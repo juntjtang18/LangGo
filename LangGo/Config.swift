@@ -10,13 +10,14 @@ import Foundation
 struct Config {
     static var strapiBaseUrl: String {
         #if DEBUG
-        #if USE_LOCAL_IP
-        return "http://192.168.1.66:8080" // Use your actual IP
+            #if USE_LOCAL_IP
+                return "http://192.168.1.66:8080" // Use your actual IP
+            #else
+                return "http://localhost:8080"
+            #endif
         #else
-        return "http://localhost:8080"
-        #endif
-        #else
-        return "https://langgoens.geniusparentingai.ca"
+            return "https://langgoens.geniusparentingai.ca"
         #endif
     }
+    static let keychainService = "com.langGo.swift"
 }

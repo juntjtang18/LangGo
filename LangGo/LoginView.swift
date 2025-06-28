@@ -16,77 +16,68 @@ struct LoginView: View {
     @State private var password = ""
     @State private var errorMessage = ""
 
-    let keychain = Keychain(service: "com.geniusparentingai.GeniusParentingAISwift")
+    // UPDATED: Uses the central Config value
+    let keychain = Keychain(service: Config.keychainService)
 
+    // ... rest of the file is unchanged
     enum ViewState {
         case login
         case signup
     }
 
     var body: some View {
-        NavigationView {
-            Group {
-                if currentView == .login {
-                    VStack(spacing: 20) {
-                        Text("Welcome to Genius Parenting AI")
-                            .font(.largeTitle)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-
-                        TextField("Email", text: $email)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .autocapitalization(.none)
-                            .keyboardType(.emailAddress)
-                            .textContentType(.emailAddress)
-                            .disableAutocorrection(true) // Disable predictive text
-                            .autocorrectionDisabled(true) // Additional SwiftUI modifier for iOS 16+
-                            .padding(.horizontal)
-
-                        SecureField("Password", text: $password)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .textContentType(.password)
-                            .disableAutocorrection(true) // Disable predictive text
-                            .autocorrectionDisabled(true) // Additional SwiftUI modifier
-                            .padding(.horizontal)
-
-                        if !errorMessage.isEmpty {
-                            Text(errorMessage)
-                                .foregroundColor(.red)
-                                .padding()
-                        }
-
-                        Button(action: {
-                            login()
-                        }) {
-                            Text("Login")
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .clipShape(Capsule())
-                        }
+        Group {
+            if currentView == .login {
+                VStack(spacing: 20) {
+                    Text("Welcome to LangGo") // Changed from "Genius Parenting AI"
+                        .font(.largeTitle)
+                        .multilineTextAlignment(.center)
                         .padding(.horizontal)
 
-                        Button(action: {
-                            currentView = .signup
-                        }) {
-                            Text("Don't have an account? Sign Up")
-                                .foregroundColor(.blue)
-                        }
-                        .padding()
+                    TextField("Email", text: $email)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .autocapitalization(.none)
+                        .keyboardType(.emailAddress)
+                        .padding(.horizontal)
+
+                    SecureField("Password", text: $password)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .padding(.horizontal)
+
+                    if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .padding()
+                    }
+
+                    Button(action: {
+                        login()
+                    }) {
+                        Text("Login")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .clipShape(Capsule())
+                    }
+                    .padding(.horizontal)
+
+                    Button(action: {
+                        currentView = .signup
+                    }) {
+                        Text("Don't have an account? Sign Up")
+                            .foregroundColor(.blue)
                     }
                     .padding()
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
-                } else if currentView == .signup {
-                    SignupView(isLoggedIn: $isLoggedIn, currentView: $currentView)
                 }
+                .padding()
+            } else if currentView == .signup {
+                SignupView(isLoggedIn: $isLoggedIn, currentView: $currentView)
             }
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
-
+    
     func login() {
-        // Unchanged login function
         let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

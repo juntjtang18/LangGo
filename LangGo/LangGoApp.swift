@@ -15,7 +15,7 @@ struct LangGoApp: App {
     @State private var isLoggedIn: Bool
 
     // Create an instance of Keychain to check for the JWT
-    let keychain = Keychain(service: "com.geniusparentingai.GeniusParentingAISwift")
+    let keychain = Keychain(service: "com.langGo.swift")
 
     init() {
         // 2. The logic to check for an existing session is moved here.

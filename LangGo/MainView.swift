@@ -101,7 +101,7 @@ struct SideMenuView: View {
     @Binding var isShowingLanguageSheet: Bool
     @Binding var isShowingSettingSheet: Bool
     
-    let keychain = Keychain(service: "com.geniusparentingai.GeniusParentingAISwift")
+    let keychain = Keychain(service: Config.keychainService)
 
     var body: some View {
         HStack {

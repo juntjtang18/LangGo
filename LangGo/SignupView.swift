@@ -105,23 +105,38 @@ struct SignupView: View {
                     errorMessage = "Network error: \(error.localizedDescription)"
                     return
                 }
-                guard let httpResponse = response as? HTTPURLResponse else {
+
+                // Ensure we have a valid response and data
+                guard let httpResponse = response as? HTTPURLResponse, let data = data else {
                     errorMessage = "Invalid response from server"
                     return
                 }
-                print("Status code: \(httpResponse.statusCode)")
-                if let data = data, let dataString = String(data: data, encoding: .utf8) {
-                    print("Response data: \(dataString)")
+
+                // --- START: Refactored Error Handling ---
+                
+                // Check if the registration was successful
+                if httpResponse.statusCode == 200 {
+                    // Success Path
+                    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                          let jwt = json["jwt"] as? String else {
+                        errorMessage = "Failed to parse success response."
+                        return
+                    }
+                    keychain["jwt"] = jwt
+                    currentView = .login
+                } else {
+                    // Error Path: Parse the specific error message from Strapi
+                    if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let errorDetails = errorJson["error"] as? [String: Any],
+                       let message = errorDetails["message"] as? String {
+                        // We found the specific message, so display it.
+                        self.errorMessage = message
+                    } else {
+                        // Fallback if the error format is unexpected.
+                        self.errorMessage = "An unknown error occurred. Please try again."
+                    }
                 }
-                guard httpResponse.statusCode == 200,
-                      let data = data,
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let jwt = json["jwt"] as? String else {
-                    errorMessage = "Signup failed. Please try again."
-                    return
-                }
-                keychain["jwt"] = jwt
-                currentView = .login
+                // --- END: Refactored Error Handling ---
             }
         }.resume()
     }
