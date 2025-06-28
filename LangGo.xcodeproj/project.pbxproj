@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1A4B514E2E0A92C900DA4E28 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = 1A4B514D2E0A92C900DA4E28 /* KeychainAccess */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		1A4B512F2E0A922A00DA4E28 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -29,9 +33,22 @@
 		1A4B51382E0A922A00DA4E28 /* LangGoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LangGoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		1A4B51502E0A937B00DA4E28 /* Exceptions for "LangGo" folder in "LangGo" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 1A4B51182E0A922600DA4E28 /* LangGo */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		1A4B511B2E0A922600DA4E28 /* LangGo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				1A4B51502E0A937B00DA4E28 /* Exceptions for "LangGo" folder in "LangGo" target */,
+			);
 			path = LangGo;
 			sourceTree = "<group>";
 		};
@@ -52,6 +69,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A4B514E2E0A92C900DA4E28 /* KeychainAccess in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +96,7 @@
 				1A4B511B2E0A922600DA4E28 /* LangGo */,
 				1A4B51312E0A922A00DA4E28 /* LangGoTests */,
 				1A4B513B2E0A922A00DA4E28 /* LangGoUITests */,
+				1A4B514C2E0A92C900DA4E28 /* Frameworks */,
 				1A4B511A2E0A922600DA4E28 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +109,13 @@
 				1A4B51382E0A922A00DA4E28 /* LangGoUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		1A4B514C2E0A92C900DA4E28 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +138,7 @@
 			);
 			name = LangGo;
 			packageProductDependencies = (
+				1A4B514D2E0A92C900DA4E28 /* KeychainAccess */,
 			);
 			productName = LangGo;
 			productReference = 1A4B51192E0A922600DA4E28 /* LangGo.app */;
@@ -195,6 +222,9 @@
 			);
 			mainGroup = 1A4B51102E0A922600DA4E28;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1A4B514B2E0A928500DA4E28 /* XCRemoteSwiftPackageReference "KeychainAccess" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1A4B511A2E0A922600DA4E28 /* Products */;
 			projectDirPath = "";
@@ -399,6 +429,7 @@
 				DEVELOPMENT_TEAM = 9HSN563CV2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LangGo/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -428,6 +459,7 @@
 				DEVELOPMENT_TEAM = 9HSN563CV2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LangGo/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -558,6 +590,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1A4B514B2E0A928500DA4E28 /* XCRemoteSwiftPackageReference "KeychainAccess" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kishikawakatsumi/KeychainAccess";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1A4B514D2E0A92C900DA4E28 /* KeychainAccess */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1A4B514B2E0A928500DA4E28 /* XCRemoteSwiftPackageReference "KeychainAccess" */;
+			productName = KeychainAccess;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1A4B51112E0A922600DA4E28 /* Project object */;
 }
