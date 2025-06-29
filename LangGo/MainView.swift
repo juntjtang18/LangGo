@@ -4,20 +4,17 @@ import KeychainAccess
 // MARK: - Main Container View
 
 struct MainView: View {
-    // 1. The state is now a @Binding, passed down from LangGoApp.
     @Binding var isLoggedIn: Bool
     
-    // Side menu state remains the same
     @State private var isSideMenuShowing = false
     @State private var isShowingProfileSheet = false
     @State private var isShowingLanguageSheet = false
     @State private var isShowingSettingSheet = false
     
-    // 2. The keychain check and custom init() are REMOVED. The view is much simpler.
     init(isLoggedIn: Binding<Bool>) {
         _isLoggedIn = isLoggedIn
         
-        // Tab bar appearance setup remains the same
+        // Configure the appearance of the TabBar
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = .clear
@@ -28,8 +25,8 @@ struct MainView: View {
     }
 
     var body: some View {
-        // 3. The if/else logic is REMOVED. This view's only job is to show the ZStack with the TabView.
         ZStack {
+            // Main TabView for the app's primary sections
             TabView {
                 LearnTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Learn", systemImage: "leaf.fill") }
@@ -48,36 +45,45 @@ struct MainView: View {
             }
             .tint(Color.purple)
             
-            // Side Menu Layer
+            // Logic for showing the side menu with lazy loading.
             if isSideMenuShowing {
+                // A semi-transparent background overlay
                 Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .onTapGesture {
                         withAnimation(.easeInOut) { isSideMenuShowing = false }
                     }
-                    .transition(.opacity)
+                    .transition(.opacity) // Fade in/out
+                
+                // Conditionally add SideMenuView to the hierarchy.
+                SideMenuView(
+                    isShowing: $isSideMenuShowing,
+                    isLoggedIn: $isLoggedIn,
+                    isShowingProfileSheet: $isShowingProfileSheet,
+                    isShowingLanguageSheet: $isShowingLanguageSheet,
+                    isShowingSettingSheet: $isShowingSettingSheet
+                )
+                .frame(width: UIScreen.main.bounds.width * 0.75)
+                .transition(.move(edge: .trailing)) // Slide in from the right
+                .ignoresSafeArea()
             }
-            
-            SideMenuView(
-                isShowing: $isSideMenuShowing,
-                isLoggedIn: $isLoggedIn, // This binding is passed down as before
-                isShowingProfileSheet: $isShowingProfileSheet,
-                isShowingLanguageSheet: $isShowingLanguageSheet,
-                isShowingSettingSheet: $isShowingSettingSheet
-            )
-            .frame(width: UIScreen.main.bounds.width * 0.75)
-            .offset(x: isSideMenuShowing ? 0 : UIScreen.main.bounds.width)
-            .ignoresSafeArea()
         }
-        .sheet(isPresented: $isShowingProfileSheet) { Text("Profile View Sheet") }
+        .fullScreenCover(isPresented: $isShowingProfileSheet) {
+            ProfileView()
+        }
         .sheet(isPresented: $isShowingLanguageSheet) { Text("Language Picker Sheet") }
-        .sheet(isPresented: $isShowingSettingSheet) { Text("Settings View Sheet") }
+        // --- MODIFICATION START ---
+        // Present the new SettingView when the corresponding state is true.
+        .sheet(isPresented: $isShowingSettingSheet) {
+            SettingView()
+        }
+        // --- MODIFICATION END ---
     }
 }
 
 
-// MARK: - Placeholder Tab Views
-// No changes needed here
+// MARK: - Placeholder Tab Views (Definitions Restored)
+
 struct AITabView: View {
     @Binding var isSideMenuShowing: Bool
     var body: some View { NavigationStack { Text("AI View").navigationTitle("AI Assistant").toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) } } }
@@ -92,57 +98,26 @@ struct TranslationTabView: View {
 }
 
 
-// MARK: - Reusable Components
-// No changes needed to SideMenuView, SideMenuButton, or MenuToolbar
-struct SideMenuView: View {
-    @Binding var isShowing: Bool
-    @Binding var isLoggedIn: Bool
-    @Binding var isShowingProfileSheet: Bool
-    @Binding var isShowingLanguageSheet: Bool
-    @Binding var isShowingSettingSheet: Bool
-    
-    let keychain = Keychain(service: Config.keychainService)
-
-    var body: some View {
-        HStack {
-            Spacer()
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading) {
-                    Image(systemName: "person.crop.circle.fill").font(.system(size: 50))
-                    Text("User Name").font(.title2.bold())
-                    Text("user.email@langgo.com").font(.subheadline).foregroundColor(.gray)
-                }.padding(30)
-                SideMenuButton(title: "Profile", iconName: "person.fill") { isShowingProfileSheet.toggle() }
-                SideMenuButton(title: "Select Language", iconName: "globe") { isShowingLanguageSheet.toggle() }
-                SideMenuButton(title: "Settings", iconName: "gearshape.fill") { isShowingSettingSheet.toggle() }
-                Spacer()
-                SideMenuButton(title: "Logout", iconName: "arrow.right.square.fill") {
-                    // Logout Action
-                    keychain["jwt"] = nil
-                    isLoggedIn = false
-                    isShowing = false
-                }.padding(.bottom, 40)
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(red: 0.1, green: 0.1, blue: 0.2))
-        }
-    }
-}
-
-struct SideMenuButton: View {
-    var title: String, iconName: String, action: () -> Void
-    var body: some View { Button(action: action) { HStack(spacing: 15) { Image(systemName: iconName).font(.title2); Text(title).font(.headline) }.padding().frame(maxWidth: .infinity, alignment: .leading) } }
-}
-
+/// The toolbar item containing the hamburger menu button.
 struct MenuToolbar: ToolbarContent {
     @Binding var isSideMenuShowing: Bool
-    var body: some ToolbarContent { ToolbarItem(placement: .navigationBarTrailing) { Button(action: { withAnimation(.easeInOut) { isSideMenuShowing.toggle() } }) { Image(systemName: "line.3.horizontal").font(.title3).foregroundColor(.primary) } } }
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button(action: {
+                withAnimation(.easeInOut) {
+                    isSideMenuShowing.toggle()
+                }
+            }) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.title3)
+                    .foregroundColor(.primary)
+            }
+        }
+    }
 }
 
 
 // MARK: - Preview
 #Preview {
-    // The preview now needs a constant binding to work.
     MainView(isLoggedIn: .constant(true))
 }

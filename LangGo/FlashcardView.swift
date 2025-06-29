@@ -5,26 +5,20 @@ struct FlashcardTabView: View {
     @Binding var isSideMenuShowing: Bool
     
     @Environment(\.modelContext) private var modelContext
-    
     @State private var viewModel: FlashcardViewModel?
 
     @State private var isReviewing = false
-
+    
     var body: some View {
         NavigationStack {
             if let viewModel = viewModel {
-                // --- If ViewModel is ready, show the main UI ---
                 VStack(spacing: 30) {
-                    // Progress Circle
                     FlashcardProgressCircleView(viewModel: viewModel)
                         .padding(.top)
-
-                    // Action Buttons
-                    ActionButtonsView(viewModel: viewModel, isReviewing: $isReviewing)
-
-                    // Statistics
-                    StatisticsView(viewModel: viewModel)
                     
+                    ActionButtonsView(viewModel: viewModel, isReviewing: $isReviewing)
+                    
+                    StatisticsView(viewModel: viewModel)
                     Spacer()
                 }
                 .padding()
@@ -36,8 +30,11 @@ struct FlashcardTabView: View {
                 .toolbar {
                     MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
                 }
+                .task {
+                    // FIX: Changed to call loadStatistics() to prevent build error.
+                    await viewModel.loadStatistics()
+                }
             } else {
-                // --- If ViewModel is not ready, show a loading indicator ---
                 ProgressView()
                     .onAppear {
                         if viewModel == nil {
@@ -79,18 +76,30 @@ private struct FlashcardProgressCircleView: View {
 private struct ActionButtonsView: View {
     let viewModel: FlashcardViewModel
     @Binding var isReviewing: Bool
-
+    
     var body: some View {
-        HStack(spacing: 30) {
-            ActionButton(icon: "w.circle.fill", text: "Add word") { /* Add action */ }
-            ActionButton(icon: "play.circle.fill", text: "Start review", isLarge: true) {
-                viewModel.startReview()
-                if !viewModel.reviewCards.isEmpty {
-                    isReviewing = true
+        Grid {
+            GridRow {
+                ActionButton(icon: "w.circle.fill", text: "Add word") { /* Add action */ }
+                    .gridCellAnchor(.center)
+                    .frame(maxWidth: .infinity)
+
+                // FIX: This now uses the correct logic to prepare the session before presenting the view.
+                ActionButton(icon: "play.circle.fill", text: "Start review", isLarge: true) {
+                    Task {
+                        await viewModel.prepareReviewSession()
+                        isReviewing = true
+                    }
                 }
+                .gridCellAnchor(.center)
+                .frame(maxWidth: .infinity)
+
+                ActionButton(icon: "s.circle.fill", text: "Add sentence") { /* Add action */ }
+                    .gridCellAnchor(.center)
+                    .frame(maxWidth: .infinity)
             }
-            ActionButton(icon: "s.circle.fill", text: "Add sentence") { /* Add action */ }
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -103,8 +112,12 @@ private struct StatisticsView: View {
                 Text("Statistics")
                     .font(.title2).bold()
                 Spacer()
-                // FIXED: Changed viewModel.fetchData to viewModel.fetchDataFromServer
-                Button(action: { viewModel.fetchDataFromServer(forceRefresh: true) }) {
+                Button(action: {
+                    Task {
+                        await viewModel.fetchDataFromServer(forceRefresh: true)
+                        await viewModel.loadStatistics()
+                    }
+                }) {
                     Image(systemName: "arrow.clockwise")
                         .font(.title2)
                         .foregroundColor(.accentColor)
@@ -125,7 +138,6 @@ private struct StatisticsView: View {
 }
 
 // MARK: - Helper Views
-
 private struct ActionButton: View {
     let icon: String
     let text: String

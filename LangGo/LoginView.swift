@@ -1,11 +1,3 @@
-//
-//  LoginView.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/6/27.
-//
-
-import Foundation
 import SwiftUI
 import KeychainAccess
 
@@ -16,10 +8,9 @@ struct LoginView: View {
     @State private var password = ""
     @State private var errorMessage = ""
 
-    // UPDATED: Uses the central Config value
+    // Use the centralized keychain service from the Config file.
     let keychain = Keychain(service: Config.keychainService)
 
-    // ... rest of the file is unchanged
     enum ViewState {
         case login
         case signup
@@ -29,7 +20,7 @@ struct LoginView: View {
         Group {
             if currentView == .login {
                 VStack(spacing: 20) {
-                    Text("Welcome to LangGo") // Changed from "Genius Parenting AI"
+                    Text("Welcome to LangGo")
                         .font(.largeTitle)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
@@ -76,9 +67,13 @@ struct LoginView: View {
             }
         }
     }
-    
+
     func login() {
-        let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local")!
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local") else {
+            errorMessage = "Invalid server URL"
+            return
+        }
+        
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -89,7 +84,6 @@ struct LoginView: View {
         URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("Network error: \(error.localizedDescription)")
                     errorMessage = "Network error: \(error.localizedDescription)"
                     return
                 }
@@ -97,18 +91,26 @@ struct LoginView: View {
                     errorMessage = "Invalid response from server"
                     return
                 }
-                print("Status code: \(httpResponse.statusCode)")
-                if let data = data, let dataString = String(data: data, encoding: .utf8) {
-                    print("Response data: \(dataString)")
-                }
+                
                 guard httpResponse.statusCode == 200,
                       let data = data,
                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let jwt = json["jwt"] as? String else {
+                      let jwt = json["jwt"] as? String,
+                      let user = json["user"] as? [String: Any],
+                      let username = user["username"] as? String,
+                      let userEmail = user["email"] as? String,
+                      let userId = user["id"] as? Int else {
                     errorMessage = "Invalid email or password"
                     return
                 }
+                
+                // Store the user data in Keychain and UserDefaults
                 keychain["jwt"] = jwt
+                UserDefaults.standard.set(username, forKey: "username")
+                UserDefaults.standard.set(userEmail, forKey: "email")
+                UserDefaults.standard.set(userId, forKey: "userId")
+                
+                // Set the login state to true to dismiss this view
                 isLoggedIn = true
             }
         }.resume()

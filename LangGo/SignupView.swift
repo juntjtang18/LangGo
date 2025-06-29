@@ -1,10 +1,3 @@
-//
-//  SignupView.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/6/27.
-//
-
 import Foundation
 import SwiftUI
 import KeychainAccess
@@ -17,7 +10,10 @@ struct SignupView: View {
     @State private var confirmPassword = ""
     @State private var errorMessage = ""
 
-    let keychain = Keychain(service: "com.geniusparentingai.GeniusParentingAISwift")
+    // --- MODIFICATION START ---
+    // Use the centralized keychain service from the Config file.
+    let keychain = Keychain(service: Config.keychainService)
+    // --- MODIFICATION END ---
 
     var body: some View {
         VStack(spacing: 20) {
@@ -32,7 +28,7 @@ struct SignupView: View {
                 Spacer()
             }
 
-            Text("Sign Up for Genius Parenting AI")
+            Text("Sign Up for LangGo")
                 .font(.largeTitle)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -90,60 +86,46 @@ struct SignupView: View {
             return
         }
 
-        let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register")!
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register") else {
+             errorMessage = "Invalid server URL"
+             return
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // In Strapi, the default setup requires username, which can be the same as the email.
         let body = ["username": email, "email": email, "password": password]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("Network error: \(error.localizedDescription)")
                     errorMessage = "Network error: \(error.localizedDescription)"
                     return
                 }
 
-                // Ensure we have a valid response and data
                 guard let httpResponse = response as? HTTPURLResponse, let data = data else {
                     errorMessage = "Invalid response from server"
                     return
                 }
-
-                // --- START: Refactored Error Handling ---
                 
-                // Check if the registration was successful
                 if httpResponse.statusCode == 200 {
-                    // Success Path
-                    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          let jwt = json["jwt"] as? String else {
-                        errorMessage = "Failed to parse success response."
-                        return
-                    }
-                    keychain["jwt"] = jwt
+                    // On successful registration, Strapi returns a JWT.
+                    // We can log the user in directly or send them to the login screen.
+                    // Here, we just redirect to login.
                     currentView = .login
                 } else {
-                    // Error Path: Parse the specific error message from Strapi
+                    // Try to parse the specific error message from Strapi
                     if let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                        let errorDetails = errorJson["error"] as? [String: Any],
                        let message = errorDetails["message"] as? String {
-                        // We found the specific message, so display it.
                         self.errorMessage = message
                     } else {
-                        // Fallback if the error format is unexpected.
                         self.errorMessage = "An unknown error occurred. Please try again."
                     }
                 }
-                // --- END: Refactored Error Handling ---
             }
         }.resume()
-    }
-}
-
-struct SignupView_Previews: PreviewProvider {
-    static var previews: some View {
-        SignupView(isLoggedIn: .constant(false), currentView: .constant(.login))
     }
 }
