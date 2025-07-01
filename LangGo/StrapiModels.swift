@@ -32,6 +32,24 @@ struct FlashcardAttributes: Codable {
     }
 }
 
+// MARK: - Statistics Models
+
+/// The response wrapper for the statistics endpoint.
+struct StrapiStatisticsResponse: Codable {
+    let data: StrapiStatistics
+}
+
+/// Represents the statistics object returned from `/api/flashcard-stat`.
+struct StrapiStatistics: Codable {
+    let totalCards: Int
+    let remembered: Int
+    let newCards: Int
+    let warmUp: Int
+    let weekly: Int
+    let monthly: Int
+    let hardToRemember: Int
+}
+
 // MARK: - Review Models (REVISED)
 
 /// The request body for the `POST /api/flashcards/:id/review` endpoint.
@@ -51,16 +69,11 @@ struct ReviewLogData: Codable {
     let reviewLevel: String
     let user: Int
     
-    // REVISED: This is no longer needed because the NetworkManager's JSONEncoder
-    // now uses the `.convertToSnakeCase` strategy, which handles this automatically.
-    // Keeping it could cause conflicts.
-    /*
     enum CodingKeys: String, CodingKey {
         case result, flashcard, user
         case reviewedAt = "reviewed_at"
         case reviewLevel = "review_level"
     }
-    */
 }
 
 

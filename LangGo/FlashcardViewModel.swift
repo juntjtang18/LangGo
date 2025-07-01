@@ -15,6 +15,12 @@ class FlashcardViewModel {
     var totalCardCount: Int = 0
     var rememberedCount: Int = 0
     var reviewCards: [Flashcard] = []
+    // Add new properties to hold the categorized card counts
+    var newCardCount: Int = 0
+    var warmUpCardCount: Int = 0
+    var weeklyReviewCardCount: Int = 0
+    var monthlyCardCount: Int = 0
+    var hardToRememberCount: Int = 0
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
@@ -22,13 +28,69 @@ class FlashcardViewModel {
 
     @MainActor
     func loadStatistics() async {
+        let urlString = "\(Config.strapiBaseUrl)/api/flashcard-stat"
+        guard let url = URL(string: urlString) else {
+            logger.error("Invalid URL for statistics endpoint: \(urlString)")
+            await calculateStatisticsLocally()
+            return
+        }
+        
+        logger.info("Attempting to fetch statistics from server.")
+        
+        do {
+            let statsResponse: StrapiStatisticsResponse = try await NetworkManager.shared.fetchSingle(from: url)
+            let stats = statsResponse.data
+            
+            self.totalCardCount = stats.totalCards
+            self.rememberedCount = stats.remembered
+            self.newCardCount = stats.newCards
+            self.warmUpCardCount = stats.warmUp
+            self.weeklyReviewCardCount = stats.weekly
+            self.monthlyCardCount = stats.monthly
+            self.hardToRememberCount = stats.hardToRemember
+            
+            logger.info("Successfully loaded statistics from the server.")
+        } catch {
+            logger.error("Failed to fetch statistics from server: \(error.localizedDescription). Falling back to local calculation.")
+            await calculateStatisticsLocally()
+        }
+    }
+
+    @MainActor
+    private func calculateStatisticsLocally() async {
+        logger.info("Calculating statistics from local data as a fallback.")
         do {
             let descriptor = FetchDescriptor<Flashcard>()
             let allCards = try modelContext.fetch(descriptor)
+            
+            // A card is "remembered" if the flag is true OR its streak is 11 or higher.
+            let rememberedCards = allCards.filter { $0.isRemembered || $0.correctStreak >= 11 }
+            
+            // "Active" cards are those not remembered
+            let activeCards = allCards.filter { !($0.isRemembered || $0.correctStreak >= 11) }
+
             self.totalCardCount = allCards.count
-            self.rememberedCount = allCards.filter { $0.isRemembered }.count
+            self.rememberedCount = rememberedCards.count
+            
+            // New Cards (correct_streak is 0-3)
+            self.newCardCount = activeCards.filter { (0...3).contains($0.correctStreak) }.count
+
+            // Warm-up Cards (correct_streak is 4-6)
+            self.warmUpCardCount = activeCards.filter { (4...6).contains($0.correctStreak) }.count
+
+            // Weekly Review Cards (correct_streak is 7-8)
+            self.weeklyReviewCardCount = activeCards.filter { (7...8).contains($0.correctStreak) }.count
+
+            // Monthly Cards (correct_streak is 9-10)
+            self.monthlyCardCount = activeCards.filter { (9...10).contains($0.correctStreak) }.count
+            
+            // Hard to remember (wrong_streak >= 3)
+            self.hardToRememberCount = activeCards.filter { $0.wrongStreak >= 3 }.count
+            
+            logger.info("Successfully calculated statistics locally from \(allCards.count) cards.")
+
         } catch {
-            logger.error("loadStatistics: Failed to load stats from local store: \(error.localizedDescription)")
+            logger.error("calculateStatisticsLocally: Failed to load cards from local store: \(error.localizedDescription)")
         }
     }
 

@@ -127,9 +127,11 @@ private struct StatisticsView: View {
 
             StatRow(label: "Total Cards", value: "\(viewModel.totalCardCount)")
             StatRow(label: "Remembered", value: "\(viewModel.rememberedCount)")
-            StatRow(label: "Review tomorrow", value: "88") // Placeholder
-            StatRow(label: "Review next week", value: "54") // Placeholder
-            StatRow(label: "Hard to remember", value: "54") // Placeholder
+            StatRow(label: "New Cards", value: "\(viewModel.newCardCount)")
+            StatRow(label: "Warm-up cards", value: "\(viewModel.warmUpCardCount)")
+            StatRow(label: "Weekly Review Cards", value: "\(viewModel.weeklyReviewCardCount)")
+            StatRow(label: "Monthly Cards", value: "\(viewModel.monthlyCardCount)")
+            StatRow(label: "Hard to remember", value: "\(viewModel.hardToRememberCount)")
         }
         .padding()
         .background(Color(uiColor: .secondarySystemGroupedBackground))

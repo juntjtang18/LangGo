@@ -22,8 +22,6 @@ class NetworkManager {
         
         decoder.dateDecodingStrategy = .formatted(formatter)
         encoder.dateEncodingStrategy = .formatted(formatter)
-        // This strategy handles converting camelCase (like `reviewedAt`) to snake_case (`reviewed_at`)
-        encoder.keyEncodingStrategy = .convertToSnakeCase
     }
 
     /// Fetches data and decodes it into a StrapiResponse (an array of items).
@@ -79,6 +77,38 @@ class NetworkManager {
             return try decoder.decode(StrapiUser.self, from: data)
         } catch {
             logger.error("Decoding Error: Failed to decode StrapiUser. Error: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    /// Generic function to fetch a single Decodable resource (e.g., wrapped in a "data": {} object).
+    func fetchSingle<U: Decodable>(from url: URL) async throws -> U {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        guard let token = keychain["jwt"] else {
+            logger.warning("JWT token not found in keychain. Request to \(url.lastPathComponent) will be unauthenticated.")
+            throw URLError(.userAuthenticationRequired)
+        }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "No response body"
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            logger.error("HTTP GET Error: Received status code \(statusCode) for URL \(url). Body: \(errorBody)")
+            throw URLError(.badServerResponse)
+        }
+        
+        do {
+            if let jsonString = String(data: data, encoding: .utf8) {
+                 logger.debug("Received JSON response from GET single:\n\(jsonString)")
+            }
+            return try decoder.decode(U.self, from: data)
+        } catch {
+            logger.error("Decoding Error: Failed to decode \(U.self). Error: \(error.localizedDescription)")
+            logger.error("Decoding Error Details: \(error)")
             throw error
         }
     }
