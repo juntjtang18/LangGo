@@ -1,10 +1,12 @@
 import Foundation
 
 // MARK: - Core Response Wrappers
+/// Represents a standard Strapi response for a collection, wrapped in a "data" key.
 struct StrapiResponse: Codable {
     let data: [StrapiFlashcard]
 }
 
+/// Represents a single flashcard object from the Strapi API.
 struct StrapiFlashcard: Codable {
     let id: Int
     let attributes: FlashcardAttributes
@@ -17,7 +19,6 @@ struct FlashcardAttributes: Codable {
     let lastReviewedAt: Date?
     let content: [StrapiComponent]
     
-    // FIXED: Made streak properties optional to handle potential null values from the server.
     let correctStreak: Int?
     let wrongStreak: Int?
     let isRemembered: Bool
@@ -31,7 +32,13 @@ struct FlashcardAttributes: Codable {
     }
 }
 
-// MARK: - Review Log Models
+// MARK: - Review Models (REVISED)
+
+/// The request body for the `POST /api/flashcards/:id/review` endpoint.
+struct ReviewBody: Codable {
+    let result: String
+}
+
 // Used for creating a new review log via POST request.
 struct ReviewLogRequestBody: Codable {
     let data: ReviewLogData
@@ -43,12 +50,17 @@ struct ReviewLogData: Codable {
     let reviewedAt: Date
     let reviewLevel: String
     let user: Int
-
+    
+    // REVISED: This is no longer needed because the NetworkManager's JSONEncoder
+    // now uses the `.convertToSnakeCase` strategy, which handles this automatically.
+    // Keeping it could cause conflicts.
+    /*
     enum CodingKeys: String, CodingKey {
         case result, flashcard, user
-        case reviewedAt = "reviewd_at" // Mapped to schema's field name
+        case reviewedAt = "reviewed_at"
         case reviewLevel = "review_level"
     }
+    */
 }
 
 
@@ -257,7 +269,7 @@ struct ReviewLogAttributes: Codable {
 
     enum CodingKeys: String, CodingKey {
         case result
-        case reviewedAt = "reviewd_at" // Mapped to match the Strapi schema
+        case reviewedAt = "reviewed_at"
         case reviewLevel = "level"
     }
 }

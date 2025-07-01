@@ -35,9 +35,7 @@ struct FlashcardReviewView: View {
                     // The Flippable Card View
                     if let card = viewModel.reviewCards[safe: currentIndex] {
                         
-                        // --- NEW: Display Register ---
-                        // This view shows the register in the top-left corner above the card.
-                        // It only appears if the 'register' property is not nil or empty.
+                        // Display Register
                         if let register = card.register, !register.isEmpty, register != "Neutral" {
                             HStack {
                                 Text(register)
@@ -53,7 +51,6 @@ struct FlashcardReviewView: View {
                             .padding(.horizontal)
                             .padding(.bottom, 4)
                         }
-                        // --- END NEW SECTION ---
                         
                         FlippableCardView(
                             frontContent: card.frontContent,
@@ -111,30 +108,32 @@ struct FlashcardReviewView: View {
         }
     }
     
-    private enum Answer {
-        case correct, wrong
-    }
-    
-    private func markCard(_ answer: Answer) {
+    // REVISED: This function now calls the new unified method in the view model.
+    private func markCard(_ answer: ReviewResult) {
         guard let currentCard = viewModel.reviewCards[safe: currentIndex] else { return }
         
-        if answer == .correct {
-            viewModel.markCorrect(for: currentCard)
-        } else {
-            viewModel.markWrong(for: currentCard)
-        }
+        // This single line now triggers the network call to the server.
+        viewModel.markReview(for: currentCard, result: answer)
         
-        // Move to the next card
+        // Advance to the next card or end the session
+        goToNextCard()
+    }
+    
+    private func goToNextCard() {
         if currentIndex < viewModel.reviewCards.count - 1 {
-            isFlipped = false // Ensure next card starts on the front
-            currentIndex += 1
+            // Use a slight delay to allow the user to see the result before the card flips
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isFlipped = false // Ensure next card starts on the front
+                currentIndex += 1
+            }
         } else {
-            dismiss() // End of session
+            // All cards have been reviewed
+            dismiss()
         }
     }
 }
 
-// MARK: - Subviews
+// MARK: - Subviews (No changes needed here)
 
 private struct FlippableCardView: View {
     let frontContent: String
@@ -143,7 +142,6 @@ private struct FlippableCardView: View {
 
     var body: some View {
         ZStack {
-            // Use a Group to apply modifiers to both card faces
             Group {
                 CardFace(content: frontContent)
                     .opacity(isFlipped ? 0 : 1)
@@ -173,10 +171,8 @@ private struct CardFace: View {
     }
 }
 
-
 // Helper extension for safe array access
 extension Collection {
-    /// Returns the element at the specified index if it is within bounds, otherwise nil.
     subscript (safe index: Index) -> Element? {
         return indices.contains(index) ? self[index] : nil
     }
