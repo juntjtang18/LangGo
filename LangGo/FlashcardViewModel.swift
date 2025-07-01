@@ -6,6 +6,7 @@ import os
 class FlashcardViewModel {
     var modelContext: ModelContext
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardViewModel")
+    var userReviewLogs: [StrapiReviewLog] = [] // Property to hold the fetched logs
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
@@ -17,6 +18,8 @@ class FlashcardViewModel {
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        // REMOVED: The network call to fetch the user has been removed.
+        // The userId will be fetched directly from UserDefaults when needed.
     }
 
     @MainActor
@@ -63,35 +66,29 @@ class FlashcardViewModel {
 
             for strapiCard in fetchedData.data {
                 do {
-                    // --- START DEBUG LOGS ---
-                    logger.debug("--- Processing Strapi Card ID: \(strapiCard.id) ---")
-                    guard let component = strapiCard.attributes.content.first else {
-                        logger.warning("Card ID \(strapiCard.id) has no content components. Skipping.")
-                        continue
-                    }
-
-                    // Log the entire decoded component. This is the most important log.
-                    // It will tell us if the nested relation properties are nil.
-                    logger.debug("Decoded Component: \(String(describing: component))")
-                    // --- END DEBUG LOGS ---
+                    guard let component = strapiCard.attributes.content.first else { continue }
 
                     var frontContent: String?
                     var backContent: String?
+                    var register: String?
 
-                    // FIX: Switched to use the new 'componentIdentifier' property
                     switch component.componentIdentifier {
                     case "a.user-word-ref":
                         frontContent = component.userWord?.data?.attributes.baseText
                         backContent = component.userWord?.data?.attributes.word
+                        register = nil
                     case "a.word-ref":
                         frontContent = component.word?.data?.attributes.baseText
                         backContent = component.word?.data?.attributes.word
+                        register = component.word?.data?.attributes.register
                     case "a.user-sent-ref":
                         frontContent = component.userSentence?.data?.attributes.baseText
                         backContent = component.userSentence?.data?.attributes.targetText
+                        register = nil
                     case "a.sent-ref":
                         frontContent = component.sentence?.data?.attributes.baseText
                         backContent = component.sentence?.data?.attributes.targetText
+                        register = component.sentence?.data?.attributes.register
                     default:
                         logger.warning("Unrecognized component type: \(component.componentIdentifier)")
                         break
@@ -99,12 +96,7 @@ class FlashcardViewModel {
 
                     let finalFront = frontContent ?? "Missing Question"
                     let finalBack = backContent ?? "Missing Answer"
-                    
-                    // --- MORE DEBUG LOGS ---
-                    logger.debug("Card ID \(strapiCard.id) | Front: '\(finalFront)' | Back: '\(finalBack)'")
-                    // ---
-                    
-                    let contentType = component.componentIdentifier.contains("word") ? "word" : "sentence"
+                    let contentType = component.componentIdentifier
                     let rawData = try? JSONEncoder().encode(component)
                     let cardId = strapiCard.id
                     var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == cardId })
@@ -113,25 +105,28 @@ class FlashcardViewModel {
                     if let cardToUpdate = try modelContext.fetch(fetchDescriptor).first {
                         cardToUpdate.frontContent = finalFront
                         cardToUpdate.backContent = finalBack
+                        cardToUpdate.register = register
                         cardToUpdate.contentType = contentType
                         cardToUpdate.rawComponentData = rawData
                         cardToUpdate.lastReviewedAt = strapiCard.attributes.lastReviewedAt
-                        cardToUpdate.isRemembered = strapiCard.attributes.isRemembered ?? cardToUpdate.isRemembered
+                        cardToUpdate.isRemembered = strapiCard.attributes.isRemembered
+                        // FIXED: Use nil-coalescing operator to provide a default value for optional streaks.
+                        cardToUpdate.correctStreak = strapiCard.attributes.correctStreak ?? 0
+                        cardToUpdate.wrongStreak = strapiCard.attributes.wrongStreak ?? 0
                         processedCards.append(cardToUpdate)
                     } else {
                         let newCard = Flashcard(
                             id: cardId,
                             frontContent: finalFront,
                             backContent: finalBack,
+                            register: register,
                             contentType: contentType,
                             rawComponentData: rawData,
                             lastReviewedAt: strapiCard.attributes.lastReviewedAt,
-                            dailyStreak: strapiCard.attributes.dailyStreak ?? 0,
-                            weeklyStreak: strapiCard.attributes.weeklyStreak ?? 0,
-                            weeklyWrongStreak: strapiCard.attributes.weeklyWrongStreak ?? 0,
-                            monthlyStreak: strapiCard.attributes.monthlyStreak ?? 0,
-                            monthlyWrongStreak: strapiCard.attributes.monthlyWrongStreak ?? 0,
-                            isRemembered: strapiCard.attributes.isRemembered ?? false
+                            // FIXED: Use nil-coalescing operator for streaks during initialization.
+                            correctStreak: strapiCard.attributes.correctStreak ?? 0,
+                            wrongStreak: strapiCard.attributes.wrongStreak ?? 0,
+                            isRemembered: strapiCard.attributes.isRemembered
                         )
                         modelContext.insert(newCard)
                         processedCards.append(newCard)
@@ -175,21 +170,25 @@ class FlashcardViewModel {
 
                 var frontContent: String?
                 var backContent: String?
+                var register: String?
 
-                // FIX: Switched to use the new 'componentIdentifier' property
                 switch component.componentIdentifier {
                 case "a.user-word-ref":
                     frontContent = component.userWord?.data?.attributes.baseText
                     backContent = component.userWord?.data?.attributes.word
+                    register = nil
                 case "a.word-ref":
                     frontContent = component.word?.data?.attributes.baseText
                     backContent = component.word?.data?.attributes.word
+                    register = component.word?.data?.attributes.register
                 case "a.user-sent-ref":
                     frontContent = component.userSentence?.data?.attributes.baseText
                     backContent = component.userSentence?.data?.attributes.targetText
+                    register = nil
                 case "a.sent-ref":
                     frontContent = component.sentence?.data?.attributes.baseText
                     backContent = component.sentence?.data?.attributes.targetText
+                    register = component.sentence?.data?.attributes.register
                 default:
                     logger.warning("Unrecognized component type: \(component.componentIdentifier)")
                     break
@@ -197,9 +196,8 @@ class FlashcardViewModel {
 
                 let finalFront = frontContent ?? "Missing Question"
                 let finalBack = backContent ?? "Missing Answer"
-                let contentType = component.componentIdentifier.contains("word") ? "word" : "sentence"
+                let contentType = component.componentIdentifier
                 let rawData = try? JSONEncoder().encode(component)
-
                 let cardId = strapiCard.id
                 var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == cardId })
                 fetchDescriptor.fetchLimit = 1
@@ -208,24 +206,27 @@ class FlashcardViewModel {
                 if let cardToUpdate = existingCards.first {
                     cardToUpdate.frontContent = finalFront
                     cardToUpdate.backContent = finalBack
+                    cardToUpdate.register = register
                     cardToUpdate.contentType = contentType
                     cardToUpdate.rawComponentData = rawData
                     cardToUpdate.lastReviewedAt = strapiCard.attributes.lastReviewedAt
-                    cardToUpdate.isRemembered = strapiCard.attributes.isRemembered ?? cardToUpdate.isRemembered
+                    cardToUpdate.isRemembered = strapiCard.attributes.isRemembered
+                    // FIXED: Use nil-coalescing operator for streaks.
+                    cardToUpdate.correctStreak = strapiCard.attributes.correctStreak ?? 0
+                    cardToUpdate.wrongStreak = strapiCard.attributes.wrongStreak ?? 0
                 } else {
                     let newCard = Flashcard(
                         id: cardId,
                         frontContent: finalFront,
                         backContent: finalBack,
+                        register: register,
                         contentType: contentType,
                         rawComponentData: rawData,
                         lastReviewedAt: strapiCard.attributes.lastReviewedAt,
-                        dailyStreak: strapiCard.attributes.dailyStreak ?? 0,
-                        weeklyStreak: strapiCard.attributes.weeklyStreak ?? 0,
-                        weeklyWrongStreak: strapiCard.attributes.weeklyWrongStreak ?? 0,
-                        monthlyStreak: strapiCard.attributes.monthlyStreak ?? 0,
-                        monthlyWrongStreak: strapiCard.attributes.monthlyWrongStreak ?? 0,
-                        isRemembered: strapiCard.attributes.isRemembered ?? false
+                        // FIXED: Use nil-coalescing operator for streaks.
+                        correctStreak: strapiCard.attributes.correctStreak ?? 0,
+                        wrongStreak: strapiCard.attributes.wrongStreak ?? 0,
+                        isRemembered: strapiCard.attributes.isRemembered
                     )
                     modelContext.insert(newCard)
                 }
@@ -244,14 +245,59 @@ class FlashcardViewModel {
     func markCorrect(for card: Flashcard) {
         card.isRemembered = true
         card.lastReviewedAt = .now
+        card.correctStreak += 1
+        card.wrongStreak = 0
+        
         try? modelContext.save()
-        Task { await loadStatistics() }
+        Task {
+            await createReviewLog(for: card, result: "correct")
+            await loadStatistics()
+        }
     }
 
     func markWrong(for card: Flashcard) {
         card.isRemembered = false
         card.lastReviewedAt = .now
+        card.wrongStreak += 1
+        card.correctStreak = 0
+        
         try? modelContext.save()
-        Task { await loadStatistics() }
+        Task {
+            await createReviewLog(for: card, result: "wrong")
+            await loadStatistics()
+        }
+    }
+    
+    private func createReviewLog(for card: Flashcard, result: String) async {
+        // FIXED: Retrieve the user ID directly from UserDefaults, where it was stored on login.
+        guard let userId = UserDefaults.standard.object(forKey: "userId") as? Int else {
+            logger.warning("Cannot create review log. User ID not found in UserDefaults.")
+            return
+        }
+        
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/reviewlogs") else {
+            logger.error("Invalid URL for /api/reviewlogs")
+            return
+        }
+        
+        let logData = ReviewLogData(result: result, flashcard: card.id, reviewedAt: .now, reviewLevel: "daily", user: userId)
+        let requestBody = ReviewLogRequestBody(data: logData)
+        
+        do {
+            try await NetworkManager.shared.post(to: url, body: requestBody)
+            logger.info("Successfully created review log for flashcard \(card.id) for user \(userId).")
+        } catch {
+            logger.error("Failed to create review log for flashcard \(card.id): \(error.localizedDescription)")
+        }
+    }
+    // Add this new function to fetch the logs
+    @MainActor
+    func fetchMyReviewLogs() async {
+        do {
+            self.userReviewLogs = try await NetworkManager.shared.fetchMyReviewLogs()
+            logger.info("Successfully fetched \(self.userReviewLogs.count) review logs for the current user.")
+        } catch {
+            logger.error("Failed to fetch user review logs: \(error.localizedDescription)")
+        }
     }
 }

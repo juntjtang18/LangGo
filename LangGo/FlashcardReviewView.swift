@@ -34,6 +34,27 @@ struct FlashcardReviewView: View {
 
                     // The Flippable Card View
                     if let card = viewModel.reviewCards[safe: currentIndex] {
+                        
+                        // --- NEW: Display Register ---
+                        // This view shows the register in the top-left corner above the card.
+                        // It only appears if the 'register' property is not nil or empty.
+                        if let register = card.register, !register.isEmpty, register != "Neutral" {
+                            HStack {
+                                Text(register)
+                                    .font(.footnote)
+                                    .fontWeight(.semibold)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.gray.opacity(0.2))
+                                    .foregroundColor(.gray)
+                                    .cornerRadius(8)
+                                Spacer()
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom, 4)
+                        }
+                        // --- END NEW SECTION ---
+                        
                         FlippableCardView(
                             frontContent: card.frontContent,
                             backContent: card.backContent,

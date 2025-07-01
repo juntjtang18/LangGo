@@ -15,26 +15,42 @@ struct FlashcardAttributes: Codable {
     let updatedAt: String?
     let locale: String?
     let lastReviewedAt: Date?
-    let dailyStreak: Int?
-    let weeklyStreak: Int?
-    let weeklyWrongStreak: Int?
-    let monthlyStreak: Int?
-    let monthlyWrongStreak: Int?
-    let isRemembered: Bool?
     let content: [StrapiComponent]
+    
+    // FIXED: Made streak properties optional to handle potential null values from the server.
+    let correctStreak: Int?
+    let wrongStreak: Int?
+    let isRemembered: Bool
 
-    // FINAL FIX: Removed the incorrect 'id' case from the enum to match the struct's properties.
     enum CodingKeys: String, CodingKey {
         case createdAt, updatedAt, locale, content
         case lastReviewedAt = "last_reviewed_at"
-        case dailyStreak = "daily_streak"
-        case weeklyStreak = "weekly_streak"
-        case weeklyWrongStreak = "weekly_wrong_streak"
-        case monthlyStreak = "monthly_streak"
-        case monthlyWrongStreak = "monthly_wrong_streak"
+        case correctStreak = "correct_streak"
+        case wrongStreak = "wrong_streak"
         case isRemembered = "is_remembered"
     }
 }
+
+// MARK: - Review Log Models
+// Used for creating a new review log via POST request.
+struct ReviewLogRequestBody: Codable {
+    let data: ReviewLogData
+}
+
+struct ReviewLogData: Codable {
+    let result: String
+    let flashcard: Int
+    let reviewedAt: Date
+    let reviewLevel: String
+    let user: Int
+
+    enum CodingKeys: String, CodingKey {
+        case result, flashcard, user
+        case reviewedAt = "reviewd_at" // Mapped to schema's field name
+        case reviewLevel = "review_level"
+    }
+}
+
 
 // MARK: - Dynamic Zone Component
 struct StrapiComponent: Codable {
@@ -117,7 +133,6 @@ struct UserWordAttributes: Codable {
     let updatedAt: String?
     let locale: String?
 
-    // FINAL FIX: Added missing cases for createdAt and updatedAt to match the struct's properties.
     enum CodingKeys: String, CodingKey {
         case word, locale, createdAt, updatedAt
         case baseText = "base_text"
@@ -153,9 +168,10 @@ struct WordAttributes: Codable {
     let tags: [TagListComponent]?
     let exampleSentences: ExampleSentencesRelation?
     let verbMeta: VerbMetaComponent?
+    let register: String?
 
     enum CodingKeys: String, CodingKey {
-        case word, instruction, gender, article, createdAt, updatedAt, locale, audio, tags
+        case word, instruction, gender, article, createdAt, updatedAt, locale, audio, tags, register
         case baseText = "base_text"
         case partOfSpeech = "part_of_speech"
         case exampleSentences = "example_sentences"
@@ -174,9 +190,10 @@ struct SentenceAttributes: Codable {
     let targetAudio: MediaRelation?
     let tags: [TagListComponent]?
     let words: WordsRelation?
+    let register: String?
     
     enum CodingKeys: String, CodingKey {
-        case title, instruction, createdAt, updatedAt, locale, tags, words
+        case title, instruction, createdAt, updatedAt, locale, tags, words, register
         case baseText = "base_text"
         case targetText = "target_text"
         case targetAudio = "target_audio"
@@ -219,4 +236,28 @@ struct MediaFormat: Codable {
     let height: Int?
     let size: Double?
     let url: String?
+}
+
+// Wrapper for the array response from /api/my-reviewlogs
+struct StrapiReviewLogResponse: Codable {
+    let data: [StrapiReviewLog]
+}
+
+// Represents a single review log object from the API
+struct StrapiReviewLog: Codable, Identifiable {
+    let id: Int
+    let attributes: ReviewLogAttributes
+}
+
+// The attributes of a review log
+struct ReviewLogAttributes: Codable {
+    let result: String
+    let reviewedAt: Date
+    let reviewLevel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case result
+        case reviewedAt = "reviewd_at" // Mapped to match the Strapi schema
+        case reviewLevel = "level"
+    }
 }
