@@ -4,15 +4,15 @@ import KeychainAccess
 // MARK: - Main Container View
 
 struct MainView: View {
-    @Binding var isLoggedIn: Bool
+    @Binding var authState: AuthState
     
     @State private var isSideMenuShowing = false
     @State private var isShowingProfileSheet = false
     @State private var isShowingLanguageSheet = false
     @State private var isShowingSettingSheet = false
     
-    init(isLoggedIn: Binding<Bool>) {
-        _isLoggedIn = isLoggedIn
+    init(authState: Binding<AuthState>) {
+        _authState = authState
         
         // Configure the appearance of the TabBar
         let appearance = UITabBarAppearance()
@@ -58,7 +58,7 @@ struct MainView: View {
                 // Conditionally add SideMenuView to the hierarchy.
                 SideMenuView(
                     isShowing: $isSideMenuShowing,
-                    isLoggedIn: $isLoggedIn,
+                    authState: $authState,
                     isShowingProfileSheet: $isShowingProfileSheet,
                     isShowingLanguageSheet: $isShowingLanguageSheet,
                     isShowingSettingSheet: $isShowingSettingSheet
@@ -72,12 +72,9 @@ struct MainView: View {
             ProfileView()
         }
         .sheet(isPresented: $isShowingLanguageSheet) { Text("Language Picker Sheet") }
-        // --- MODIFICATION START ---
-        // Present the new SettingView when the corresponding state is true.
         .sheet(isPresented: $isShowingSettingSheet) {
             SettingView()
         }
-        // --- MODIFICATION END ---
     }
 }
 
@@ -119,5 +116,5 @@ struct MenuToolbar: ToolbarContent {
 
 // MARK: - Preview
 #Preview {
-    MainView(isLoggedIn: .constant(true))
+    MainView(authState: .constant(.loggedIn))
 }

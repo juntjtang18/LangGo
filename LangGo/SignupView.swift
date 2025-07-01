@@ -3,17 +3,13 @@ import SwiftUI
 import KeychainAccess
 
 struct SignupView: View {
-    @Binding var isLoggedIn: Bool
     @Binding var currentView: LoginView.ViewState
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var errorMessage = ""
 
-    // --- MODIFICATION START ---
-    // Use the centralized keychain service from the Config file.
     let keychain = Keychain(service: Config.keychainService)
-    // --- MODIFICATION END ---
 
     var body: some View {
         VStack(spacing: 20) {

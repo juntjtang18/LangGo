@@ -2,7 +2,7 @@ import SwiftUI
 import KeychainAccess
 
 struct LoginView: View {
-    @Binding var isLoggedIn: Bool
+    @Binding var authState: AuthState
     @State private var currentView: ViewState = .login
     @State private var email = ""
     @State private var password = ""
@@ -63,7 +63,7 @@ struct LoginView: View {
                 }
                 .padding()
             } else if currentView == .signup {
-                SignupView(isLoggedIn: $isLoggedIn, currentView: $currentView)
+                SignupView(currentView: $currentView)
             }
         }
     }
@@ -111,7 +111,7 @@ struct LoginView: View {
                 UserDefaults.standard.set(userId, forKey: "userId")
                 
                 // Set the login state to true to dismiss this view
-                isLoggedIn = true
+                authState = .loggedIn
             }
         }.resume()
     }

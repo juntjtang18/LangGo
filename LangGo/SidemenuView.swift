@@ -1,17 +1,10 @@
-//
-//  SidemenuView.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/6/28.
-//
-
 import Foundation
 import SwiftUI
 import KeychainAccess
 
 struct SideMenuView: View {
     @Binding var isShowing: Bool
-    @Binding var isLoggedIn: Bool
+    @Binding var authState: AuthState
     @Binding var isShowingProfileSheet: Bool
     @Binding var isShowingLanguageSheet: Bool
     @Binding var isShowingSettingSheet: Bool
@@ -39,14 +32,10 @@ struct SideMenuView: View {
                         .foregroundColor(.gray)
                 }
                 .padding(30)
-                // --- MODIFICATION START ---
-                // Use .onAppear to load data every time the menu is shown.
-                // This is more reliable than .onChange for this use case.
                 .onAppear {
                     self.username = UserDefaults.standard.string(forKey: "username") ?? "User"
                     self.email = UserDefaults.standard.string(forKey: "email") ?? "No email found"
                 }
-                // --- MODIFICATION END ---
 
                 // Menu buttons
                 SideMenuButton(title: "Profile", iconName: "person.fill") {
@@ -67,7 +56,7 @@ struct SideMenuView: View {
                     UserDefaults.standard.removeObject(forKey: "email")
                     
                     // Update state to reflect logout
-                    isLoggedIn = false
+                    authState = .loggedOut
                     isShowing = false
                 }
                 .padding(.bottom, 40)

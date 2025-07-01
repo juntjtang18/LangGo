@@ -1,41 +1,32 @@
-//
-//  LangGoApp.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/6/25.
-//
-
 import SwiftUI
 import SwiftData
 import KeychainAccess
 
+// Define the possible authentication states for the app
+enum AuthState {
+    case checking
+    case loggedIn
+    case loggedOut
+}
+
 @main
 struct LangGoApp: App {
-    // 1. The top-level state for the entire app now lives here.
-    @State private var isLoggedIn: Bool
+    // 1. Use an enum for a more robust state management
+    @State private var authState: AuthState = .checking
 
-    // Create an instance of Keychain to check for the JWT
-    let keychain = Keychain(service: "com.langGo.swift")
-
-    init() {
-        // 2. The logic to check for an existing session is moved here.
-        if keychain["jwt"] != nil {
-            // Use _isLoggedIn to set the initial value of a @State property
-            _isLoggedIn = State(initialValue: true)
-        } else {
-            _isLoggedIn = State(initialValue: false)
-        }
-    }
-    
     var body: some Scene {
         WindowGroup {
-            // 3. The app's body now decides which view to show.
-            if isLoggedIn {
-                // If logged in, show MainView and pass the binding.
-                MainView(isLoggedIn: $isLoggedIn)
-            } else {
-                // If not logged in, show LoginView and pass the binding.
-                LoginView(isLoggedIn: $isLoggedIn)
+            // 2. Switch the view based on the authentication state
+            switch authState {
+            case .checking:
+                // Show a loading view while verifying the token
+                InitialLoadingView(authState: $authState)
+            case .loggedIn:
+                // Pass a binding to allow logout
+                MainView(authState: $authState)
+            case .loggedOut:
+                // Pass a binding to allow login
+                LoginView(authState: $authState)
             }
         }
         .modelContainer(for: Flashcard.self)
