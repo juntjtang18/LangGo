@@ -1,12 +1,9 @@
 import SwiftUI
 import os
 
-// Define the PartOfSpeech enum based on your Strapi schema
 enum PartOfSpeech: String, CaseIterable, Identifiable {
     case noun, verb, adjective, adverb, conjunction, preposition, interjection, determiner, pronoun
-
     var id: String { self.rawValue }
-
     var displayName: String {
         switch self {
         case .noun: return "Noun"
@@ -25,20 +22,19 @@ enum PartOfSpeech: String, CaseIterable, Identifiable {
 struct NewWordInputView: View {
     @Environment(\.dismiss) var dismiss
     let viewModel: FlashcardViewModel
-
     @State private var word: String = ""
     @State private var baseText: String = ""
     @State private var partOfSpeech: PartOfSpeech = .noun
     @EnvironmentObject var languageSettings: LanguageSettings
     @State private var isTranslating: Bool = false
     @State private var isLoading: Bool = false
-    @State private var showingErrorAlert: Bool = false
-    @State private var errorMessage: String = ""
+    @State private var showSuccessMessage: Bool = false
+    @State private var showErrorMessage: Bool = false
+    @State private var errorMessageText: String = ""
 
     enum InputDirection: String, CaseIterable, Identifiable {
         case englishToLearning = "English to Learning Language"
         case learningToEnglish = "Learning Language to English"
-
         var id: String { self.rawValue }
     }
     @State private var inputDirection: InputDirection = .englishToLearning
@@ -53,9 +49,7 @@ struct NewWordInputView: View {
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         }
-
                         actionButtonsSection
-
                         Section((languageSettings.availableLanguages.first(where: { $0.id == languageSettings.selectedLanguageCode })?.name ?? "Learning Language") + " Translation") {
                             TextField("Translated text", text: $baseText)
                                 .autocapitalization(.none)
@@ -67,16 +61,13 @@ struct NewWordInputView: View {
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         }
-
                         actionButtonsSection
-
                         Section("English Translation") {
                             TextField("English translation", text: $baseText)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         }
                     }
-
                     Section("Part of Speech") {
                         Picker("Select Part of Speech", selection: $partOfSpeech) {
                             ForEach(PartOfSpeech.allCases) { pos in
@@ -86,8 +77,6 @@ struct NewWordInputView: View {
                         .pickerStyle(.navigationLink)
                     }
                 }
-
-                Spacer()
 
                 Button(action: saveWord) {
                     HStack {
@@ -105,30 +94,49 @@ struct NewWordInputView: View {
                 }
                 .disabled(isLoading || word.isEmpty || baseText.isEmpty || isTranslating)
                 .padding(.horizontal)
+
+                VStack {
+                    if showSuccessMessage {
+                        Text("Word saved successfully!")
+                            .font(.subheadline)
+                            .padding()
+                            .background(Color.green.opacity(0.9))
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                            .shadow(radius: 5)
+                            .transition(.opacity)
+                    } else if showErrorMessage {
+                        Text(errorMessageText)
+                            .font(.subheadline)
+                            .padding()
+                            .background(Color.red.opacity(0.9))
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                            .shadow(radius: 5)
+                            .transition(.opacity)
+                    }
+                }
+                .frame(height: 100) // Fixed space for messages
             }
-            .padding(.bottom, 20)
+            .padding(.bottom, 10)
             .navigationTitle("Add New Word")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
+                    Button(action: { dismiss() }) {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
                     }
                 }
-            }
-            .alert("Error", isPresented: $showingErrorAlert) {
-                Button("OK") { }
-            } message: {
-                Text(errorMessage)
             }
         }
     }
 
     private var actionButtonsSection: some View {
         HStack(spacing: 0) {
-            Spacer() // Push buttons to the center
-
-            // Swap Button
+            Spacer()
             Button(action: {
                 withAnimation {
                     inputDirection = (inputDirection == .englishToLearning) ? .learningToEnglish : .englishToLearning
@@ -149,15 +157,10 @@ struct NewWordInputView: View {
                         .font(.caption)
                 }
             }
-            .contentShape(Rectangle()) // Use Rectangle to include text in tap area
+            .contentShape(Rectangle())
             .buttonStyle(PlainButtonStyle())
-
-            Spacer() // Distribute space evenly
-
-            // Magic (AI) Button
-            Button(action: {
-                translateWord()
-            }) {
+            Spacer()
+            Button(action: { translateWord() }) {
                 VStack {
                     if isTranslating {
                         ProgressView()
@@ -176,11 +179,10 @@ struct NewWordInputView: View {
                         .font(.caption)
                 }
             }
-            .contentShape(Rectangle()) // Use Rectangle to include text in tap area
+            .contentShape(Rectangle())
             .buttonStyle(PlainButtonStyle())
             .disabled(word.isEmpty || isTranslating || (languageSettings.selectedLanguageCode == "en"))
-
-            Spacer() // Push buttons to the center
+            Spacer()
         }
         .padding(.vertical, 10)
         .listRowBackground(Color.clear)
@@ -192,7 +194,6 @@ struct NewWordInputView: View {
             do {
                 let learningLanguageWord: String
                 let englishTranslation: String
-
                 if inputDirection == .englishToLearning {
                     learningLanguageWord = baseText
                     englishTranslation = word
@@ -200,16 +201,35 @@ struct NewWordInputView: View {
                     learningLanguageWord = word
                     englishTranslation = baseText
                 }
-
                 try await viewModel.saveNewUserWord(
                     word: learningLanguageWord,
                     baseText: englishTranslation,
                     partOfSpeech: partOfSpeech.rawValue
                 )
-                dismiss()
+                word = ""
+                baseText = ""
+                partOfSpeech = .noun
+                withAnimation {
+                    showSuccessMessage = true
+                    showErrorMessage = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation {
+                        showSuccessMessage = false
+                    }
+                }
+                isLoading = false
             } catch {
-                errorMessage = error.localizedDescription
-                showingErrorAlert = true
+                errorMessageText = error.localizedDescription
+                withAnimation {
+                    showErrorMessage = true
+                    showSuccessMessage = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation {
+                        showErrorMessage = false
+                    }
+                }
                 isLoading = false
             }
         }
@@ -221,7 +241,6 @@ struct NewWordInputView: View {
             do {
                 let sourceLanguageCode: String
                 let targetLanguageCode: String
-
                 if inputDirection == .englishToLearning {
                     sourceLanguageCode = "en"
                     targetLanguageCode = languageSettings.selectedLanguageCode
@@ -229,13 +248,11 @@ struct NewWordInputView: View {
                     sourceLanguageCode = languageSettings.selectedLanguageCode
                     targetLanguageCode = "en"
                 }
-
                 if word.isEmpty || sourceLanguageCode == targetLanguageCode {
                     self.baseText = word
                     isTranslating = false
                     return
                 }
-
                 let translatedText = try await viewModel.translateWord(
                     word: word,
                     source: sourceLanguageCode,
@@ -243,8 +260,16 @@ struct NewWordInputView: View {
                 )
                 self.baseText = translatedText
             } catch {
-                errorMessage = "Translation failed: \(error.localizedDescription)"
-                showingErrorAlert = true
+                errorMessageText = "Translation failed: \(error.localizedDescription)"
+                withAnimation {
+                    showErrorMessage = true
+                    showSuccessMessage = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation {
+                        showErrorMessage = false
+                    }
+                }
             }
             isTranslating = false
         }

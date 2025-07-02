@@ -212,9 +212,6 @@
         }
       }
     },
-    "Cancel" : {
-
-    },
     "CHANGE PASSWORD" : {
       "localizations" : {
         "ja" : {
@@ -480,9 +477,6 @@
 
     },
     "Enter word in learning language" : {
-
-    },
-    "Error" : {
 
     },
     "Flashcard" : {
@@ -1427,6 +1421,9 @@
           }
         }
       }
+    },
+    "Word saved successfully!" : {
+
     },
     "Wrong" : {
       "localizations" : {

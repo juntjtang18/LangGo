@@ -7,9 +7,8 @@ struct FlashcardTabView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: FlashcardViewModel?
 
-    @State private var isReviewing = false
-    // New state to control the presentation of the new word input view
-    @State private var isAddingNewWord = false
+    @State private var isReviewing: Bool = false
+    @State private var isAddingNewWord: Bool = false
     
     var body: some View {
         NavigationStack {
@@ -18,7 +17,7 @@ struct FlashcardTabView: View {
                     FlashcardProgressCircleView(viewModel: viewModel)
                         .padding(.top)
                     
-                    ActionButtonsView(viewModel: viewModel, isReviewing: $isReviewing, isAddingNewWord: $isAddingNewWord) // Pass new binding
+                    ActionButtonsView(viewModel: viewModel, isReviewing: $isReviewing, isAddingNewWord: $isAddingNewWord)
                     
                     StatisticsView(viewModel: viewModel)
                     Spacer()
@@ -26,11 +25,7 @@ struct FlashcardTabView: View {
                 .padding()
                 .navigationTitle("Flashcard")
                 .navigationBarTitleDisplayMode(.inline)
-                .fullScreenCover(isPresented: $isReviewing) {
-                    FlashcardReviewView(viewModel: viewModel)
-                }
-                // Present the NewWordInputView as a sheet
-                .sheet(isPresented: $isAddingNewWord) {
+                .fullScreenCover(isPresented: $isAddingNewWord) {
                     NewWordInputView(viewModel: viewModel)
                 }
                 .toolbar {
@@ -50,8 +45,6 @@ struct FlashcardTabView: View {
         }
     }
 }
-
-// MARK: - Subviews for Readability
 
 private struct FlashcardProgressCircleView: View {
     let viewModel: FlashcardViewModel
@@ -81,14 +74,13 @@ private struct FlashcardProgressCircleView: View {
 private struct ActionButtonsView: View {
     let viewModel: FlashcardViewModel
     @Binding var isReviewing: Bool
-    // New binding for adding new word
     @Binding var isAddingNewWord: Bool
     
     var body: some View {
         Grid {
             GridRow {
                 ActionButton(icon: "w.circle.fill", text: "Add word") {
-                    isAddingNewWord = true // Action to show the new word input view
+                    isAddingNewWord = true
                 }
                 .gridCellAnchor(.center)
                 .frame(maxWidth: .infinity)
@@ -147,7 +139,6 @@ private struct StatisticsView: View {
     }
 }
 
-// MARK: - Helper Views
 private struct ActionButton: View {
     let icon: String
     let text: String
