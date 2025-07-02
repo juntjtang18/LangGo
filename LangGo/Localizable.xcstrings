@@ -209,6 +209,9 @@
         }
       }
     },
+    "Base Text" : {
+
+    },
     "Base Text (e.g., 'to run')" : {
 
     },
@@ -1012,6 +1015,9 @@
     "Saving..." : {
 
     },
+    "Select Part of Speech" : {
+
+    },
     "Settings" : {
       "localizations" : {
         "ja" : {
@@ -1179,9 +1185,6 @@
           }
         }
       }
-    },
-    "Success" : {
-
     },
     "This will control data refreshing behavior in a future update." : {
       "localizations" : {
@@ -1407,10 +1410,10 @@
         }
       }
     },
-    "Word (e.g., 'run')" : {
+    "Word" : {
 
     },
-    "Word Details" : {
+    "Word (e.g., 'run')" : {
 
     },
     "Wrong" : {
@@ -1440,9 +1443,6 @@
           }
         }
       }
-    },
-    "Your new word has been saved." : {
-
     }
   },
   "version" : "1.0"

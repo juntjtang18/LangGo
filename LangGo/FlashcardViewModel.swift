@@ -276,7 +276,7 @@ class FlashcardViewModel {
                 lastReviewedAt: strapiCard.attributes.lastReviewedAt,
                 correctStreak: strapiCard.attributes.correctStreak ?? 0,
                 wrongStreak: strapiCard.attributes.wrongStreak ?? 0,
-                isRemembered: strapiCard.attributes.isRemembered // FIX: Corrected access to isRemembered
+                isRemembered: strapiCard.attributes.isRemembered
             )
             modelContext.insert(newCard)
             return newCard
@@ -298,14 +298,15 @@ class FlashcardViewModel {
             throw URLError(.badURL)
         }
 
+        // The backend will automatically associate the authenticated user.
+        // We only send the word-specific data.
         let newWordData = UserWordData(word: word, base_text: baseText, part_of_speech: partOfSpeech)
         let requestBody = CreateUserWordRequest(data: newWordData)
 
         do {
             logger.info("Attempting to save new user word: '\(word)' with base text '\(baseText)' and part of speech '\(partOfSpeech)'")
             
-            // Assuming NetworkManager.shared.post handles encoding and authentication
-            // FIX: Added Decodable conformance to CreateUserWordRequest and UserWordData
+            // Assuming NetworkManager.shared.post handles encoding and authentication (JWT token in headers)
             let _: UserWordResponse = try await NetworkManager.shared.post(to: url, body: requestBody)
             
             logger.info("Successfully saved new user word: '\(word)' to Strapi.")
@@ -318,6 +319,33 @@ class FlashcardViewModel {
             throw error // Re-throw to be handled by the UI
         }
     }
+
+    /// Translates a word using the /api/translate-word endpoint.
+    /// - Parameters:
+    ///   - word: The word to translate.
+    ///   - source: The source language code (e.g., "en").
+    ///   - target: The target language code (e.g., "zh-CN").
+    /// - Returns: The translated word.
+    @MainActor
+    func translateWord(word: String, source: String, target: String) async throws -> String {
+        let urlString = "\(Config.strapiBaseUrl)/api/translate-word"
+        guard let url = URL(string: urlString) else {
+            logger.error("Invalid URL for translate-word endpoint: \(urlString)")
+            throw URLError(.badURL)
+        }
+
+        let requestBody = TranslateWordRequest(word: word, source: source, target: target)
+
+        do {
+            logger.info("Attempting to translate word '\(word)' from \(source) to \(target)")
+            let response: TranslateWordResponse = try await NetworkManager.shared.post(to: url, body: requestBody)
+            logger.info("Successfully translated word: \(response.translatedText)")
+            return response.translatedText
+        } catch {
+            logger.error("Failed to translate word '\(word)': \(error.localizedDescription)")
+            throw error
+        }
+    }
 }
 
 /// Enum to provide strong typing for review results.
@@ -327,19 +355,19 @@ enum ReviewResult: String {
 }
 
 // MARK: - Strapi Data Structures for User Word
+// These structs are defined here only to avoid redeclaration.
 
 // Request body for creating a new user word
-struct CreateUserWordRequest: Encodable, Decodable { // FIX: Added Decodable conformance
+struct CreateUserWordRequest: Encodable, Decodable { // Needs Decodable if NetworkManager.post requires it for its body parameter.
     let data: UserWordData
 }
 
-// FIX: Added Decodable conformance to UserWordData
-struct UserWordData: Encodable, Decodable {
+struct UserWordData: Encodable, Decodable { // Needs Decodable if CreateUserWordRequest is Decodable.
     let word: String
     let base_text: String
     let part_of_speech: String
-    // Assuming users_permissions_user will be handled by the backend based on auth token
-    // let users_permissions_user: Int? // If you need to explicitly send user ID
+    // user is now handled by the Strapi backend.
+    // Do NOT include it in the client-side payload.
 }
 
 // Response structure for a created user word (optional, but good for confirmation)
@@ -350,4 +378,19 @@ struct UserWordResponse: Decodable {
 struct UserWordResponseData: Decodable {
     let id: Int
     let attributes: UserWordAttributes
+}
+
+// MARK: - Strapi Data Structures for Translate Word
+struct TranslateWordRequest: Codable {
+    let word: String
+    let source: String
+    let target: String
+}
+
+struct TranslateWordResponse: Decodable {
+    let translatedText: String
+
+    enum CodingKeys: String, CodingKey {
+        case translatedText = "translation" // Corrected to match Strapi response key
+    }
 }
