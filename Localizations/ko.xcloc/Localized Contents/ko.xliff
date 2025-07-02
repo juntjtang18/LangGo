@@ -1,0 +1,221 @@
+<?xml version='1.0' encoding='utf-8'?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+  <file original="LangGo/InfoPlist.xcstrings" source-language="en" target-language="ko" datatype="plaintext">
+    <header>
+      <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="16.2" build-num="16C5032a" />
+    </header>
+    <body>
+      <trans-unit id="CFBundleName" xml:space="preserve">
+        <source>LangGo</source>
+        <note>Bundle name</note>
+      </trans-unit>
+    </body>
+  </file>
+  <file original="LangGo/Localizable.xcstrings" source-language="en" target-language="ko" datatype="plaintext">
+    <header>
+      <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="16.2" build-num="16C5032a" />
+    </header>
+    <body>
+      <trans-unit id="%lld" xml:space="preserve">
+        <source>%lld</source>
+        <note />
+      <target state="translated">%lld</target></trans-unit>
+      <trans-unit id="%lld of %lld" xml:space="preserve">
+        <source>%1$lld of %2$lld</source>
+        <note />
+      <target state="translated">%1 $ lld of %2 $ lld</target></trans-unit>
+      <trans-unit id="%lld%%" xml:space="preserve">
+        <source>%lld%%</source>
+        <note />
+      <target state="translated">%lld %%</target></trans-unit>
+      <trans-unit id="AI" xml:space="preserve">
+        <source>AI</source>
+        <note />
+      <target state="translated">일체 포함</target></trans-unit>
+      <trans-unit id="AI Assistant" xml:space="preserve">
+        <source>AI Assistant</source>
+        <note />
+      <target state="translated">AI 보조</target></trans-unit>
+      <trans-unit id="AI View" xml:space="preserve">
+        <source>AI View</source>
+        <note />
+      <target state="translated">AI보기</target></trans-unit>
+      <trans-unit id="Back" xml:space="preserve">
+        <source>Back</source>
+        <note />
+      <target state="translated">뒤쪽에</target></trans-unit>
+      <trans-unit id="CHANGE PASSWORD" xml:space="preserve">
+        <source>CHANGE PASSWORD</source>
+        <note />
+      <target state="translated">비밀번호를 변경하십시오</target></trans-unit>
+      <trans-unit id="Confirm New Password" xml:space="preserve">
+        <source>Confirm New Password</source>
+        <note />
+      <target state="translated">새 비밀번호를 확인하십시오</target></trans-unit>
+      <trans-unit id="Confirm Password" xml:space="preserve">
+        <source>Confirm Password</source>
+        <note />
+      <target state="translated">비밀번호를 확인하십시오</target></trans-unit>
+      <trans-unit id="Correct" xml:space="preserve">
+        <source>Correct</source>
+        <note />
+      <target state="translated">옳은</target></trans-unit>
+      <trans-unit id="Current Password" xml:space="preserve">
+        <source>Current Password</source>
+        <note />
+      <target state="translated">현재 비밀번호</target></trans-unit>
+      <trans-unit id="Data Options" xml:space="preserve">
+        <source>Data Options</source>
+        <note />
+      <target state="translated">데이터 옵션</target></trans-unit>
+      <trans-unit id="Don't have an account? Sign Up" xml:space="preserve">
+        <source>Don't have an account? Sign Up</source>
+        <note />
+      <target state="translated">계정이 없습니까? 가입하십시오</target></trans-unit>
+      <trans-unit id="Done" xml:space="preserve">
+        <source>Done</source>
+        <note />
+      <target state="translated">완료</target></trans-unit>
+      <trans-unit id="Email" xml:space="preserve">
+        <source>Email</source>
+        <note />
+      <target state="translated">이메일</target></trans-unit>
+      <trans-unit id="Flashcard" xml:space="preserve">
+        <source>Flashcard</source>
+        <note />
+      <target state="translated">플래시 카드</target></trans-unit>
+      <trans-unit id="Flashcards" xml:space="preserve">
+        <source>Flashcards</source>
+        <note />
+      <target state="translated">플래시 카드</target></trans-unit>
+      <trans-unit id="Language" xml:space="preserve">
+        <source>Language</source>
+        <note />
+      <target state="translated">언어</target></trans-unit>
+      <trans-unit id="Language Picker Sheet" xml:space="preserve">
+        <source>Language Picker Sheet</source>
+        <note />
+      <target state="translated">언어 선택기 시트</target></trans-unit>
+      <trans-unit id="Learn" xml:space="preserve">
+        <source>Learn</source>
+        <note />
+      <target state="translated">배우다</target></trans-unit>
+      <trans-unit id="Learn English" xml:space="preserve">
+        <source>Learn English</source>
+        <note />
+      <target state="translated">영어를 배우십시오</target></trans-unit>
+      <trans-unit id="Lesson 3 Good Morning" xml:space="preserve">
+        <source>Lesson 3 Good Morning</source>
+        <note />
+      <target state="translated">레슨 3 좋은 아침</target></trans-unit>
+      <trans-unit id="Login" xml:space="preserve">
+        <source>Login</source>
+        <note />
+      <target state="translated">로그인</target></trans-unit>
+      <trans-unit id="New Password" xml:space="preserve">
+        <source>New Password</source>
+        <note />
+      <target state="translated">새 비밀번호</target></trans-unit>
+      <trans-unit id="No cards to review." xml:space="preserve">
+        <source>No cards to review.</source>
+        <note />
+      <target state="translated">검토 할 카드가 없습니다.</target></trans-unit>
+      <trans-unit id="OK" xml:space="preserve">
+        <source>OK</source>
+        <note />
+      <target state="translated">좋아요</target></trans-unit>
+      <trans-unit id="Password" xml:space="preserve">
+        <source>Password</source>
+        <note />
+      <target state="translated">비밀번호</target></trans-unit>
+      <trans-unit id="Profile" xml:space="preserve">
+        <source>Profile</source>
+        <note />
+      <target state="translated">윤곽</target></trans-unit>
+      <trans-unit id="Profile Update" xml:space="preserve">
+        <source>Profile Update</source>
+        <note />
+      <target state="translated">프로필 업데이트</target></trans-unit>
+      <trans-unit id="Progress" xml:space="preserve">
+        <source>Progress</source>
+        <note />
+      <target state="translated">진전</target></trans-unit>
+      <trans-unit id="REFRESH mode" xml:space="preserve">
+        <source>REFRESH mode</source>
+        <note />
+      <target state="translated">새로 고침 모드</target></trans-unit>
+      <trans-unit id="Resume Learning" xml:space="preserve">
+        <source>Resume Learning</source>
+        <note />
+      <target state="translated">학습을 재개하십시오</target></trans-unit>
+      <trans-unit id="Review Session" xml:space="preserve">
+        <source>Review Session</source>
+        <note />
+      <target state="translated">검토 세션</target></trans-unit>
+      <trans-unit id="Save Changes" xml:space="preserve">
+        <source>Save Changes</source>
+        <note />
+      <target state="translated">변경 사항을 저장하십시오</target></trans-unit>
+      <trans-unit id="Settings" xml:space="preserve">
+        <source>Settings</source>
+        <note />
+      <target state="translated">설정</target></trans-unit>
+      <trans-unit id="Sign Up" xml:space="preserve">
+        <source>Sign Up</source>
+        <note />
+      <target state="translated">가입하십시오</target></trans-unit>
+      <trans-unit id="Sign Up for LangGo" xml:space="preserve">
+        <source>Sign Up for LangGo</source>
+        <note />
+      <target state="translated">Langgo에 가입하십시오</target></trans-unit>
+      <trans-unit id="Statistics" xml:space="preserve">
+        <source>Statistics</source>
+        <note />
+      <target state="translated">통계</target></trans-unit>
+      <trans-unit id="Stories" xml:space="preserve">
+        <source>Stories</source>
+        <note />
+      <target state="translated">이야기</target></trans-unit>
+      <trans-unit id="Stories View" xml:space="preserve">
+        <source>Stories View</source>
+        <note />
+      <target state="translated">이야기보기</target></trans-unit>
+      <trans-unit id="This will control data refreshing behavior in a future update." xml:space="preserve">
+        <source>This will control data refreshing behavior in a future update.</source>
+        <note />
+      <target state="translated">이렇게하면 향후 업데이트에서 데이터 새로 고침 동작을 제어 할 수 있습니다.</target></trans-unit>
+      <trans-unit id="Translation" xml:space="preserve">
+        <source>Translation</source>
+        <note />
+      <target state="translated">번역</target></trans-unit>
+      <trans-unit id="Translation View" xml:space="preserve">
+        <source>Translation View</source>
+        <note />
+      <target state="translated">번역보기</target></trans-unit>
+      <trans-unit id="USER PROFILE" xml:space="preserve">
+        <source>USER PROFILE</source>
+        <note />
+      <target state="translated">사용자 프로필</target></trans-unit>
+      <trans-unit id="Unit 1 Introductions" xml:space="preserve">
+        <source>Unit 1 Introductions</source>
+        <note />
+      <target state="translated">단원 1 소개</target></trans-unit>
+      <trans-unit id="Username" xml:space="preserve">
+        <source>Username</source>
+        <note />
+      <target state="translated">사용자 이름</target></trans-unit>
+      <trans-unit id="Verifying Session..." xml:space="preserve">
+        <source>Verifying Session...</source>
+        <note />
+      <target state="translated">세션 확인 ...</target></trans-unit>
+      <trans-unit id="Welcome to LangGo" xml:space="preserve">
+        <source>Welcome to LangGo</source>
+        <note />
+      <target state="translated">Langgo에 오신 것을 환영합니다</target></trans-unit>
+      <trans-unit id="Wrong" xml:space="preserve">
+        <source>Wrong</source>
+        <note />
+      <target state="translated">잘못된</target></trans-unit>
+    </body>
+  </file>
+</xliff>

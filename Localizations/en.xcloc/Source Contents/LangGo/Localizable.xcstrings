@@ -1,0 +1,163 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld" : {
+
+    },
+    "%lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "%lld%%" : {
+
+    },
+    "AI" : {
+
+    },
+    "AI Assistant" : {
+
+    },
+    "AI View" : {
+
+    },
+    "Back" : {
+
+    },
+    "CHANGE PASSWORD" : {
+
+    },
+    "Confirm New Password" : {
+
+    },
+    "Confirm Password" : {
+
+    },
+    "Correct" : {
+
+    },
+    "Current Password" : {
+
+    },
+    "Data Options" : {
+
+    },
+    "Don't have an account? Sign Up" : {
+
+    },
+    "Done" : {
+
+    },
+    "Email" : {
+
+    },
+    "Flashcard" : {
+
+    },
+    "Flashcards" : {
+
+    },
+    "Language" : {
+
+    },
+    "Language Picker Sheet" : {
+
+    },
+    "Learn" : {
+
+    },
+    "Learn English" : {
+
+    },
+    "Lesson 3 Good Morning" : {
+
+    },
+    "Login" : {
+
+    },
+    "New Password" : {
+
+    },
+    "No cards to review." : {
+
+    },
+    "OK" : {
+
+    },
+    "Password" : {
+
+    },
+    "Profile" : {
+
+    },
+    "Profile Update" : {
+
+    },
+    "Progress" : {
+
+    },
+    "REFRESH mode" : {
+
+    },
+    "Resume Learning" : {
+
+    },
+    "Review Session" : {
+
+    },
+    "Save Changes" : {
+
+    },
+    "Settings" : {
+
+    },
+    "Sign Up" : {
+
+    },
+    "Sign Up for LangGo" : {
+
+    },
+    "Statistics" : {
+
+    },
+    "Stories" : {
+
+    },
+    "Stories View" : {
+
+    },
+    "This will control data refreshing behavior in a future update." : {
+
+    },
+    "Translation" : {
+
+    },
+    "Translation View" : {
+
+    },
+    "Unit 1 Introductions" : {
+
+    },
+    "USER PROFILE" : {
+
+    },
+    "Username" : {
+
+    },
+    "Verifying Session..." : {
+
+    },
+    "Welcome to LangGo" : {
+
+    },
+    "Wrong" : {
+
+    }
+  },
+  "version" : "1.0"
+}
