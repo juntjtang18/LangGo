@@ -20,29 +20,10 @@ struct SignupView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            HStack {
-                Button(action: { currentView = .login }) {
-                    Image(systemName: "chevron.left")
-                    Text("Back")
-                }
-                .padding()
-                Spacer()
-            }
-
             Text("Sign Up for LangGo")
                 .font(.largeTitle)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
-
-            // --- LANGUAGE PICKER ADDED ---
-            Picker("Language", selection: $languageSettings.selectedLanguageCode) {
-                ForEach(languageSettings.availableLanguages) { language in
-                    Text(language.name).tag(language.id)
-                }
-            }
-            .pickerStyle(.menu)
-            .padding(.horizontal)
-            // --- END OF PICKER ---
 
             TextField("Email", text: $email)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -77,6 +58,33 @@ struct SignupView: View {
             Spacer()
         }
         .padding()
+        // The toolbar now contains both the back button and the new icon-based language picker.
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { currentView = .login }) {
+                    Image(systemName: "chevron.left")
+                    Text("Back")
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    ForEach(languageSettings.availableLanguages) { language in
+                        Button(action: {
+                            languageSettings.selectedLanguageCode = language.id
+                        }) {
+                            Text(language.name)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "globe")
+                        .font(.title2)
+                        .foregroundColor(.accentColor)
+                }
+            }
+        }
+        .navigationTitle("Sign Up")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true) // Hide the default back button
     }
 
     // --- SIGNUP FUNCTION MODIFIED ---

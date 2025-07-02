@@ -7,6 +7,9 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var errorMessage = ""
+    
+    // Access the shared language settings from the environment
+    @EnvironmentObject var languageSettings: LanguageSettings
 
     // Use the centralized keychain service from the Config file.
     let keychain = Keychain(service: Config.keychainService)
@@ -17,53 +20,77 @@ struct LoginView: View {
     }
 
     var body: some View {
-        Group {
-            if currentView == .login {
-                VStack(spacing: 20) {
-                    Text("Welcome to LangGo")
-                        .font(.largeTitle)
-                        .multilineTextAlignment(.center)
+        // A NavigationStack is added to host the toolbar for the language picker.
+        NavigationStack {
+            Group {
+                if currentView == .login {
+                    VStack(spacing: 20) {
+                        Text("Welcome to LangGo")
+                            .font(.largeTitle)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+
+                        TextField("Email", text: $email)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .autocapitalization(.none)
+                            .keyboardType(.emailAddress)
+                            .padding(.horizontal)
+
+                        SecureField("Password", text: $password)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .padding(.horizontal)
+
+                        if !errorMessage.isEmpty {
+                            Text(errorMessage)
+                                .foregroundColor(.red)
+                                .padding()
+                        }
+
+                        Button(action: {
+                            login()
+                        }) {
+                            Text("Login")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
                         .padding(.horizontal)
 
-                    TextField("Email", text: $email)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .autocapitalization(.none)
-                        .keyboardType(.emailAddress)
-                        .padding(.horizontal)
-
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .padding(.horizontal)
-
-                    if !errorMessage.isEmpty {
-                        Text(errorMessage)
-                            .foregroundColor(.red)
-                            .padding()
-                    }
-
-                    Button(action: {
-                        login()
-                    }) {
-                        Text("Login")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .clipShape(Capsule())
-                    }
-                    .padding(.horizontal)
-
-                    Button(action: {
-                        currentView = .signup
-                    }) {
-                        Text("Don't have an account? Sign Up")
-                            .foregroundColor(.blue)
+                        Button(action: {
+                            currentView = .signup
+                        }) {
+                            Text("Don't have an account? Sign Up")
+                                .foregroundColor(.blue)
+                        }
+                        .padding()
                     }
                     .padding()
+                    // An empty title is used to make the navigation bar visible without showing text.
+                    .navigationTitle("")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            // The Picker has been replaced with a Menu, using a globe icon as its label.
+                            Menu {
+                                ForEach(languageSettings.availableLanguages) { language in
+                                    Button(action: {
+                                        languageSettings.selectedLanguageCode = language.id
+                                    }) {
+                                        Text(language.name)
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "globe")
+                                    .font(.title2)
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                    }
+                } else if currentView == .signup {
+                    SignupView(currentView: $currentView, authState: $authState)
                 }
-                .padding()
-            } else if currentView == .signup {
-                SignupView(currentView: $currentView, authState: $authState)
             }
         }
     }
