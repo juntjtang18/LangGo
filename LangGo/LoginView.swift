@@ -63,7 +63,7 @@ struct LoginView: View {
                 }
                 .padding()
             } else if currentView == .signup {
-                SignupView(currentView: $currentView)
+                SignupView(currentView: $currentView, authState: $authState)
             }
         }
     }

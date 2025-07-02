@@ -13,6 +13,7 @@ enum AuthState {
 struct LangGoApp: App {
     // 1. Use an enum for a more robust state management
     @State private var authState: AuthState = .checking
+    @StateObject private var languageSettings = LanguageSettings()
 
     var body: some Scene {
         WindowGroup {
@@ -30,5 +31,10 @@ struct LangGoApp: App {
             }
         }
         .modelContainer(for: Flashcard.self)
+        // Make the language settings available to all child views.
+        .environmentObject(languageSettings)
+        // Set the app's locale from the published property.
+        // The UI will automatically update when this value changes.
+        .environment(\.locale, .init(identifier: languageSettings.selectedLanguageCode))
     }
 }
