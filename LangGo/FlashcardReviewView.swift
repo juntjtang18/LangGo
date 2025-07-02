@@ -24,7 +24,8 @@ struct FlashcardReviewView: View {
                         }
                         .progressViewStyle(.linear)
                         
-                        Text("\(currentIndex + 1) of \(viewModel.reviewCards.count)")
+                        // Use NumberFormatter for locale-sensitive progress count formatting
+                        Text(progressCountString)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -106,6 +107,14 @@ struct FlashcardReviewView: View {
                 }
             }
         }
+    }
+    
+    private var progressCountString: String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale.current
+        // Use a localized format string for "X of Y"
+        let format = NSLocalizedString("%lld of %lld", comment: "Progress count format (e.g., 1 of 10)")
+        return String(format: format, currentIndex + 1, viewModel.reviewCards.count)
     }
     
     // REVISED: This function now calls the new unified method in the view model.
