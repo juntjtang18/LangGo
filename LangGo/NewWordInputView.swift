@@ -192,18 +192,24 @@ struct NewWordInputView: View {
         isLoading = true
         Task {
             do {
-                let learningLanguageWord: String
-                let englishTranslation: String
+                let strapiWordFieldContent: String // This will be the English word
+                let strapiBaseTextFieldContent: String // This will be the Learning Language word
+
                 if inputDirection == .englishToLearning {
-                    learningLanguageWord = baseText
-                    englishTranslation = word
-                } else {
-                    learningLanguageWord = word
-                    englishTranslation = baseText
+                    // UI: "English Word" is $word, "Learning Language Translation" is $baseText
+                    // Desired Strapi: 'word' field = English, 'base_text' field = Learning Language
+                    strapiWordFieldContent = word // Content of UI's "English Word"
+                    strapiBaseTextFieldContent = baseText // Content of UI's "Learning Language Translation"
+                } else { // inputDirection == .learningToEnglish
+                    // UI: "Learning Language Word" is $word, "English Translation" is $baseText
+                    // Desired Strapi: 'word' field = English, 'base_text' field = Learning Language
+                    strapiWordFieldContent = baseText // Content of UI's "English Translation"
+                    strapiBaseTextFieldContent = word // Content of UI's "Learning Language Word"
                 }
+                
                 try await viewModel.saveNewUserWord(
-                    word: learningLanguageWord,
-                    baseText: englishTranslation,
+                    word: strapiWordFieldContent, // Maps to Strapi 'word' field
+                    baseText: strapiBaseTextFieldContent, // Maps to Strapi 'base_text' field
                     partOfSpeech: partOfSpeech.rawValue
                 )
                 word = ""
