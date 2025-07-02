@@ -8,7 +8,6 @@ struct MainView: View {
     
     @State private var isSideMenuShowing = false
     @State private var isShowingProfileSheet = false
-    @State private var isShowingLanguageSheet = false
     @State private var isShowingSettingSheet = false
     
     init(authState: Binding<AuthState>) {
@@ -60,7 +59,6 @@ struct MainView: View {
                     isShowing: $isSideMenuShowing,
                     authState: $authState,
                     isShowingProfileSheet: $isShowingProfileSheet,
-                    isShowingLanguageSheet: $isShowingLanguageSheet,
                     isShowingSettingSheet: $isShowingSettingSheet
                 )
                 .frame(width: UIScreen.main.bounds.width * 0.75)
@@ -71,7 +69,6 @@ struct MainView: View {
         .fullScreenCover(isPresented: $isShowingProfileSheet) {
             ProfileView()
         }
-        .sheet(isPresented: $isShowingLanguageSheet) { Text("Language Picker Sheet") }
         .sheet(isPresented: $isShowingSettingSheet) {
             SettingView()
         }

@@ -74,11 +74,9 @@ struct LoginView: View {
                         ToolbarItem(placement: .navigationBarTrailing) {
                             // The Picker has been replaced with a Menu, using a globe icon as its label.
                             Menu {
-                                ForEach(languageSettings.availableLanguages) { language in
-                                    Button(action: {
-                                        languageSettings.selectedLanguageCode = language.id
-                                    }) {
-                                        Text(language.name)
+                                Picker("Language", selection: $languageSettings.selectedLanguageCode) { //
+                                    ForEach(languageSettings.availableLanguages) { language in
+                                        Text(language.name).tag(language.id) //
                                     }
                                 }
                             } label: {

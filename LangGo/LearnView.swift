@@ -13,7 +13,8 @@ import SwiftUI
 
 struct LearnTabView: View {
     @Binding var isSideMenuShowing: Bool
-    
+    @EnvironmentObject var languageSettings: LanguageSettings
+
     var body: some View {
         NavigationStack {
             LearnView() // The detailed view goes here.

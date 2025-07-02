@@ -55,7 +55,6 @@ struct SignupView: View {
             }
             .padding(.horizontal)
 
-            Spacer()
         }
         .padding()
         // The toolbar now contains both the back button and the new icon-based language picker.
@@ -68,11 +67,9 @@ struct SignupView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    ForEach(languageSettings.availableLanguages) { language in
-                        Button(action: {
-                            languageSettings.selectedLanguageCode = language.id
-                        }) {
-                            Text(language.name)
+                    Picker("Language", selection: $languageSettings.selectedLanguageCode) { //
+                        ForEach(languageSettings.availableLanguages) { language in
+                            Text(language.name).tag(language.id) //
                         }
                     }
                 } label: {

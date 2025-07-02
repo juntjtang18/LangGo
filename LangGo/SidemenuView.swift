@@ -3,10 +3,10 @@ import SwiftUI
 import KeychainAccess
 
 struct SideMenuView: View {
+    @EnvironmentObject var languageSettings: LanguageSettings
     @Binding var isShowing: Bool
     @Binding var authState: AuthState
     @Binding var isShowingProfileSheet: Bool
-    @Binding var isShowingLanguageSheet: Bool
     @Binding var isShowingSettingSheet: Bool
     
     @State private var username: String = ""
@@ -42,7 +42,26 @@ struct SideMenuView: View {
                     isShowingProfileSheet.toggle()
                     isShowing = false // Close side menu when opening profile
                 }
-                SideMenuButton(title: "Select Language", iconName: "globe") { isShowingLanguageSheet.toggle() }
+                
+                // The language picker is now a Menu containing a Picker.
+                Menu {
+                    Picker("Language", selection: $languageSettings.selectedLanguageCode) {
+                        ForEach(languageSettings.availableLanguages) { language in
+                            Text(language.name).tag(language.id)
+                        }
+                    }
+                } label: {
+                    // The label is styled to look like the other side menu buttons.
+                    HStack(spacing: 15) {
+                        Image(systemName: "globe")
+                            .font(.title2)
+                        Text("Language")
+                            .font(.headline)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 SideMenuButton(title: "Settings", iconName: "gearshape.fill") { isShowingSettingSheet.toggle() }
                 
                 Spacer()
