@@ -117,7 +117,6 @@ class FlashcardViewModel {
 
     @MainActor
     private func fetchAndLoadReviewCardsFromServer() async throws {
-        // CORRECTED: The URL now points to the correct endpoint you specified.
         let urlString = "\(Config.strapiBaseUrl)/api/review-flashcards"
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
@@ -277,10 +276,46 @@ class FlashcardViewModel {
                 lastReviewedAt: strapiCard.attributes.lastReviewedAt,
                 correctStreak: strapiCard.attributes.correctStreak ?? 0,
                 wrongStreak: strapiCard.attributes.wrongStreak ?? 0,
-                isRemembered: strapiCard.attributes.isRemembered
+                isRemembered: strapiCard.attributes.isRemembered // FIX: Corrected access to isRemembered
             )
             modelContext.insert(newCard)
             return newCard
+        }
+    }
+
+    // MARK: - New Word Logic
+
+    /// Saves a new user-created word to Strapi.
+    /// - Parameters:
+    ///   - word: The target word (e.g., "run").
+    ///   - baseText: The base form or definition (e.g., "to run").
+    ///   - partOfSpeech: The part of speech (e.g., "verb").
+    @MainActor
+    func saveNewUserWord(word: String, baseText: String, partOfSpeech: String) async throws {
+        let urlString = "\(Config.strapiBaseUrl)/api/user-words"
+        guard let url = URL(string: urlString) else {
+            logger.error("Invalid URL for saving new user word: \(urlString)")
+            throw URLError(.badURL)
+        }
+
+        let newWordData = UserWordData(word: word, base_text: baseText, part_of_speech: partOfSpeech)
+        let requestBody = CreateUserWordRequest(data: newWordData)
+
+        do {
+            logger.info("Attempting to save new user word: '\(word)' with base text '\(baseText)' and part of speech '\(partOfSpeech)'")
+            
+            // Assuming NetworkManager.shared.post handles encoding and authentication
+            // FIX: Added Decodable conformance to CreateUserWordRequest and UserWordData
+            let _: UserWordResponse = try await NetworkManager.shared.post(to: url, body: requestBody)
+            
+            logger.info("Successfully saved new user word: '\(word)' to Strapi.")
+            
+            // After saving, refresh statistics to reflect the new word count
+            await loadStatistics()
+            
+        } catch {
+            logger.error("Failed to save new user word '\(word)': \(error.localizedDescription)")
+            throw error // Re-throw to be handled by the UI
         }
     }
 }
@@ -289,4 +324,30 @@ class FlashcardViewModel {
 enum ReviewResult: String {
     case correct
     case wrong
+}
+
+// MARK: - Strapi Data Structures for User Word
+
+// Request body for creating a new user word
+struct CreateUserWordRequest: Encodable, Decodable { // FIX: Added Decodable conformance
+    let data: UserWordData
+}
+
+// FIX: Added Decodable conformance to UserWordData
+struct UserWordData: Encodable, Decodable {
+    let word: String
+    let base_text: String
+    let part_of_speech: String
+    // Assuming users_permissions_user will be handled by the backend based on auth token
+    // let users_permissions_user: Int? // If you need to explicitly send user ID
+}
+
+// Response structure for a created user word (optional, but good for confirmation)
+struct UserWordResponse: Decodable {
+    let data: UserWordResponseData
+}
+
+struct UserWordResponseData: Decodable {
+    let id: Int
+    let attributes: UserWordAttributes
 }

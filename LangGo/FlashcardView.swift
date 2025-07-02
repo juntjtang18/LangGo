@@ -8,6 +8,8 @@ struct FlashcardTabView: View {
     @State private var viewModel: FlashcardViewModel?
 
     @State private var isReviewing = false
+    // New state to control the presentation of the new word input view
+    @State private var isAddingNewWord = false
     
     var body: some View {
         NavigationStack {
@@ -16,7 +18,7 @@ struct FlashcardTabView: View {
                     FlashcardProgressCircleView(viewModel: viewModel)
                         .padding(.top)
                     
-                    ActionButtonsView(viewModel: viewModel, isReviewing: $isReviewing)
+                    ActionButtonsView(viewModel: viewModel, isReviewing: $isReviewing, isAddingNewWord: $isAddingNewWord) // Pass new binding
                     
                     StatisticsView(viewModel: viewModel)
                     Spacer()
@@ -27,11 +29,14 @@ struct FlashcardTabView: View {
                 .fullScreenCover(isPresented: $isReviewing) {
                     FlashcardReviewView(viewModel: viewModel)
                 }
+                // Present the NewWordInputView as a sheet
+                .sheet(isPresented: $isAddingNewWord) {
+                    NewWordInputView(viewModel: viewModel)
+                }
                 .toolbar {
                     MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
                 }
                 .task {
-                    // FIX: Changed to call loadStatistics() to prevent build error.
                     await viewModel.loadStatistics()
                 }
             } else {
@@ -76,15 +81,18 @@ private struct FlashcardProgressCircleView: View {
 private struct ActionButtonsView: View {
     let viewModel: FlashcardViewModel
     @Binding var isReviewing: Bool
+    // New binding for adding new word
+    @Binding var isAddingNewWord: Bool
     
     var body: some View {
         Grid {
             GridRow {
-                ActionButton(icon: "w.circle.fill", text: "Add word") { /* Add action */ }
-                    .gridCellAnchor(.center)
-                    .frame(maxWidth: .infinity)
+                ActionButton(icon: "w.circle.fill", text: "Add word") {
+                    isAddingNewWord = true // Action to show the new word input view
+                }
+                .gridCellAnchor(.center)
+                .frame(maxWidth: .infinity)
 
-                // FIX: This now uses the correct logic to prepare the session before presenting the view.
                 ActionButton(icon: "play.circle.fill", text: "Start review", isLarge: true) {
                     Task {
                         await viewModel.prepareReviewSession()

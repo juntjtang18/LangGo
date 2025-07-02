@@ -94,6 +94,9 @@
         }
       }
     },
+    "Add New Word" : {
+
+    },
     "AI" : {
       "localizations" : {
         "ja" : {
@@ -205,6 +208,12 @@
           }
         }
       }
+    },
+    "Base Text (e.g., 'to run')" : {
+
+    },
+    "Cancel" : {
+
     },
     "CHANGE PASSWORD" : {
       "localizations" : {
@@ -457,6 +466,9 @@
           }
         }
       }
+    },
+    "Error" : {
+
     },
     "Flashcard" : {
       "localizations" : {
@@ -767,6 +779,9 @@
         }
       }
     },
+    "Part of Speech" : {
+
+    },
     "Password" : {
       "localizations" : {
         "ja" : {
@@ -991,6 +1006,12 @@
         }
       }
     },
+    "Save Word" : {
+
+    },
+    "Saving..." : {
+
+    },
     "Settings" : {
       "localizations" : {
         "ja" : {
@@ -1158,6 +1179,9 @@
           }
         }
       }
+    },
+    "Success" : {
+
     },
     "This will control data refreshing behavior in a future update." : {
       "localizations" : {
@@ -1383,6 +1407,12 @@
         }
       }
     },
+    "Word (e.g., 'run')" : {
+
+    },
+    "Word Details" : {
+
+    },
     "Wrong" : {
       "localizations" : {
         "ja" : {
@@ -1410,6 +1440,9 @@
           }
         }
       }
+    },
+    "Your new word has been saved." : {
+
     }
   },
   "version" : "1.0"
