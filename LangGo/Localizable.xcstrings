@@ -209,9 +209,6 @@
         }
       }
     },
-    "Base Text (e.g., 'to run')" : {
-
-    },
     "Cancel" : {
 
     },
@@ -467,7 +464,19 @@
         }
       }
     },
-    "English" : {
+    "English translation" : {
+
+    },
+    "English Translation" : {
+
+    },
+    "English Word" : {
+
+    },
+    "Enter English word" : {
+
+    },
+    "Enter word in learning language" : {
 
     },
     "Error" : {
@@ -1214,6 +1223,9 @@
         }
       }
     },
+    "Translated text" : {
+
+    },
     "Translation" : {
       "localizations" : {
         "ja" : {
@@ -1409,9 +1421,6 @@
           }
         }
       }
-    },
-    "Word (e.g., 'run')" : {
-
     },
     "Wrong" : {
       "localizations" : {

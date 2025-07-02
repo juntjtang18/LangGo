@@ -36,71 +36,146 @@ struct NewWordInputView: View {
     @State private var showingErrorAlert: Bool = false
     @State private var errorMessage: String = ""
 
+    // State to control the input direction based on learning context
+    enum InputDirection: String, CaseIterable, Identifiable {
+        case englishToLearning = "English to Learning Language"
+        case learningToEnglish = "Learning Language to English"
+
+        var id: String { self.rawValue }
+    }
+    @State private var inputDirection: InputDirection = .englishToLearning
+
     var body: some View {
         NavigationStack {
-            VStack { // This is the outermost VStack
+            VStack {
                 Form {
-                    // Section for English Word
-                    Section("English") {
+                    // Dynamically render sections based on inputDirection
+                    if inputDirection == .englishToLearning {
+                        Section("English Word") {
+                            HStack {
+                                TextField("Enter English word", text: $word)
+                                    .autocapitalization(.none)
+                                    .disableAutocorrection(true)
+
+                                Button(action: translateWord) {
+                                    if isTranslating {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "wand.and.stars")
+                                            .foregroundColor(.accentColor)
+                                    }
+                                }
+                                .disabled(word.isEmpty || isTranslating || (languageSettings.selectedLanguageCode == "en"))
+                            }
+                        }
+
+                        // Swap button as a larger circle with icon only
                         HStack {
-                            TextField("Word (e.g., 'run')", text: $word)
+                            Spacer()
+                            Button(action: {
+                                withAnimation {
+                                    inputDirection = .learningToEnglish
+                                    word = "" // Clear fields on swap
+                                    baseText = "" // Clear fields on swap
+                                }
+                            }) {
+                                Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                    .font(.largeTitle) // Make icon larger
+                                    .foregroundColor(.white) // Icon color
+                                    .frame(width: 60, height: 60) // Fixed size for the tappable area
+                                    .background(Color.accentColor) // A solid color for the circle background
+                                    .clipShape(Circle()) // Clip to a perfect circle
+                                    .shadow(radius: 3) // Add a subtle shadow for depth
+                            }
+                            .padding(.vertical, 10) // Add some vertical padding to separate it from sections
+                            Spacer()
+                        }
+
+
+                        Section((languageSettings.availableLanguages.first(where: { $0.id == languageSettings.selectedLanguageCode })?.name ?? "Learning Language") + " Translation") {
+                            TextField("Translated text", text: $baseText)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
+                        }
+                    } else { // inputDirection == .learningToEnglish
+                        Section((languageSettings.availableLanguages.first(where: { $0.id == languageSettings.selectedLanguageCode })?.name ?? "Learning Language") + " Word") {
+                            HStack {
+                                TextField("Enter word in learning language", text: $word)
+                                    .autocapitalization(.none)
+                                    .disableAutocorrection(true)
 
-                            // Magic button for translation
-                            Button(action: translateWord) {
-                                if isTranslating {
-                                    ProgressView()
-                                } else {
-                                    Image(systemName: "wand.and.stars") // Magic icon
-                                        .foregroundColor(.accentColor)
+                                Button(action: translateWord) {
+                                    if isTranslating {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "wand.and.stars")
+                                            .foregroundColor(.accentColor)
+                                    }
                                 }
+                                .disabled(word.isEmpty || isTranslating || (languageSettings.selectedLanguageCode == "en"))
                             }
-                            // Disable if no word, translating, or target language is English (same as source)
-                            .disabled(word.isEmpty || isTranslating || languageSettings.selectedLanguageCode == "en")
+                        }
+
+                        // Swap button as a larger circle with icon only
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                withAnimation {
+                                    inputDirection = .englishToLearning
+                                    word = "" // Clear fields on swap
+                                    baseText = "" // Clear fields on swap
+                                }
+                            }) {
+                                Image(systemName: "arrow.up.arrow.down.circle.fill")
+                                    .font(.largeTitle) // Make icon larger
+                                    .foregroundColor(.white) // Icon color
+                                    .frame(width: 60, height: 60) // Fixed size for the tappable area
+                                    .background(Color.accentColor) // A solid color for the circle background
+                                    .clipShape(Circle()) // Clip to a perfect circle
+                                    .shadow(radius: 3) // Add a subtle shadow for depth
+                            }
+                            .padding(.vertical, 10) // Add some vertical padding to separate it from sections
+                            Spacer()
+                        }
+
+
+                        Section("English Translation") {
+                            TextField("English translation", text: $baseText)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
                         }
                     }
 
-                    // Section for Selected Language
-                    Section(languageSettings.availableLanguages.first(where: { $0.id == languageSettings.selectedLanguageCode })?.name ?? "Translation") {
-                        TextField("Base Text (e.g., 'to run')", text: $baseText)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                    }
-
-                    // Separate Section for Part of Speech
                     Section("Part of Speech") {
                         Picker("Select Part of Speech", selection: $partOfSpeech) {
                             ForEach(PartOfSpeech.allCases) { pos in
                                 Text(pos.displayName).tag(pos)
                             }
                         }
-                        .pickerStyle(.navigationLink) // Often looks cleaner in forms
+                        .pickerStyle(.navigationLink)
                     }
                 }
 
-                Spacer() // Pushes the form content up and the button down
+                Spacer()
 
-                // The Save button is now outside the Form
                 Button(action: saveWord) {
                     HStack {
                         if isLoading {
                             ProgressView()
                         }
-                        Text(isLoading ? "Saving..." : "Save Word") // No icon
+                        Text(isLoading ? "Saving..." : "Save Word")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding() // Add padding around the text inside the button
-                    .background(Capsule().fill(Color.accentColor)) // Example background
+                    .padding()
+                    .background(Capsule().fill(Color.accentColor))
                     .foregroundColor(.white)
                     .font(.headline)
-                    .opacity(word.isEmpty || baseText.isEmpty || isLoading || isTranslating ? 0.5 : 1.0) // Dim if disabled
+                    .opacity(word.isEmpty || baseText.isEmpty || isLoading || isTranslating ? 0.5 : 1.0)
                 }
                 .disabled(isLoading || word.isEmpty || baseText.isEmpty || isTranslating)
-                .padding(.horizontal) // Padding from the sides of the screen for the button
-                // Removed padding from here as it's now applied to the outermost VStack
+                .padding(.horizontal)
             }
-            .padding(.bottom, 20) // Apply padding to the entire VStack to lift content from the bottom
+            .padding(.bottom, 20)
             .navigationTitle("Add New Word")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -122,9 +197,20 @@ struct NewWordInputView: View {
         isLoading = true
         Task {
             do {
+                let learningLanguageWord: String
+                let englishTranslation: String
+
+                if inputDirection == .englishToLearning {
+                    learningLanguageWord = baseText
+                    englishTranslation = word
+                } else { // learningToEnglish
+                    learningLanguageWord = word
+                    englishTranslation = baseText
+                }
+
                 try await viewModel.saveNewUserWord(
-                    word: word,
-                    baseText: baseText,
+                    word: learningLanguageWord,
+                    baseText: englishTranslation,
                     partOfSpeech: partOfSpeech.rawValue
                 )
                 dismiss()
@@ -140,22 +226,27 @@ struct NewWordInputView: View {
         isTranslating = true
         Task {
             do {
-                // Use the app's selected language from LanguageSettings as the target locale
-                let targetLocale = languageSettings.selectedLanguageCode
+                let sourceLanguageCode: String
+                let targetLanguageCode: String
 
-                // Prevent translation if source and target languages are the same, or if the word is empty
-                // This check is now redundant due to the .disabled modifier on the button, but kept for logical clarity
-                if word.isEmpty || targetLocale == "en" { // Assuming source is always "en" for this feature
+                if inputDirection == .englishToLearning {
+                    sourceLanguageCode = "en"
+                    targetLanguageCode = languageSettings.selectedLanguageCode
+                } else { // learningToEnglish
+                    sourceLanguageCode = languageSettings.selectedLanguageCode
+                    targetLanguageCode = "en"
+                }
+
+                if word.isEmpty || sourceLanguageCode == targetLanguageCode {
                     self.baseText = word
                     isTranslating = false
                     return
                 }
 
-                // Translate from English ("en") to the device's locale
                 let translatedText = try await viewModel.translateWord(
                     word: word,
-                    source: "en", // Source language is always English for this feature
-                    target: targetLocale
+                    source: sourceLanguageCode,
+                    target: targetLanguageCode
                 )
                 self.baseText = translatedText
             } catch {
