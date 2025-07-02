@@ -40,8 +40,8 @@ struct NewWordInputView: View {
         NavigationStack {
             VStack { // This is the outermost VStack
                 Form {
-                    // Separate Section for Word
-                    Section("Word") {
+                    // Section for English Word
+                    Section("English") {
                         HStack {
                             TextField("Word (e.g., 'run')", text: $word)
                                 .autocapitalization(.none)
@@ -61,8 +61,8 @@ struct NewWordInputView: View {
                         }
                     }
 
-                    // Separate Section for Base Text
-                    Section("Base Text") {
+                    // Section for Selected Language
+                    Section(languageSettings.availableLanguages.first(where: { $0.id == languageSettings.selectedLanguageCode })?.name ?? "Translation") {
                         TextField("Base Text (e.g., 'to run')", text: $baseText)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)
