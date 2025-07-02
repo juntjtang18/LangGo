@@ -1,7 +1,7 @@
 import SwiftUI
 import os
 
-// PartOfSpeech enum remains unchanged
+// Define the PartOfSpeech enum based on your Strapi schema
 enum PartOfSpeech: String, CaseIterable, Identifiable {
     case noun, verb, adjective, adverb, conjunction, preposition, interjection, determiner, pronoun
 
@@ -54,7 +54,6 @@ struct NewWordInputView: View {
                                 .disableAutocorrection(true)
                         }
 
-                        // Use extracted action buttons section
                         actionButtonsSection
 
                         Section((languageSettings.availableLanguages.first(where: { $0.id == languageSettings.selectedLanguageCode })?.name ?? "Learning Language") + " Translation") {
@@ -69,7 +68,6 @@ struct NewWordInputView: View {
                                 .disableAutocorrection(true)
                         }
 
-                        // Use extracted action buttons section
                         actionButtonsSection
 
                         Section("English Translation") {
@@ -126,9 +124,10 @@ struct NewWordInputView: View {
         }
     }
 
-    // MARK: - Extracted Action Buttons Section
     private var actionButtonsSection: some View {
-        HStack(spacing: 20) { // Add spacing to prevent tap overlap
+        HStack(spacing: 0) {
+            Spacer() // Push buttons to the center
+
             // Swap Button
             Button(action: {
                 withAnimation {
@@ -137,43 +136,56 @@ struct NewWordInputView: View {
                     baseText = ""
                 }
             }) {
-                Image(systemName: "arrow.up.arrow.down.circle.fill")
-                    .font(.largeTitle)
-                    .foregroundColor(.white)
-                    .frame(width: 60, height: 60)
-                    .background(Color.accentColor)
-                    .clipShape(Circle())
-                    .shadow(radius: 3)
-            }
-            .contentShape(Circle()) // Explicitly define tap area
-            .buttonStyle(PlainButtonStyle()) // Prevent Form styling interference
-
-            // Magic (AI) Button
-            Button(action: {
-                translateWord()
-            }) {
-                if isTranslating {
-                    ProgressView()
-                        .frame(width: 60, height: 60)
-                } else {
-                    Image(systemName: "wand.and.stars")
+                VStack {
+                    Image(systemName: "arrow.up.arrow.down.circle.fill")
                         .font(.largeTitle)
                         .foregroundColor(.white)
                         .frame(width: 60, height: 60)
                         .background(Color.accentColor)
                         .clipShape(Circle())
                         .shadow(radius: 3)
+                    Text("Swap")
+                        .foregroundColor(.primary)
+                        .font(.caption)
                 }
             }
-            .contentShape(Circle()) // Explicitly define tap area
-            .buttonStyle(PlainButtonStyle()) // Prevent Form styling interference
+            .contentShape(Rectangle()) // Use Rectangle to include text in tap area
+            .buttonStyle(PlainButtonStyle())
+
+            Spacer() // Distribute space evenly
+
+            // Magic (AI) Button
+            Button(action: {
+                translateWord()
+            }) {
+                VStack {
+                    if isTranslating {
+                        ProgressView()
+                            .frame(width: 60, height: 60)
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                            .font(.largeTitle)
+                            .foregroundColor(.white)
+                            .frame(width: 60, height: 60)
+                            .background(Color.accentColor)
+                            .clipShape(Circle())
+                            .shadow(radius: 3)
+                    }
+                    Text("AI Translation")
+                        .foregroundColor(.primary)
+                        .font(.caption)
+                }
+            }
+            .contentShape(Rectangle()) // Use Rectangle to include text in tap area
+            .buttonStyle(PlainButtonStyle())
             .disabled(word.isEmpty || isTranslating || (languageSettings.selectedLanguageCode == "en"))
+
+            Spacer() // Push buttons to the center
         }
         .padding(.vertical, 10)
-        .listRowBackground(Color.clear) // Ensure the row background is clear
+        .listRowBackground(Color.clear)
     }
 
-    // saveWord and translateWord functions remain unchanged
     private func saveWord() {
         isLoading = true
         Task {

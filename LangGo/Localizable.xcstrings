@@ -153,6 +153,9 @@
         }
       }
     },
+    "AI Translation" : {
+
+    },
     "AI View" : {
       "localizations" : {
         "ja" : {
@@ -1194,6 +1197,9 @@
           }
         }
       }
+    },
+    "Swap" : {
+
     },
     "This will control data refreshing behavior in a future update." : {
       "localizations" : {
