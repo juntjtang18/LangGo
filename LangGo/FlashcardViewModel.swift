@@ -153,7 +153,7 @@ class FlashcardViewModel {
     func markReview(for card: Flashcard, result: ReviewResult) {
         Task {
             await submitReview(for: card, result: result)
-            await loadStatistics()
+            //await loadStatistics()
         }
     }
 
@@ -170,8 +170,20 @@ class FlashcardViewModel {
         do {
             logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)' to \(urlString)")
             
-            let updatedStrapiCard: StrapiFlashcard = try await NetworkManager.shared.post(to: url, body: body)
+            // --- START: CORRECTED CODE ---
+
+            // 1. Decode the response into the 'Relation' wrapper to handle the "data" key.
+            let response: Relation<StrapiFlashcard> = try await NetworkManager.shared.post(to: url, body: body)
             
+            // 2. Safely unwrap the actual flashcard object from the response's .data property.
+            guard let updatedStrapiCard = response.data else {
+                logger.error("Failed to submit review for card \(card.id): Server response was missing the 'data' object.")
+                return
+            }
+            
+            // --- END: CORRECTED CODE ---
+            
+            // 3. Continue with your existing logic using the correctly decoded card.
             _ = try await self.syncCard(updatedStrapiCard)
             
             try self.modelContext.save()
@@ -179,10 +191,10 @@ class FlashcardViewModel {
             logger.info("Successfully synced updated card \(card.id) from server after review.")
             
         } catch {
+            // The detailed error logging you added to NetworkManager will provide rich context here.
             logger.error("Failed to submit and sync review for flashcard \(card.id): \(error.localizedDescription)")
         }
     }
-
     // MARK: - Data Syncing
     
     public func fetchDataFromServer(forceRefresh: Bool = false) async {
@@ -229,7 +241,7 @@ class FlashcardViewModel {
         switch component.componentIdentifier {
         case "a.user-word-ref":
             frontContent = component.userWord?.data?.attributes.baseText
-            backContent = component.userWord?.data?.attributes.word
+            backContent = component.userWord?.data?.attributes.targetText
         case "a.word-ref":
             frontContent = component.word?.data?.attributes.baseText
             backContent = component.word?.data?.attributes.word
@@ -291,7 +303,7 @@ class FlashcardViewModel {
     ///   - baseText: The base form or definition (e.g., "to run").
     ///   - partOfSpeech: The part of speech (e.g., "verb").
     @MainActor
-    func saveNewUserWord(word: String, baseText: String, partOfSpeech: String) async throws {
+    func saveNewUserWord(targetText: String, baseText: String, partOfSpeech: String) async throws {
         let urlString = "\(Config.strapiBaseUrl)/api/user-words"
         guard let url = URL(string: urlString) else {
             logger.error("Invalid URL for saving new user word: \(urlString)")
@@ -300,22 +312,22 @@ class FlashcardViewModel {
 
         // The backend will automatically associate the authenticated user.
         // We only send the word-specific data.
-        let newWordData = UserWordData(word: word, base_text: baseText, part_of_speech: partOfSpeech)
+        let newWordData = UserWordData(target_text: targetText, base_text: baseText, part_of_speech: partOfSpeech)
         let requestBody = CreateUserWordRequest(data: newWordData)
 
         do {
-            logger.info("Attempting to save new user word: '\(word)' with base text '\(baseText)' and part of speech '\(partOfSpeech)'")
+            logger.info("Attempting to save new user word: '\(targetText)' with base text '\(baseText)' and part of speech '\(partOfSpeech)'")
             
             // Assuming NetworkManager.shared.post handles encoding and authentication (JWT token in headers)
             let _: UserWordResponse = try await NetworkManager.shared.post(to: url, body: requestBody)
             
-            logger.info("Successfully saved new user word: '\(word)' to Strapi.")
+            logger.info("Successfully saved new user word: '\(targetText)' to Strapi.")
             
             // After saving, refresh statistics to reflect the new word count
             await loadStatistics()
             
         } catch {
-            logger.error("Failed to save new user word '\(word)': \(error.localizedDescription)")
+            logger.error("Failed to save new user word '\(targetText)': \(error.localizedDescription)")
             throw error // Re-throw to be handled by the UI
         }
     }
@@ -363,7 +375,7 @@ struct CreateUserWordRequest: Encodable, Decodable { // Needs Decodable if Netwo
 }
 
 struct UserWordData: Encodable, Decodable { // Needs Decodable if CreateUserWordRequest is Decodable.
-    let word: String
+    let target_text: String
     let base_text: String
     let part_of_speech: String
     // user is now handled by the Strapi backend.

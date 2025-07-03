@@ -151,7 +151,7 @@ struct VerbMetaComponent: Codable {
 
 // MARK: - Final Attribute Structs
 struct UserWordAttributes: Codable {
-    let word: String?
+    let targetText: String? // Renamed from 'word'
     let baseText: String?
     let partOfSpeech: String?
     let createdAt: String?
@@ -159,7 +159,8 @@ struct UserWordAttributes: Codable {
     let locale: String?
 
     enum CodingKeys: String, CodingKey {
-        case word, locale, createdAt, updatedAt
+        case locale, createdAt, updatedAt
+        case targetText = "target_text" // Updated to match the new API field name
         case baseText = "base_text"
         case partOfSpeech = "part_of_speech"
     }

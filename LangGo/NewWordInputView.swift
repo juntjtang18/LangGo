@@ -77,6 +77,7 @@ struct NewWordInputView: View {
                         .pickerStyle(.navigationLink)
                     }
                 }
+                .id(inputDirection) // <-- Add this modifier to fix the redraw issues
 
                 Button(action: saveWord) {
                     HStack {
@@ -208,7 +209,7 @@ struct NewWordInputView: View {
                 }
                 
                 try await viewModel.saveNewUserWord(
-                    word: strapiWordFieldContent, // Maps to Strapi 'word' field
+                    targetText: strapiWordFieldContent, // Renamed for clarity and correctness
                     baseText: strapiBaseTextFieldContent, // Maps to Strapi 'base_text' field
                     partOfSpeech: partOfSpeech.rawValue
                 )

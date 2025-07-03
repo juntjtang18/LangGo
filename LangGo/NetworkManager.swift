@@ -151,8 +151,18 @@ class NetworkManager {
             // The review endpoint returns the single updated flashcard, not wrapped in a "data" object.
             return try decoder.decode(U.self, from: data)
         } catch {
-            logger.error("Decoding Error: Failed to decode response of type \(U.self). Error: \(error.localizedDescription)")
-            logger.error("Decoding Error Details: \(error)")
+            // --- START: ADD THIS DETAILED LOGGING BLOCK ---
+            logger.error("Decoding Error: Failed to decode response of type \(U.self).")
+            
+            // Log the raw JSON string that caused the failure.
+            if let jsonString = String(data: data, encoding: .utf8) {
+                logger.error("Raw JSON that failed to decode:\n--- START JSON ---\n\(jsonString)\n--- END JSON ---")
+            }
+
+            // Log the specific Swift decoding error details.
+            logger.error("Swift.DecodingError details: \(error)")
+            // --- END: ADD THIS DETAILED LOGGING BLOCK ---
+
             throw error
         }
     }

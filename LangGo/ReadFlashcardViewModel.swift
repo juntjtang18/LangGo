@@ -183,7 +183,7 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
         switch component.componentIdentifier {
         case "a.user-word-ref":
             frontContent = component.userWord?.data?.attributes.baseText
-            backContent = component.userWord?.data?.attributes.word
+            backContent = component.userWord?.data?.attributes.targetText // Changed to use the new field
         case "a.word-ref":
             frontContent = component.word?.data?.attributes.baseText
             backContent = component.word?.data?.attributes.word
