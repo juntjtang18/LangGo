@@ -33,8 +33,8 @@ struct MainView: View {
                 FlashcardTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Flashcards", systemImage: "square.stack.3d.up.fill") }
 
-                AITabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("AI", systemImage: "sparkles") }
+                ReadFlashcardTabView(isSideMenuShowing: $isSideMenuShowing)
+                    .tabItem { Label("Read Flashcards", systemImage: "speaker.wave.2.fill") }
                 
                 StoriesTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Stories", systemImage: "book.fill") }
@@ -78,10 +78,8 @@ struct MainView: View {
 
 // MARK: - Placeholder Tab Views (Definitions Restored)
 
-struct AITabView: View {
-    @Binding var isSideMenuShowing: Bool
-    var body: some View { NavigationStack { Text("AI View").navigationTitle("AI Assistant").toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) } } }
-}
+// AITabView has been removed as requested.
+
 struct StoriesTabView: View {
     @Binding var isSideMenuShowing: Bool
     var body: some View { NavigationStack { Text("Stories View").navigationTitle("Stories").toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) } } }
@@ -113,5 +111,7 @@ struct MenuToolbar: ToolbarContent {
 
 // MARK: - Preview
 #Preview {
+    // You will need to provide a mock LanguageSettings object for the preview to work.
     MainView(authState: .constant(.loggedIn))
+        .environmentObject(LanguageSettings())
 }

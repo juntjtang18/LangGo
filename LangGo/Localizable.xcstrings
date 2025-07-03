@@ -22,6 +22,7 @@
 
     },
     "AI" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -50,6 +51,7 @@
       }
     },
     "AI Assistant" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -81,6 +83,7 @@
 
     },
     "AI View" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -132,6 +135,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "后退"
+          }
+        }
+      }
+    },
+    "Card %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Card %1$lld of %2$lld"
           }
         }
       }
@@ -571,6 +584,9 @@
         }
       }
     },
+    "Loading cards..." : {
+
+    },
     "Login" : {
       "localizations" : {
         "ja" : {
@@ -626,6 +642,9 @@
           }
         }
       }
+    },
+    "No cards available for reading." : {
+
     },
     "No cards to review." : {
       "localizations" : {
@@ -797,6 +816,9 @@
           }
         }
       }
+    },
+    "Read Flashcards" : {
+
     },
     "REFRESH mode" : {
       "localizations" : {
@@ -1003,6 +1025,9 @@
         }
       }
     },
+    "Start Reading" : {
+
+    },
     "Statistics" : {
       "localizations" : {
         "ja" : {
@@ -1030,6 +1055,9 @@
           }
         }
       }
+    },
+    "Stop" : {
+
     },
     "Stories" : {
       "localizations" : {
