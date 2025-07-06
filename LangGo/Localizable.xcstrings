@@ -18,7 +18,16 @@
         }
       }
     },
+    "Action successful!" : {
+
+    },
     "Add New Word" : {
+
+    },
+    "Add to VocaBook" : {
+
+    },
+    "Adding..." : {
 
     },
     "AI" : {
@@ -416,6 +425,9 @@
     "Enter word in learning language" : {
 
     },
+    "Enter word or sentence" : {
+
+    },
     "Flashcard" : {
       "localizations" : {
         "ja" : {
@@ -471,6 +483,9 @@
           }
         }
       }
+    },
+    "Input Text (%@)" : {
+
     },
     "Language" : {
       "localizations" : {
@@ -1146,7 +1161,13 @@
         }
       }
     },
+    "Translate" : {
+
+    },
     "Translated text" : {
+
+    },
+    "Translating..." : {
 
     },
     "Translation" : {
@@ -1177,7 +1198,11 @@
         }
       }
     },
+    "Translation (%@)" : {
+
+    },
     "Translation View" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {

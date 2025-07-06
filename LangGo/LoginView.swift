@@ -1,5 +1,6 @@
 import SwiftUI
 import KeychainAccess
+import os // Added import for Logger
 
 struct LoginView: View {
     @Binding var authState: AuthState
@@ -13,6 +14,9 @@ struct LoginView: View {
 
     // Use the centralized keychain service from the Config file.
     let keychain = Keychain(service: Config.keychainService)
+    
+    // Logger instance
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "LoginView") // Added Logger
 
     enum ViewState {
         case login
@@ -86,6 +90,10 @@ struct LoginView: View {
                             }
                         }
                     }
+                    .onAppear { // Added onAppear to log config values
+                        logger.info("LoginView appeared. Strapi Base URL: \(Config.strapiBaseUrl, privacy: .public)")
+                        logger.info("LoginView appeared. Learning Target Language Code: \(Config.learningTargetLanguageCode, privacy: .public)")
+                    }
                 } else if currentView == .signup {
                     SignupView(currentView: $currentView, authState: $authState)
                 }
@@ -94,8 +102,15 @@ struct LoginView: View {
     }
 
     func login() {
+        // Added logging before the request
+        logger.info("Attempting login...")
+        logger.info("Login function. Strapi Base URL: \(Config.strapiBaseUrl, privacy: .public)")
+        logger.info("Login function. Learning Target Language Code: \(Config.learningTargetLanguageCode, privacy: .public)")
+
+
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local") else {
             errorMessage = "Invalid server URL"
+            logger.error("Invalid server URL for login: \(Config.strapiBaseUrl, privacy: .public)")
             return
         }
         
@@ -110,13 +125,21 @@ struct LoginView: View {
             DispatchQueue.main.async {
                 if let error = error {
                     errorMessage = "Network error: \(error.localizedDescription)"
+                    logger.error("Network error during login: \(error.localizedDescription, privacy: .public)")
                     return
                 }
                 guard let httpResponse = response as? HTTPURLResponse else {
                     errorMessage = "Invalid response from server"
+                    logger.error("Invalid HTTP response during login. Response was not HTTPURLResponse.")
                     return
                 }
                 
+                // Log the HTTP status code and response body for debugging
+                logger.info("Login HTTP Status Code: \(httpResponse.statusCode, privacy: .public)")
+                if let data = data, let responseBody = String(data: data, encoding: .utf8) {
+                    logger.info("Login Response Body: \(responseBody, privacy: .public)")
+                }
+
                 guard httpResponse.statusCode == 200,
                       let data = data,
                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -125,7 +148,9 @@ struct LoginView: View {
                       let username = user["username"] as? String,
                       let userEmail = user["email"] as? String,
                       let userId = user["id"] as? Int else {
+                    // Added more detailed logging for parsing failures
                     errorMessage = "Invalid email or password"
+                    logger.error("Failed to parse successful login response or status code not 200.")
                     return
                 }
                 
@@ -137,6 +162,7 @@ struct LoginView: View {
                 
                 // Set the login state to true to dismiss this view
                 authState = .loggedIn
+                logger.info("Login successful. User: \(username, privacy: .public)")
             }
         }.resume()
     }

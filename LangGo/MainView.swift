@@ -84,11 +84,13 @@ struct StoriesTabView: View {
     @Binding var isSideMenuShowing: Bool
     var body: some View { NavigationStack { Text("Stories View").navigationTitle("Stories").toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) } } }
 }
+
+/*
 struct TranslationTabView: View {
     @Binding var isSideMenuShowing: Bool
     var body: some View { NavigationStack { Text("Translation View").navigationTitle("Translation").toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) } } }
 }
-
+*/
 
 /// The toolbar item containing the hamburger menu button.
 struct MenuToolbar: ToolbarContent {
