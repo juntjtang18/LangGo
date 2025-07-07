@@ -48,7 +48,8 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
         }
 
         do {
-            let fetchedData = try await NetworkManager.shared.fetch(from: url)
+            //let fetchedData = try await NetworkManager.shared.fetch(from: url)
+            let fetchedData: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
             var processedCards: [Flashcard] = []
 
             for strapiCard in fetchedData.data {

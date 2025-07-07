@@ -124,7 +124,8 @@ class FlashcardViewModel {
         logger.debug("fetchAndLoadReviewCardsFromServer called: \(urlString)")
 
         do {
-            let fetchedData = try await NetworkManager.shared.fetch(from: url)
+            //let fetchedData = try await NetworkManager.shared.fetch(from: url)
+            let fetchedData: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
             var processedCards: [Flashcard] = []
 
             for strapiCard in fetchedData.data {
@@ -202,7 +203,8 @@ class FlashcardViewModel {
         guard let url = URL(string: urlString) else { return }
 
         do {
-            let fetchedData = try await NetworkManager.shared.fetch(from: url)
+            //let fetchedData = try await NetworkManager.shared.fetch(from: url)
+            let fetchedData: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
             await updateLocalDatabase(with: fetchedData.data)
         } catch {
             logger.error("fetchDataFromServer: Failed to fetch or decode data: \(error.localizedDescription)")

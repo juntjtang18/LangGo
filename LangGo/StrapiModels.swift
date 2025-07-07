@@ -32,6 +32,73 @@ struct FlashcardAttributes: Codable {
     }
 }
 
+// MARK: - Authentication Models (NEW)
+
+/// Request body for user login.
+struct LoginCredentials: Encodable {
+    let identifier: String
+    let password: String
+}
+
+/// Request body for user registration (signup).
+struct RegistrationPayload: Encodable {
+    let email: String
+    let password: String
+    let username: String
+    let baseLanguage: String // Added based on SignupView.swift
+
+    enum CodingKeys: String, CodingKey {
+        case email, password, username
+        case baseLanguage = "base_language" // Explicitly map to snake_case for backend
+    }
+}
+
+/// Response for authentication (login and signup).
+struct AuthResponse: Codable {
+    let jwt: String
+    let user: StrapiUser
+}
+
+// MARK: - Generic API Response Wrappers (NEW/REVISED)
+
+/// Represents a paginated list response from Strapi.
+struct StrapiListResponse<T: Codable>: Codable {
+    let data: [T]? // Array of the actual data objects
+    let meta: StrapiMeta?
+}
+
+/// Represents a single item response from Strapi, typically wrapped under a `data` key.
+struct StrapiSingleResponse<T: Codable>: Codable {
+    let data: T
+}
+
+/// Represents the metadata section in Strapi responses, containing pagination info.
+struct StrapiMeta: Codable {
+    let pagination: StrapiPagination?
+}
+
+/// Represents the pagination details in Strapi's metadata.
+struct StrapiPagination: Codable {
+    let page: Int
+    let pageSize: Int
+    let pageCount: Int
+    let total: Int
+}
+
+/// Represents a standard error response from Strapi.
+struct StrapiErrorResponse: Codable {
+    let data: String? // Can be null in some error cases
+    let error: ErrorDetails
+    
+    struct ErrorDetails: Codable {
+        let status: Int
+        let name: String
+        let message: String
+        let details: [String: String]? // Or more specific structure if known
+    }
+}
+
+
 // MARK: - Statistics Models
 
 /// The response wrapper for the statistics endpoint.
@@ -48,6 +115,16 @@ struct StrapiStatistics: Codable {
     let weekly: Int
     let monthly: Int
     let hardToRemember: Int
+
+    enum CodingKeys: String, CodingKey { // Added explicit CodingKeys for snake_case
+        case totalCards = "total_cards"
+        case remembered
+        case newCards = "new_cards"
+        case warmUp = "warm_up"
+        case weekly
+        case monthly
+        case hardToRemember = "hard_to_remember"
+    }
 }
 
 // MARK: - Review Models (REVISED)

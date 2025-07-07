@@ -96,7 +96,8 @@ struct SignupView: View {
         }
 
         // 1. Use the new custom endpoint URL
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/register") else {
+        // Changed to /api/auth/local/register to hit the custom Strapi registration logic
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register") else {
              errorMessage = "Invalid server URL"
              return
         }
@@ -106,6 +107,12 @@ struct SignupView: View {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         // 2. Create the new request body including `baseLanguage`
+        // Note: The custom Strapi endpoint expects 'username', 'email', and 'password'.
+        // 'baseLanguage' from your app's payload is not directly consumed by the default /auth/local/register endpoint,
+        // but it can remain in the payload if your server-side customization handles it.
+        // Based on the provided strapi-server.js, `baseLanguage` is not being used.
+        // It's generally better to send only what the API expects for that specific endpoint.
+        // However, if `username` is set to `email` as a default, that's fine.
         let body: [String: Any] = [
             "email": email,
             "password": password,

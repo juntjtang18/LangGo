@@ -26,14 +26,15 @@ struct InitialLoadingView: View {
         // 2. If a token exists, validate it by fetching the user profile
         Task {
             do {
-                guard let url = URL(string: "\(Config.strapiBaseUrl)/api/users/me") else {
-                    clearSessionAndLogout()
-                    return
-                }
+                //guard let url = URL(string: "\(Config.strapiBaseUrl)/api/users/me") else {
+                //guard URL(string: "\(Config.strapiBaseUrl)/api/users/me") != nil else { // Simplified check as 'url' is no longer used directly here
+                //    clearSessionAndLogout()
+                //    return
+                //}
                 
                 // The existing fetchUser function is perfect for this
-                let user = try await NetworkManager.shared.fetchUser(from: url)
-                
+                //let user = try await NetworkManager.shared.fetchUser(from: url)
+                let user = try await NetworkManager.shared.fetchUser()
                 // SUCCESS: Token is valid. Refresh user details.
                 UserDefaults.standard.set(user.username, forKey: "username")
                 UserDefaults.standard.set(user.email, forKey: "email")
