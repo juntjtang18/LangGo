@@ -38,18 +38,10 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
     // MARK: - Public Methods
     @MainActor
     func fetchFlashcards() async {
-        // Same as before...
         isLoading = true
-        let urlString = "\(Config.strapiBaseUrl)/api/review-flashcards"
-        guard let url = URL(string: urlString) else {
-            logger.error("Invalid URL for review-flashcards endpoint.")
-            isLoading = false
-            return
-        }
-
         do {
-            //let fetchedData = try await NetworkManager.shared.fetch(from: url)
-            let fetchedData: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
+            // Use StrapiService to fetch review flashcards
+            let fetchedData: StrapiResponse = try await StrapiService.shared.fetchReviewFlashcards()
             var processedCards: [Flashcard] = []
 
             for strapiCard in fetchedData.data {

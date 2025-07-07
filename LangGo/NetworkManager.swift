@@ -3,12 +3,13 @@ import KeychainAccess
 import os
 
 /// A centralized, generic manager for handling all network requests.
+/// This class is a low-level HTTP client and should not be aware of specific API endpoints.
 class NetworkManager {
     static let shared = NetworkManager()
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
     private let keychain = Keychain(service: Config.keychainService)
-    private let logger = Logger(subsystem: "com.langGo.swift", category: "NetworkManager") // Changed subsystem to match LangGo
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "NetworkManager")
 
     private init() {
         decoder = JSONDecoder()
@@ -24,25 +25,7 @@ class NetworkManager {
         encoder.dateEncodingStrategy = .formatted(formatter)
     }
 
-    // MARK: - Public API Methods
-    
-    /// Performs a user login.
-    func login(credentials: LoginCredentials) async throws -> AuthResponse {
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local") else { throw URLError(.badURL) }
-        return try await performRequest(url: url, method: "POST", body: credentials)
-    }
-
-    /// Fetches the authenticated user's profile.
-    func fetchUser() async throws -> StrapiUser {
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/users/me") else { throw URLError(.badURL) }
-        return try await performRequest(url: url, method: "GET")
-    }
-
-    /// Registers a new user.
-    func signup(payload: RegistrationPayload) async throws -> AuthResponse {
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/register") else { throw URLError(.badURL) } // Updated to new register endpoint
-        return try await performRequest(url: url, method: "POST", body: payload)
-    }
+    // MARK: - Generic HTTP Request Methods
 
     /// Fetches a single page of items and returns the response shell, including pagination metadata.
     func fetchPage<T: Codable>(baseURLComponents: URLComponents, page: Int, pageSize: Int = 25) async throws -> StrapiListResponse<T> {
@@ -106,6 +89,7 @@ class NetworkManager {
 
     /// Performs a DELETE request, expecting an empty response.
     func delete(at url: URL) async throws {
+        // The EmptyResponse struct is now in StrapiModels.swift
         let _: EmptyResponse = try await performRequest(url: url, method: "DELETE")
     }
 
@@ -117,7 +101,8 @@ class NetworkManager {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let isAuthRequest = url.absoluteString.contains("/api/auth/local") || url.absoluteString.contains("/api/user-profiles/register")
+        // Authentication endpoint check for JWT
+        let isAuthRequest = url.absoluteString.contains("/api/auth/local") || url.absoluteString.contains("/api/auth/local/register")
         if let token = keychain["jwt"], !isAuthRequest {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -143,11 +128,13 @@ class NetworkManager {
         }
         
         if data.isEmpty {
-            guard let empty = EmptyResponse() as? ResponseBody else {
-                logger.error("Failed to cast EmptyResponse to \(ResponseBody.self)")
-                throw URLError(.cannotParseResponse)
+            // Check if the expected ResponseBody is our global EmptyResponse
+            if ResponseBody.self is EmptyResponse.Type {
+                return EmptyResponse() as! ResponseBody
             }
-            return empty
+            // Fallback for other cases where data is empty but not explicitly EmptyResponse
+            logger.error("Decoding Error: Expected \(ResponseBody.self) but received empty data.")
+            throw URLError(.cannotParseResponse)
         }
 
         do {
@@ -170,6 +157,5 @@ class NetworkManager {
     }
 }
 
-// Private structs used internally by NetworkManager
-private struct EmptyResponse: Codable {}
+// This struct is only for internal `performRequest` overloads that might not have a body.
 private struct EmptyPayload: Codable {}

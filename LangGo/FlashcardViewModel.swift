@@ -28,18 +28,10 @@ class FlashcardViewModel {
 
     @MainActor
     func loadStatistics() async {
-        let urlString = "\(Config.strapiBaseUrl)/api/flashcard-stat"
-        guard let url = URL(string: urlString) else {
-            logger.error("Invalid URL for statistics endpoint: \(urlString)")
-            await calculateStatisticsLocally()
-            return
-        }
-        
         logger.info("Attempting to fetch statistics from server.")
-        
         do {
-            let statsResponse: StrapiStatisticsResponse = try await NetworkManager.shared.fetchSingle(from: url)
-            let stats = statsResponse.data
+            // Use StrapiService to fetch statistics
+            let stats = try await StrapiService.shared.fetchFlashcardStatistics()
             
             self.totalCardCount = stats.totalCards
             self.rememberedCount = stats.remembered
@@ -117,15 +109,11 @@ class FlashcardViewModel {
 
     @MainActor
     private func fetchAndLoadReviewCardsFromServer() async throws {
-        let urlString = "\(Config.strapiBaseUrl)/api/review-flashcards"
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
-        }
-        logger.debug("fetchAndLoadReviewCardsFromServer called: \(urlString)")
+        logger.debug("fetchAndLoadReviewCardsFromServer called.")
 
         do {
-            //let fetchedData = try await NetworkManager.shared.fetch(from: url)
-            let fetchedData: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
+            // Use StrapiService to fetch review flashcards
+            let fetchedData: StrapiResponse = try await StrapiService.shared.fetchReviewFlashcards()
             var processedCards: [Flashcard] = []
 
             for strapiCard in fetchedData.data {
@@ -160,31 +148,17 @@ class FlashcardViewModel {
 
     @MainActor
     private func submitReview(for card: Flashcard, result: ReviewResult) async {
-        let urlString = "\(Config.strapiBaseUrl)/api/flashcards/\(card.id)/review"
-        guard let url = URL(string: urlString) else {
-            logger.error("Invalid URL for submitting review for card \(card.id)")
-            return
-        }
-        
-        let body = ReviewBody(result: result.rawValue)
-        
         do {
-            logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)' to \(urlString)")
+            logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)'")
             
-            // --- START: CORRECTED CODE ---
-
-            // 1. Decode the response into the 'Relation' wrapper to handle the "data" key.
-            let response: Relation<StrapiFlashcard> = try await NetworkManager.shared.post(to: url, body: body)
+            // Use StrapiService to submit flashcard review
+            let response: Relation<StrapiFlashcard> = try await StrapiService.shared.submitFlashcardReview(cardId: card.id, result: result)
             
-            // 2. Safely unwrap the actual flashcard object from the response's .data property.
             guard let updatedStrapiCard = response.data else {
                 logger.error("Failed to submit review for card \(card.id): Server response was missing the 'data' object.")
                 return
             }
             
-            // --- END: CORRECTED CODE ---
-            
-            // 3. Continue with your existing logic using the correctly decoded card.
             _ = try await self.syncCard(updatedStrapiCard)
             
             try self.modelContext.save()
@@ -192,19 +166,15 @@ class FlashcardViewModel {
             logger.info("Successfully synced updated card \(card.id) from server after review.")
             
         } catch {
-            // The detailed error logging you added to NetworkManager will provide rich context here.
             logger.error("Failed to submit and sync review for flashcard \(card.id): \(error.localizedDescription)")
         }
     }
     // MARK: - Data Syncing
     
     public func fetchDataFromServer(forceRefresh: Bool = false) async {
-        let urlString = "\(Config.strapiBaseUrl)/api/flashcards?populate=content"
-        guard let url = URL(string: urlString) else { return }
-
         do {
-            //let fetchedData = try await NetworkManager.shared.fetch(from: url)
-            let fetchedData: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
+            // Use StrapiService to fetch all flashcards
+            let fetchedData: StrapiResponse = try await StrapiService.shared.fetchAllFlashcardsWithContent()
             await updateLocalDatabase(with: fetchedData.data)
         } catch {
             logger.error("fetchDataFromServer: Failed to fetch or decode data: \(error.localizedDescription)")
@@ -306,22 +276,11 @@ class FlashcardViewModel {
     ///   - partOfSpeech: The part of speech (e.g., "verb").
     @MainActor
     func saveNewUserWord(targetText: String, baseText: String, partOfSpeech: String) async throws {
-        let urlString = "\(Config.strapiBaseUrl)/api/user-words"
-        guard let url = URL(string: urlString) else {
-            logger.error("Invalid URL for saving new user word: \(urlString)")
-            throw URLError(.badURL)
-        }
-
-        // The backend will automatically associate the authenticated user.
-        // We only send the word-specific data.
-        let newWordData = UserWordData(target_text: targetText, base_text: baseText, part_of_speech: partOfSpeech)
-        let requestBody = CreateUserWordRequest(data: newWordData)
-
         do {
             logger.info("Attempting to save new user word: '\(targetText)' with base text '\(baseText)' and part of speech '\(partOfSpeech)'")
             
-            // Assuming NetworkManager.shared.post handles encoding and authentication (JWT token in headers)
-            let _: UserWordResponse = try await NetworkManager.shared.post(to: url, body: requestBody)
+            // Use StrapiService to save new user word
+            let _: UserWordResponse = try await StrapiService.shared.saveNewUserWord(targetText: targetText, baseText: baseText, partOfSpeech: partOfSpeech)
             
             logger.info("Successfully saved new user word: '\(targetText)' to Strapi.")
             
@@ -342,17 +301,10 @@ class FlashcardViewModel {
     /// - Returns: The translated word.
     @MainActor
     func translateWord(word: String, source: String, target: String) async throws -> String {
-        let urlString = "\(Config.strapiBaseUrl)/api/translate-word"
-        guard let url = URL(string: urlString) else {
-            logger.error("Invalid URL for translate-word endpoint: \(urlString)")
-            throw URLError(.badURL)
-        }
-
-        let requestBody = TranslateWordRequest(word: word, source: source, target: target)
-
         do {
             logger.info("Attempting to translate word '\(word)' from \(source) to \(target)")
-            let response: TranslateWordResponse = try await NetworkManager.shared.post(to: url, body: requestBody)
+            // Use StrapiService to translate word
+            let response: TranslateWordResponse = try await StrapiService.shared.translateWord(word: word, source: source, target: target)
             logger.info("Successfully translated word: \(response.translatedText)")
             return response.translatedText
         } catch {
@@ -372,16 +324,14 @@ enum ReviewResult: String {
 // These structs are defined here only to avoid redeclaration.
 
 // Request body for creating a new user word
-struct CreateUserWordRequest: Encodable, Decodable { // Needs Decodable if NetworkManager.post requires it for its body parameter.
+struct CreateUserWordRequest: Encodable, Decodable {
     let data: UserWordData
 }
 
-struct UserWordData: Encodable, Decodable { // Needs Decodable if CreateUserWordRequest is Decodable.
+struct UserWordData: Encodable, Decodable {
     let target_text: String
     let base_text: String
     let part_of_speech: String
-    // user is now handled by the Strapi backend.
-    // Do NOT include it in the client-side payload.
 }
 
 // Response structure for a created user word (optional, but good for confirmation)

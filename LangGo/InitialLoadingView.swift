@@ -1,10 +1,12 @@
 import SwiftUI
 import KeychainAccess
+import os
 
 struct InitialLoadingView: View {
     @Binding var authState: AuthState // Binding to control the app's root view
 
     let keychain = Keychain(service: Config.keychainService)
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "InitialLoadingView")
 
     var body: some View {
         VStack {
@@ -19,6 +21,7 @@ struct InitialLoadingView: View {
     private func verifyToken() {
         // 1. Check if a token even exists
         guard keychain["jwt"] != nil else {
+            logger.info("No JWT found. Setting authState to loggedOut.")
             authState = .loggedOut
             return
         }
@@ -26,22 +29,18 @@ struct InitialLoadingView: View {
         // 2. If a token exists, validate it by fetching the user profile
         Task {
             do {
-                //guard let url = URL(string: "\(Config.strapiBaseUrl)/api/users/me") else {
-                //guard URL(string: "\(Config.strapiBaseUrl)/api/users/me") != nil else { // Simplified check as 'url' is no longer used directly here
-                //    clearSessionAndLogout()
-                //    return
-                //}
-                
-                // The existing fetchUser function is perfect for this
-                //let user = try await NetworkManager.shared.fetchUser(from: url)
-                let user = try await NetworkManager.shared.fetchUser()
+                // Use StrapiService to fetch current user
+                let user = try await StrapiService.shared.fetchCurrentUser()
                 // SUCCESS: Token is valid. Refresh user details.
                 UserDefaults.standard.set(user.username, forKey: "username")
                 UserDefaults.standard.set(user.email, forKey: "email")
+                UserDefaults.standard.set(user.id, forKey: "userId") // Ensure user ID is also saved
                 authState = .loggedIn
+                logger.info("JWT validated. User \(user.username, privacy: .public) logged in.")
                 
             } catch {
                 // FAILURE: Token is invalid (expired, etc.).
+                logger.error("JWT validation failed: \(error.localizedDescription, privacy: .public). Clearing session.")
                 clearSessionAndLogout()
             }
         }

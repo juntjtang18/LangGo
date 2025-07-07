@@ -98,6 +98,9 @@ struct StrapiErrorResponse: Codable {
     }
 }
 
+// MARK: - General purpose empty response for successful calls with no body
+// ADDED THIS STRUCT FOR MODULE-LEVEL ACCESS
+public struct EmptyResponse: Codable {}
 
 // MARK: - Statistics Models
 
@@ -106,7 +109,6 @@ struct StrapiStatisticsResponse: Codable {
     let data: StrapiStatistics
 }
 
-/// Represents the statistics object returned from `/api/flashcard-stat`.
 struct StrapiStatistics: Codable {
     let totalCards: Int
     let remembered: Int
@@ -116,14 +118,14 @@ struct StrapiStatistics: Codable {
     let monthly: Int
     let hardToRemember: Int
 
-    enum CodingKeys: String, CodingKey { // Added explicit CodingKeys for snake_case
-        case totalCards = "total_cards"
+    enum CodingKeys: String, CodingKey {
+        case totalCards
         case remembered
-        case newCards = "new_cards"
-        case warmUp = "warm_up"
+        case newCards
+        case warmUp
         case weekly
         case monthly
-        case hardToRemember = "hard_to_remember"
+        case hardToRemember
     }
 }
 
