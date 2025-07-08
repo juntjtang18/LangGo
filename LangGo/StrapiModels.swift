@@ -1,3 +1,4 @@
+// LangGo/StrapiModels.swift
 import Foundation
 
 // MARK: - Core Response Wrappers
@@ -228,6 +229,19 @@ struct VerbMetaComponent: Codable {
     }
 }
 
+// MARK: - Exam Options Structure
+// Represents a single exam option, used within exam_base and exam_target JSON arrays
+struct ExamOption: Codable {
+    let text: String
+    let isCorrect: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case isCorrect = "isCorrect" // Ensure this matches the JSON key from user-word.js
+    }
+}
+
+
 // MARK: - Final Attribute Structs
 struct UserWordAttributes: Codable {
     let targetText: String? // Renamed from 'word'
@@ -236,12 +250,16 @@ struct UserWordAttributes: Codable {
     let createdAt: String?
     let updatedAt: String?
     let locale: String?
+    let examBase: [ExamOption]? // Added new field
+    let examTarget: [ExamOption]? // Added new field
 
     enum CodingKeys: String, CodingKey {
         case locale, createdAt, updatedAt
         case targetText = "target_text" // Updated to match the new API field name
         case baseText = "base_text"
         case partOfSpeech = "part_of_speech"
+        case examBase = "exam_base" // Added new coding key
+        case examTarget = "exam_target" // Added new coding key
     }
 }
 
@@ -274,6 +292,8 @@ struct WordAttributes: Codable {
     let exampleSentences: ExampleSentencesRelation?
     let verbMeta: VerbMetaComponent?
     let register: String?
+    let examBase: [ExamOption]? // Added new field
+    let examTarget: [ExamOption]? // Added new field
 
     enum CodingKeys: String, CodingKey {
         case word, instruction, gender, article, createdAt, updatedAt, locale, audio, tags, register
@@ -281,6 +301,8 @@ struct WordAttributes: Codable {
         case partOfSpeech = "part_of_speech"
         case exampleSentences = "example_sentences"
         case verbMeta = "verb_meta"
+        case examBase = "exam_base" // Added new coding key
+        case examTarget = "exam_target" // Added new coding key
     }
 }
 
@@ -296,12 +318,16 @@ struct SentenceAttributes: Codable {
     let tags: [TagListComponent]?
     let words: WordsRelation?
     let register: String?
+    let examBase: [ExamOption]? // Added new field
+    let examTarget: [ExamOption]? // Added new field
     
     enum CodingKeys: String, CodingKey {
         case title, instruction, createdAt, updatedAt, locale, tags, words, register
         case baseText = "base_text"
         case targetText = "target_text"
         case targetAudio = "target_audio"
+        case examBase = "exam_base" // Added new coding key
+        case examTarget = "exam_target" // Added new coding key
     }
 }
 
@@ -364,5 +390,46 @@ struct ReviewLogAttributes: Codable {
         case result
         case reviewedAt = "reviewed_at"
         case reviewLevel = "level"
+    }
+}
+
+// MARK: - Strapi Data Structures for User Word
+// These structs are now defined here for global access.
+
+// Request body for creating a new user word
+struct CreateUserWordRequest: Encodable, Decodable {
+    let data: UserWordData
+}
+
+struct UserWordData: Encodable, Decodable {
+    let target_text: String
+    let base_text: String
+    let part_of_speech: String
+    let base_locale: String
+    let target_locale: String
+}
+
+// Response structure for a created user word (optional, but good for confirmation)
+struct UserWordResponse: Decodable {
+    let data: UserWordResponseData
+}
+
+struct UserWordResponseData: Decodable {
+    let id: Int
+    let attributes: UserWordAttributes
+}
+
+// MARK: - Strapi Data Structures for Translate Word
+struct TranslateWordRequest: Codable {
+    let word: String
+    let source: String
+    let target: String
+}
+
+struct TranslateWordResponse: Decodable {
+    let translatedText: String
+
+    enum CodingKeys: String, CodingKey {
+        case translatedText = "translation"
     }
 }

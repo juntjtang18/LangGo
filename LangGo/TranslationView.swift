@@ -1,3 +1,4 @@
+// LangGo/TranslationView.swift
 import SwiftUI
 import SwiftData
 import os
@@ -245,32 +246,37 @@ struct TranslationView: View {
             do {
                 let baseLangContentForSave: String
                 let targetLangContentForSave: String
+                
+                // baseLocaleForSave will always be the user's selected app language
+                let baseLocaleForSave: String = languageSettings.selectedLanguageCode
+                // targetLocaleForSave will always be the app's learning target language
+                let targetLocaleForSave: String = learningTargetLanguageCode
 
-                // CRITICAL: Ensure base_text always stores the native language content,
-                // and target_text always stores the learning language content,
-                // regardless of the current UI's swap direction.
+                // Determine content based on input direction
                 if inputDirection == .baseToTarget {
-                    // UI: Input is Base Language, Translation is Target Language
+                    // User inputs native language (base), translates to learning language (target)
                     baseLangContentForSave = inputText
                     targetLangContentForSave = translatedText
                 } else { // inputDirection == .targetToBase
-                    // UI: Input is Target Language, Translation is Base Language
+                    // User inputs learning language (target), translates to native language (base)
                     baseLangContentForSave = translatedText
                     targetLangContentForSave = inputText
                 }
 
                 try await viewModel.saveNewUserWord(
-                    targetText: targetLangContentForSave, // This is the content in the learningTargetLanguageCode (e.g., English)
-                    baseText: baseLangContentForSave,     // This is the content in the selected app (base) language (e.g., Chinese)
-                    partOfSpeech: partOfSpeech.rawValue // Using default for now
+                    targetText: targetLangContentForSave,
+                    baseText: baseLangContentForSave,
+                    partOfSpeech: partOfSpeech.rawValue,
+                    baseLocale: baseLocaleForSave,
+                    targetLocale: targetLocaleForSave
                 )
                 withAnimation { showSuccessMessage = true }
                 // Clear inputs after successful save
                 inputText = ""
                 translatedText = ""
-                inputIsStale = true // After saving, implicitly new input is needed, so mark as stale
-                lastTranslatedInput = nil // Clear last translated state after saving
-                lastTranslatedOutput = nil // Clear last translated state after saving
+                inputIsStale = true
+                lastTranslatedInput = nil
+                lastTranslatedOutput = nil
             } catch {
                 errorMessageText = "Failed to add to VocaBook: \(error.localizedDescription)"
                 withAnimation {

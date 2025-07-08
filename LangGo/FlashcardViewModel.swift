@@ -1,3 +1,4 @@
+// LangGo/FlashcardViewModel.swift
 import SwiftUI
 import SwiftData
 import os
@@ -275,12 +276,12 @@ class FlashcardViewModel {
     ///   - baseText: The base form or definition (e.g., "to run").
     ///   - partOfSpeech: The part of speech (e.g., "verb").
     @MainActor
-    func saveNewUserWord(targetText: String, baseText: String, partOfSpeech: String) async throws {
+    func saveNewUserWord(targetText: String, baseText: String, partOfSpeech: String, baseLocale: String, targetLocale: String) async throws {
         do {
             logger.info("Attempting to save new user word: '\(targetText)' with base text '\(baseText)' and part of speech '\(partOfSpeech)'")
             
             // Use StrapiService to save new user word
-            let _: UserWordResponse = try await StrapiService.shared.saveNewUserWord(targetText: targetText, baseText: baseText, partOfSpeech: partOfSpeech)
+            let _: UserWordResponse = try await StrapiService.shared.saveNewUserWord(targetText: targetText, baseText: baseText, partOfSpeech: partOfSpeech, baseLocale: baseLocale, targetLocale: targetLocale)
             
             logger.info("Successfully saved new user word: '\(targetText)' to Strapi.")
             
@@ -318,43 +319,4 @@ class FlashcardViewModel {
 enum ReviewResult: String {
     case correct
     case wrong
-}
-
-// MARK: - Strapi Data Structures for User Word
-// These structs are defined here only to avoid redeclaration.
-
-// Request body for creating a new user word
-struct CreateUserWordRequest: Encodable, Decodable {
-    let data: UserWordData
-}
-
-struct UserWordData: Encodable, Decodable {
-    let target_text: String
-    let base_text: String
-    let part_of_speech: String
-}
-
-// Response structure for a created user word (optional, but good for confirmation)
-struct UserWordResponse: Decodable {
-    let data: UserWordResponseData
-}
-
-struct UserWordResponseData: Decodable {
-    let id: Int
-    let attributes: UserWordAttributes
-}
-
-// MARK: - Strapi Data Structures for Translate Word
-struct TranslateWordRequest: Codable {
-    let word: String
-    let source: String
-    let target: String
-}
-
-struct TranslateWordResponse: Decodable {
-    let translatedText: String
-
-    enum CodingKeys: String, CodingKey {
-        case translatedText = "translation" // Corrected to match Strapi response key
-    }
 }

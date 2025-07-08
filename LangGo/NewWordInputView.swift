@@ -1,3 +1,4 @@
+// LangGo/NewWordInputView.swift
 import SwiftUI
 import os
 
@@ -178,23 +179,31 @@ struct NewWordInputView: View {
             do {
                 let strapiWordFieldContent: String // This will be the English word
                 let strapiBaseTextFieldContent: String // This will be the Learning Language word
+                let baseLocale: String
+                let targetLocale: String
 
                 if inputDirection == .englishToLearning {
                     // UI: "English Word" is $word, "Learning Language Translation" is $baseText
                     // Desired Strapi: 'word' field = English, 'base_text' field = Learning Language
                     strapiWordFieldContent = word // Content of UI's "English Word"
                     strapiBaseTextFieldContent = baseText // Content of UI's "Learning Language Translation"
+                    baseLocale = "en"
+                    targetLocale = languageSettings.selectedLanguageCode
                 } else { // inputDirection == .learningToEnglish
                     // UI: "Learning Language Word" is $word, "English Translation" is $baseText
                     // Desired Strapi: 'word' field = English, 'base_text' field = Learning Language
                     strapiWordFieldContent = baseText // Content of UI's "English Translation"
                     strapiBaseTextFieldContent = word // Content of UI's "Learning Language Word"
+                    baseLocale = languageSettings.selectedLanguageCode
+                    targetLocale = "en"
                 }
                 
                 try await viewModel.saveNewUserWord(
                     targetText: strapiWordFieldContent, // Renamed for clarity and correctness
                     baseText: strapiBaseTextFieldContent, // Maps to Strapi 'base_text' field
-                    partOfSpeech: partOfSpeech.rawValue
+                    partOfSpeech: partOfSpeech.rawValue,
+                    baseLocale: baseLocale,
+                    targetLocale: targetLocale
                 )
                 word = ""
                 baseText = ""

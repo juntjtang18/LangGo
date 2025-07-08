@@ -1,3 +1,4 @@
+// LangGo/StrapiService.swift
 //
 //  StrapiService.swift
 //  LangGo
@@ -87,10 +88,10 @@ class StrapiService {
 
     // MARK: - User Words & Translation
 
-    func saveNewUserWord(targetText: String, baseText: String, partOfSpeech: String) async throws -> UserWordResponse {
+    func saveNewUserWord(targetText: String, baseText: String, partOfSpeech: String, baseLocale: String, targetLocale: String) async throws -> UserWordResponse {
         logger.debug("StrapiService: Saving new user word.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-words") else { throw URLError(.badURL) }
-        let newWordData = UserWordData(target_text: targetText, base_text: baseText, part_of_speech: partOfSpeech)
+        let newWordData = UserWordData(target_text: targetText, base_text: baseText, part_of_speech: partOfSpeech, base_locale: baseLocale, target_locale: targetLocale)
         let requestBody = CreateUserWordRequest(data: newWordData)
         return try await NetworkManager.shared.post(to: url, body: requestBody)
     }
