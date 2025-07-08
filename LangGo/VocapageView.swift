@@ -73,9 +73,7 @@ struct VocapageView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showBaseText.toggle()
-                    }) {
+                    Button(action: { showBaseText.toggle() }) {
                         Image(systemName: showBaseText ? "eye.slash.fill" : "eye.fill")
                             .accessibilityLabel(showBaseText ? "Hide Base Text" : "Show Base Text")
                     }
@@ -83,7 +81,6 @@ struct VocapageView: View {
                 ToolbarItem(placement: .bottomBar) {
                     HStack {
                         Spacer()
-                        // Read button: reads flashcards sequentially
                         Button(action: {
                             if let flashcards = vocapage?.flashcards {
                                 let sortedCards = flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
@@ -97,10 +94,7 @@ struct VocapageView: View {
                         }
                         .tint(.blue)
                         Spacer()
-                        // Practice button: opens practice view
-                        Button(action: {
-                            isShowingPracticeView = true
-                        }) {
+                        Button(action: { isShowingPracticeView = true }) {
                             Label("Practice", systemImage: "play.circle.fill")
                                 .font(.title)
                                 .padding(.horizontal, 16)
@@ -108,7 +102,6 @@ struct VocapageView: View {
                         }
                         .tint(.blue)
                         Spacer()
-                        // Placeholder to balance layout
                         Button(action: {}) {
                             Label("", systemImage: "circle")
                                 .font(.title)
@@ -121,9 +114,7 @@ struct VocapageView: View {
                     }
                 }
             }
-            .task {
-                await fetchAndSyncVocapageDetails()
-            }
+            .task { await fetchAndSyncVocapageDetails() }
             .fullScreenCover(isPresented: $isShowingPracticeView) {
                 ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings)
             }
@@ -219,13 +210,10 @@ struct VocapageView: View {
             flashcardToUpdate.vocapage = vocapage
             logger.debug("Updating existing flashcard: \(flashcardToUpdate.id)")
         } else {
-            let contentComponent = strapiFlashcard.content?.first
-            var front: String = "Missing Question"
-            var back: String = "Missing Answer"
+            var front = "Missing Question"
+            var back = "Missing Answer"
             var reg: String? = nil
-            let type: String = contentComponent?.componentIdentifier ?? ""
-            let rawData: Data? = try? JSONEncoder().encode(contentComponent)
-
+            let contentComponent = strapiFlashcard.content?.first
             switch contentComponent?.componentIdentifier {
             case "a.user-word-ref":
                 front = contentComponent?.userWord?.data?.attributes.baseText ?? front
@@ -233,25 +221,24 @@ struct VocapageView: View {
             case "a.word-ref":
                 front = contentComponent?.word?.data?.attributes.baseText ?? front
                 back = contentComponent?.word?.data?.attributes.word ?? back
-                reg = contentComponent?.word?.data?.attributes.register ?? reg
+                reg = contentComponent?.word?.data?.attributes.register
             case "a.user-sent-ref":
                 front = contentComponent?.userSentence?.data?.attributes.baseText ?? front
                 back = contentComponent?.userSentence?.data?.attributes.targetText ?? back
             case "a.sent-ref":
                 front = contentComponent?.sentence?.data?.attributes.baseText ?? front
                 back = contentComponent?.sentence?.data?.attributes.targetText ?? back
-                reg = contentComponent?.sentence?.data?.attributes.register ?? reg
+                reg = contentComponent?.sentence?.data?.attributes.register
             default:
                 break
             }
-
             let newFlashcard = Flashcard(
                 id: strapiFlashcardData.id,
                 frontContent: front,
                 backContent: back,
                 register: reg,
-                contentType: type,
-                rawComponentData: rawData,
+                contentType: contentComponent?.componentIdentifier ?? "",
+                rawComponentData: try? JSONEncoder().encode(contentComponent),
                 lastReviewedAt: strapiFlashcard.lastReviewedAt,
                 correctStreak: strapiFlashcard.correctStreak ?? 0,
                 wrongStreak: strapiFlashcard.wrongStreak ?? 0,
@@ -273,7 +260,7 @@ private class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDele
     @Published var currentIndex: Int = -1
     private var flashcards: [Flashcard] = []
     private var showBaseText: Bool = true
-    private var isSpeakingBasePhase: Bool = false
+    private var utterancePhase: Int = 0  // 0 = first target, 1 = second target, 2 = base
     private let synthesizer = AVSpeechSynthesizer()
 
     override init() {
@@ -286,7 +273,7 @@ private class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDele
         self.flashcards = flashcards
         self.showBaseText = showBaseText
         self.currentIndex = 0
-        self.isSpeakingBasePhase = false
+        self.utterancePhase = 0
         speakCurrent()
     }
 
@@ -295,47 +282,68 @@ private class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDele
             currentIndex = -1
             return
         }
+        // Update highlight before speaking
+        objectWillChange.send()
 
         let card = flashcards[currentIndex]
-        let textToSpeak: String
-        let languageCode: String
+        let targetLang = Config.learningTargetLanguageCode
+        let baseLang = UserDefaults.standard.string(forKey: "selectedLanguage")
+                      ?? Locale.current.language.languageCode?.identifier
+                      ?? "en"
 
-        if !isSpeakingBasePhase {
-            // Speak target text in target language
-            textToSpeak = card.backContent
-            languageCode = Config.learningTargetLanguageCode
-        } else {
-            // Speak base text in base language
-            textToSpeak = card.frontContent
-            languageCode = UserDefaults.standard.string(forKey: "selectedLanguage") ?? Locale.current.languageCode ?? "en"
+        // Determine utterance based on phase
+        let utterance: AVSpeechUtterance
+        switch utterancePhase {
+        case 0:
+            utterance = AVSpeechUtterance(string: card.backContent)
+            utterance.voice = AVSpeechSynthesisVoice(language: targetLang)
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+            utterance.postUtteranceDelay = 1.5
+
+        case 1:
+            utterance = AVSpeechUtterance(string: card.backContent)
+            utterance.voice = AVSpeechSynthesisVoice(language: targetLang)
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+            utterance.postUtteranceDelay = 1.5
+
+        case 2:
+            if showBaseText {
+                utterance = AVSpeechUtterance(string: card.frontContent)
+                utterance.voice = AVSpeechSynthesisVoice(language: baseLang)
+                utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+                utterance.postUtteranceDelay = 2.0
+            } else {
+                // Skip base phase if disabled: wait 2s then advance
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    self.advanceToNextCard()
+                }
+                return
+            }
+
+        default:
+            return
         }
-
-        let utterance = AVSpeechUtterance(string: textToSpeak)
-        utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
         synthesizer.speak(utterance)
+    }
+
+    private func advanceToNextCard() {
+        utterancePhase = 0
+        currentIndex += 1
+        if currentIndex < flashcards.count {
+            speakCurrent()
+        } else {
+            currentIndex = -1
+        }
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
-            if self.showBaseText {
-                if !self.isSpeakingBasePhase {
-                    // Finished target phase, now speak base phase
-                    self.isSpeakingBasePhase = true
-                } else {
-                    // Finished base phase, move to next card
-                    self.isSpeakingBasePhase = false
-                    self.currentIndex += 1
-                }
-            } else {
-                // Only target phase
-                self.currentIndex += 1
-            }
-
-            if self.currentIndex < self.flashcards.count {
+            // After finishing an utterance, move to next phase or card
+            self.utterancePhase += 1
+            if self.utterancePhase <= 2 {
                 self.speakCurrent()
             } else {
-                self.currentIndex = -1
+                self.advanceToNextCard()
             }
         }
     }
