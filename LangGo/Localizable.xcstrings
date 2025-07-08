@@ -148,9 +148,6 @@
         }
       }
     },
-    "Base Text" : {
-
-    },
     "Card %lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -490,6 +487,9 @@
         }
       }
     },
+    "Hide Base Text" : {
+
+    },
     "Input Text (%@)" : {
 
     },
@@ -639,6 +639,9 @@
         }
       }
     },
+    "My Vocabulary Notebook" : {
+
+    },
     "New Password" : {
       "localizations" : {
         "ja" : {
@@ -768,6 +771,9 @@
           }
         }
       }
+    },
+    "Practice" : {
+
     },
     "Profile" : {
       "localizations" : {
@@ -1005,6 +1011,9 @@
         }
       }
     },
+    "Show Base Text" : {
+
+    },
     "Sign Up" : {
       "localizations" : {
         "ja" : {
@@ -1152,9 +1161,6 @@
       }
     },
     "Swap" : {
-
-    },
-    "Target Text" : {
 
     },
     "This will control data refreshing behavior in a future update." : {
@@ -1367,9 +1373,6 @@
       }
     },
     "Vocabulary Notebook" : {
-
-    },
-    "Vocapage Details" : {
 
     },
     "Vocapage details not available." : {

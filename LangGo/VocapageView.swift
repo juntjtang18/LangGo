@@ -4,21 +4,22 @@ import SwiftData
 import os // For logging
 
 struct VocapageView: View {
-    @Environment(\.dismiss) var dismiss // To dismiss the full screen cover
-    @Environment(\.modelContext) private var modelContext // Add ModelContext for SwiftData operations
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var languageSettings: LanguageSettings
 
-    let vocapageId: Int // The ID of the vocapage to display
+    let vocapageId: Int
     
-    @State private var vocapage: Vocapage? // State to hold the fetched SwiftData Vocapage object
+    @State private var vocapage: Vocapage?
     @State private var isLoading: Bool = false
+    @State private var showBaseText: Bool = true // New state to control base text visibility
+    @State private var isShowingPracticeView: Bool = false
     @State private var errorMessage: String?
     
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageView")
 
     init(vocapageId: Int) {
         self.vocapageId = vocapageId
-        // No @Query init here, as we will fetch and sync it ourselves.
-        // This allows us to handle loading states and network errors explicitly.
     }
     
     var body: some View {
@@ -32,38 +33,16 @@ struct VocapageView: View {
                         .foregroundColor(.red)
                         .padding()
                 } else if let vocapage = vocapage { // Display content when SwiftData model is loaded
-                    Text(vocapage.title)
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .padding(.bottom, 20)
-                    
                     if let flashcards = vocapage.flashcards, !flashcards.isEmpty {
                         List {
-                            // Header Row for columns
-                            HStack {
-                                Text("Target Text")
-                                    .font(.headline)
-                                    .fontWeight(.bold)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text("Base Text")
-                                    .font(.headline)
-                                    .fontWeight(.bold)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.vertical, 5)
-                            .background(Color.gray.opacity(0.1))
-                            .listRowInsets(EdgeInsets()) // Remove default list padding for header
-
-                            // Iterate over the actual Flashcard model objects
-                            // Sort by lastReviewedAt for consistent order
                             ForEach(flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })) { card in
                                 HStack {
-                                    // `backContent` is the target (e.g., English word)
-                                    // `frontContent` is the base (e.g., Chinese translation).
-                                    Text(card.backContent) // Learning language word/sentence
+                                    Text(card.backContent)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                    Text(card.frontContent) // Base language translation
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    if showBaseText {
+                                        Text(card.frontContent)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
                                 }
                                 .padding(.vertical, 5)
                             }
@@ -75,12 +54,11 @@ struct VocapageView: View {
                         Spacer()
                     }
                 } else {
-                    // Fallback in case vocapage is nil and not loading/error
                     Text("Vocapage details not available.")
                         .foregroundColor(.secondary)
                 }
             }
-            .navigationTitle("Vocapage Details")
+            .navigationTitle("My Vocabulary Notebook")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -91,9 +69,56 @@ struct VocapageView: View {
                         }
                     }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showBaseText.toggle()
+                    }) {
+                        Image(systemName: showBaseText ? "eye.slash.fill" : "eye.fill") // Changed icons
+                            .accessibilityLabel(showBaseText ? "Hide Base Text" : "Show Base Text")
+                    }
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    HStack {
+                        Spacer()
+                        // Left-aligned item (Practice Button)
+                        Button(action: {
+                            isShowingPracticeView = true
+                        }) {
+                            Label("Practice", systemImage: "play.circle.fill")
+                        }
+                        //.buttonStyle(.borderedProminent)
+                        .tint(.blue)
+
+                        Spacer()
+                        Button(action: {
+                            isShowingPracticeView = true
+                        }) {
+                            Label("Practice", systemImage: "play.circle.fill")
+                        }
+
+                        // Center-aligned item (Page Number Circle)
+                        //if let vocapage = vocapage {
+                        //    PageNumberCircleView(pageNumber: vocapage.order)
+                        //}
+
+                        Spacer()
+
+                        // Invisible placeholder to balance layout
+                        Button(action: {}) {
+                            Label("Practice", systemImage: "play.circle.fill")
+                                //.opacity(0) // Invisible to keep symmetry
+                        }
+                        //.buttonStyle(.borderedProminent)
+                        //.disabled(true)
+                        Spacer()
+                    }
+                }
             }
             .task {
                 await fetchAndSyncVocapageDetails()
+            }
+            .fullScreenCover(isPresented: $isShowingPracticeView) {
+                ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings)
             }
         }
     }
@@ -103,13 +128,8 @@ struct VocapageView: View {
         isLoading = true
         errorMessage = nil
         do {
-            // 1. Fetch the StrapiVocapage (network model)
             let fetchedStrapiVocapage = try await StrapiService.shared.fetchVocapageDetails(vocapageId: vocapageId)
-            
-            // 2. Sync the network model to the local SwiftData model
             let syncedVocapage = try await syncVocapageFromStrapi(fetchedStrapiVocapage)
-            
-            // 3. Assign the SwiftData model to the @State variable
             self.vocapage = syncedVocapage
             logger.info("Successfully fetched and synced vocapage details for ID: \(vocapageId)")
             
@@ -120,7 +140,6 @@ struct VocapageView: View {
         isLoading = false
     }
 
-    // MARK: - SwiftData Syncing Logic for VocapageView
     @MainActor
     private func syncVocapageFromStrapi(_ strapiVocapage: StrapiVocapage) async throws -> Vocapage {
         var fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == strapiVocapage.id })
@@ -131,9 +150,6 @@ struct VocapageView: View {
             vocapageToUpdate = existingVocapage
             vocapageToUpdate.title = strapiVocapage.attributes.title
             vocapageToUpdate.order = strapiVocapage.attributes.order ?? 0
-            // vocabook relationship is set during vocabook sync, or can be nullified.
-            // If this vocapage is opened directly, its vocabook might not be present,
-            // which is fine unless strict consistency is required outside the vocabook hierarchy.
             logger.debug("Updating existing vocapage: \(vocapageToUpdate.title)")
         } else {
             let newVocapage = Vocapage(id: strapiVocapage.id, title: strapiVocapage.attributes.title, order: strapiVocapage.attributes.order ?? 0)
@@ -142,7 +158,6 @@ struct VocapageView: View {
             logger.debug("Inserting new vocapage: \(newVocapage.title)")
         }
 
-        // Sync flashcards for this vocapage
         if let strapiFlashcards = strapiVocapage.attributes.flashcards?.data {
             var syncedFlashcards: [Flashcard] = []
             for strapiFlashcardData in strapiFlashcards {
@@ -156,7 +171,7 @@ struct VocapageView: View {
             logger.debug("No flashcards found or populated for vocapage '\(vocapageToUpdate.title)'.")
         }
         
-        try modelContext.save() // Save changes to the context
+        try modelContext.save()
         return vocapageToUpdate
     }
 
@@ -170,7 +185,6 @@ struct VocapageView: View {
         let flashcardToUpdate: Flashcard
         if let existingFlashcard = try modelContext.fetch(fetchDescriptor).first {
             flashcardToUpdate = existingFlashcard
-            // Update properties
             let contentComponent = strapiFlashcard.content?.first
             
             switch contentComponent?.componentIdentifier {
@@ -199,10 +213,9 @@ struct VocapageView: View {
             flashcardToUpdate.correctStreak = strapiFlashcard.correctStreak ?? 0
             flashcardToUpdate.wrongStreak = strapiFlashcard.wrongStreak ?? 0
             flashcardToUpdate.isRemembered = strapiFlashcard.isRemembered
-            flashcardToUpdate.vocapage = vocapage // Ensure relationship is set
+            flashcardToUpdate.vocapage = vocapage
             logger.debug("Updating existing flashcard: \(flashcardToUpdate.id)")
         } else {
-            // Create new Flashcard
             let contentComponent = strapiFlashcard.content?.first
             var front: String = "Missing Question"
             var back: String = "Missing Answer"
@@ -241,12 +254,35 @@ struct VocapageView: View {
                 correctStreak: strapiFlashcard.correctStreak ?? 0,
                 wrongStreak: strapiFlashcard.wrongStreak ?? 0,
                 isRemembered: strapiFlashcard.isRemembered,
-                vocapage: vocapage // Set the relationship
+                vocapage: vocapage
             )
             modelContext.insert(newFlashcard)
             flashcardToUpdate = newFlashcard
             logger.debug("Inserting new flashcard: \(newFlashcard.id)")
         }
         return flashcardToUpdate
+    }
+}
+
+private struct PageNumberCircleView: View {
+    let pageNumber: Int
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.blue, lineWidth: 3)
+                .frame(width: 20, height: 20)
+            Text("\(pageNumber)")
+                // smaller font size for better fit
+                .font(.system(size: 12))
+                .foregroundColor(.blue)
+        }
+    }
+}
+//add quick preview for the view below
+// now below preview takes long time to load, so we will use a static preview
+struct VocapageView_Previews: PreviewProvider {
+    static var previews: some View {
+        VocapageView(vocapageId: 1)
     }
 }
