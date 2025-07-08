@@ -1,6 +1,6 @@
-// LangGo/VocapageView.swift
 import SwiftUI
 import SwiftData
+import AVFoundation
 import os // For logging
 
 struct VocapageView: View {
@@ -12,10 +12,12 @@ struct VocapageView: View {
     
     @State private var vocapage: Vocapage?
     @State private var isLoading: Bool = false
-    @State private var showBaseText: Bool = true // New state to control base text visibility
+    @State private var showBaseText: Bool = true // Control base text visibility
     @State private var isShowingPracticeView: Bool = false
     @State private var errorMessage: String?
     
+    @StateObject private var speechManager = SpeechManager()
+
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageView")
 
     init(vocapageId: Int) {
@@ -32,10 +34,10 @@ struct VocapageView: View {
                     Text("Error: \(errorMessage)")
                         .foregroundColor(.red)
                         .padding()
-                } else if let vocapage = vocapage { // Display content when SwiftData model is loaded
+                } else if let vocapage = vocapage {
                     if let flashcards = vocapage.flashcards, !flashcards.isEmpty {
                         List {
-                            ForEach(flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })) { card in
+                            ForEach(Array(flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) }).enumerated()), id: \.element.id) { index, card in
                                 HStack {
                                     Text(card.backContent)
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -45,6 +47,7 @@ struct VocapageView: View {
                                     }
                                 }
                                 .padding(.vertical, 5)
+                                .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
                             }
                         }
                     } else {
@@ -73,43 +76,47 @@ struct VocapageView: View {
                     Button(action: {
                         showBaseText.toggle()
                     }) {
-                        Image(systemName: showBaseText ? "eye.slash.fill" : "eye.fill") // Changed icons
+                        Image(systemName: showBaseText ? "eye.slash.fill" : "eye.fill")
                             .accessibilityLabel(showBaseText ? "Hide Base Text" : "Show Base Text")
                     }
                 }
                 ToolbarItem(placement: .bottomBar) {
                     HStack {
                         Spacer()
-                        // Left-aligned item (Practice Button)
+                        // Read button: reads flashcards sequentially
                         Button(action: {
-                            isShowingPracticeView = true
+                            if let flashcards = vocapage?.flashcards {
+                                let sortedCards = flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
+                                speechManager.startReading(sortedCards, showBaseText: showBaseText)
+                            }
                         }) {
-                            Label("Practice", systemImage: "play.circle.fill")
+                            Label("Read", systemImage: "play.circle.fill")
+                                .font(.title)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
                         }
-                        //.buttonStyle(.borderedProminent)
                         .tint(.blue)
-
                         Spacer()
+                        // Practice button: opens practice view
                         Button(action: {
                             isShowingPracticeView = true
                         }) {
                             Label("Practice", systemImage: "play.circle.fill")
+                                .font(.title)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
                         }
-
-                        // Center-aligned item (Page Number Circle)
-                        //if let vocapage = vocapage {
-                        //    PageNumberCircleView(pageNumber: vocapage.order)
-                        //}
-
+                        .tint(.blue)
                         Spacer()
-
-                        // Invisible placeholder to balance layout
+                        // Placeholder to balance layout
                         Button(action: {}) {
-                            Label("Practice", systemImage: "play.circle.fill")
-                                //.opacity(0) // Invisible to keep symmetry
+                            Label("", systemImage: "circle")
+                                .font(.title)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .opacity(0)
                         }
-                        //.buttonStyle(.borderedProminent)
-                        //.disabled(true)
+                        .disabled(true)
                         Spacer()
                     }
                 }
@@ -122,55 +129,51 @@ struct VocapageView: View {
             }
         }
     }
-    
+
     @MainActor
     private func fetchAndSyncVocapageDetails() async {
         isLoading = true
         errorMessage = nil
         do {
-            let fetchedStrapiVocapage = try await StrapiService.shared.fetchVocapageDetails(vocapageId: vocapageId)
-            let syncedVocapage = try await syncVocapageFromStrapi(fetchedStrapiVocapage)
-            self.vocapage = syncedVocapage
+            let fetched = try await StrapiService.shared.fetchVocapageDetails(vocapageId: vocapageId)
+            let synced = try await syncVocapageFromStrapi(fetched)
+            self.vocapage = synced
             logger.info("Successfully fetched and synced vocapage details for ID: \(vocapageId)")
-            
         } catch {
-            self.errorMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
             logger.error("Failed to fetch or sync vocapage details for ID: \(vocapageId). Error: \(error.localizedDescription)")
         }
         isLoading = false
     }
 
     @MainActor
-    private func syncVocapageFromStrapi(_ strapiVocapage: StrapiVocapage) async throws -> Vocapage {
-        var fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == strapiVocapage.id })
+    private func syncVocapageFromStrapi(_ strapi: StrapiVocapage) async throws -> Vocapage {
+        var fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == strapi.id })
         fetchDescriptor.fetchLimit = 1
-
         let vocapageToUpdate: Vocapage
-        if let existingVocapage = try modelContext.fetch(fetchDescriptor).first {
-            vocapageToUpdate = existingVocapage
-            vocapageToUpdate.title = strapiVocapage.attributes.title
-            vocapageToUpdate.order = strapiVocapage.attributes.order ?? 0
+        if let existing = try modelContext.fetch(fetchDescriptor).first {
+            vocapageToUpdate = existing
+            vocapageToUpdate.title = strapi.attributes.title
+            vocapageToUpdate.order = strapi.attributes.order ?? 0
             logger.debug("Updating existing vocapage: \(vocapageToUpdate.title)")
         } else {
-            let newVocapage = Vocapage(id: strapiVocapage.id, title: strapiVocapage.attributes.title, order: strapiVocapage.attributes.order ?? 0)
-            modelContext.insert(newVocapage)
-            vocapageToUpdate = newVocapage
-            logger.debug("Inserting new vocapage: \(newVocapage.title)")
+            let newVoc = Vocapage(id: strapi.id, title: strapi.attributes.title, order: strapi.attributes.order ?? 0)
+            modelContext.insert(newVoc)
+            vocapageToUpdate = newVoc
+            logger.debug("Inserting new vocapage: \(newVoc.title)")
         }
-
-        if let strapiFlashcards = strapiVocapage.attributes.flashcards?.data {
-            var syncedFlashcards: [Flashcard] = []
-            for strapiFlashcardData in strapiFlashcards {
-                let syncedFlashcard = try await syncFlashcardForVocapage(strapiFlashcardData, vocapage: vocapageToUpdate)
-                syncedFlashcards.append(syncedFlashcard)
+        if let data = strapi.attributes.flashcards?.data {
+            var synced: [Flashcard] = []
+            for item in data {
+                let card = try await syncFlashcardForVocapage(item, vocapage: vocapageToUpdate)
+                synced.append(card)
             }
-            vocapageToUpdate.flashcards = syncedFlashcards
-            logger.debug("Synced \(syncedFlashcards.count) flashcards for vocapage '\(vocapageToUpdate.title)'.")
+            vocapageToUpdate.flashcards = synced
+            logger.debug("Synced \(synced.count) flashcards for vocapage '\(vocapageToUpdate.title)'.")
         } else {
             vocapageToUpdate.flashcards = []
-            logger.debug("No flashcards found or populated for vocapage '\(vocapageToUpdate.title)'.")
+            logger.debug("No flashcards found for vocapage '\(vocapageToUpdate.title)'.")
         }
-        
         try modelContext.save()
         return vocapageToUpdate
     }
@@ -186,7 +189,7 @@ struct VocapageView: View {
         if let existingFlashcard = try modelContext.fetch(fetchDescriptor).first {
             flashcardToUpdate = existingFlashcard
             let contentComponent = strapiFlashcard.content?.first
-            
+
             switch contentComponent?.componentIdentifier {
             case "a.user-word-ref":
                 flashcardToUpdate.frontContent = contentComponent?.userWord?.data?.attributes.baseText ?? "Missing Question"
@@ -239,8 +242,7 @@ struct VocapageView: View {
                 back = contentComponent?.sentence?.data?.attributes.targetText ?? back
                 reg = contentComponent?.sentence?.data?.attributes.register ?? reg
             default:
-                front = "Unknown Content (Front)"
-                back = "Unknown Content (Back)"
+                break
             }
 
             let newFlashcard = Flashcard(
@@ -253,36 +255,63 @@ struct VocapageView: View {
                 lastReviewedAt: strapiFlashcard.lastReviewedAt,
                 correctStreak: strapiFlashcard.correctStreak ?? 0,
                 wrongStreak: strapiFlashcard.wrongStreak ?? 0,
-                isRemembered: strapiFlashcard.isRemembered,
-                vocapage: vocapage
+                isRemembered: strapiFlashcard.isRemembered
             )
+            newFlashcard.vocapage = vocapage
             modelContext.insert(newFlashcard)
-            flashcardToUpdate = newFlashcard
-            logger.debug("Inserting new flashcard: \(newFlashcard.id)")
+            logger.debug("Inserted new flashcard: \(newFlashcard.id)")
+            return newFlashcard
         }
+
+        try modelContext.save()
         return flashcardToUpdate
     }
 }
 
-private struct PageNumberCircleView: View {
-    let pageNumber: Int
-    
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Color.blue, lineWidth: 3)
-                .frame(width: 20, height: 20)
-            Text("\(pageNumber)")
-                // smaller font size for better fit
-                .font(.system(size: 12))
-                .foregroundColor(.blue)
-        }
+// MARK: - Speech Manager for VocapageView
+private class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    @Published var currentIndex: Int = -1
+    private var flashcards: [Flashcard] = []
+    private var showBaseText: Bool = true
+    private let synthesizer = AVSpeechSynthesizer()
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
     }
-}
-//add quick preview for the view below
-// now below preview takes long time to load, so we will use a static preview
-struct VocapageView_Previews: PreviewProvider {
-    static var previews: some View {
-        VocapageView(vocapageId: 1)
+
+    func startReading(_ flashcards: [Flashcard], showBaseText: Bool) {
+        synthesizer.stopSpeaking(at: .immediate)
+        self.flashcards = flashcards
+        self.showBaseText = showBaseText
+        self.currentIndex = 0
+        speakCurrentCard()
+    }
+
+    private func speakCurrentCard() {
+        guard currentIndex >= 0 && currentIndex < flashcards.count else {
+            currentIndex = -1
+            return
+        }
+        let card = flashcards[currentIndex]
+        var textToSpeak = card.backContent
+        if showBaseText {
+            textToSpeak += " " + card.frontContent
+        }
+        let utterance = AVSpeechUtterance(string: textToSpeak)
+        utterance.voice = AVSpeechSynthesisVoice(language: Locale.current.languageCode ?? "en-US")
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+        synthesizer.speak(utterance)
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            self.currentIndex += 1
+            if self.currentIndex < self.flashcards.count {
+                self.speakCurrentCard()
+            } else {
+                self.currentIndex = -1
+            }
+        }
     }
 }
