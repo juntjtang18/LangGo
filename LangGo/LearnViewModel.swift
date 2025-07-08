@@ -63,18 +63,15 @@ class LearnViewModel {
     func fetchAndSyncVocabooks() async {
         isLoadingVocabooks = true
         do {
-            logger.info("Fetching vocabooks from Strapi.")
-            // response is now [StrapiVocabook] directly due to fetchAllPages
+            logger.info("Fetching vocabook from Strapi.")
+            // REVISED: Expect a single StrapiVocabook object
             let response = try await StrapiService.shared.fetchUserVocabooks()
             
-            var syncedVocabooks: [Vocabook] = []
-            for strapiVocabook in response {
-                let syncedVocabook = try await syncVocabook(strapiVocabook)
-                syncedVocabooks.append(syncedVocabook)
-            }
+            // REVISED: Process the single vocabook
+            let syncedVocabook = try await syncVocabook(response) // Pass the single object
+            self.vocabooks = [syncedVocabook].sorted { $0.title < $1.title } // Wrap in array
             try modelContext.save()
-            self.vocabooks = syncedVocabooks.sorted { $0.title < $1.title } // Sort by title
-            logger.info("Successfully fetched and synced \(self.vocabooks.count) vocabooks.")
+            logger.info("Successfully fetched and synced 1 vocabook.")
         } catch {
             logger.error("Failed to fetch and sync vocabooks: \(error.localizedDescription)")
             // Fallback to local data if server fetch fails
@@ -96,6 +93,7 @@ class LearnViewModel {
         }
     }
 
+    // REVISED: Parameter type changed to StrapiVocabook (not StrapiListResponse<T> or [StrapiVocabook])
     @MainActor
     private func syncVocabook(_ strapiVocabook: StrapiVocabook) async throws -> Vocabook {
         var fetchDescriptor = FetchDescriptor<Vocabook>(predicate: #Predicate { $0.id == strapiVocabook.id })
@@ -110,7 +108,7 @@ class LearnViewModel {
             let newVocabook = Vocabook(id: strapiVocabook.id, title: strapiVocabook.attributes.title)
             modelContext.insert(newVocabook)
             vocabookToUpdate = newVocabook
-            logger.debug("Inserting new vocabook: \(vocabookToUpdate.title)")
+            logger.debug("Inserting new vocabook: \(newVocabook.title)")
         }
 
         // Sync vocapages for this vocabook

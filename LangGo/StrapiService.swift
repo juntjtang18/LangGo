@@ -1,11 +1,4 @@
 // LangGo/StrapiService.swift
-//
-//  StrapiService.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/7/7. // Or actual current date
-//
-
 import Foundation
 import os
 
@@ -105,29 +98,31 @@ class StrapiService {
     
     // MARK: - NEW: Vocabook & Vocapage API Calls (Modified to fetch all pages and filter by user)
 
-    func fetchUserVocabooks() async throws -> [StrapiVocabook] {
-        logger.debug("StrapiService: Fetching user vocabooks with populated vocapages.")
-        // Get current user ID from UserDefaults
-        let userId = UserDefaults.standard.integer(forKey: "userId")
-        guard userId != 0 else {
-            logger.error("User ID not found when fetching vocabooks.")
-            throw NSError(domain: "StrapiServiceError", code: 0, userInfo: [NSLocalizedDescriptionKey: "User not logged in or ID missing."])
-        }
-
-        // Add filter for user ID and populate relations
-        guard let baseURL = URL(string: "\(Config.strapiBaseUrl)/api/vocabooks?filters[user][id][$eq]=\(userId)&populate[vocapages][populate][flashcards]=true") else { throw URLError(.badURL) }
-        let components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
-        let allVocabooks: [StrapiVocabook] = try await NetworkManager.shared.fetchAllPages(baseURLComponents: components)
-        return allVocabooks
+    func fetchUserVocabooks() async throws -> StrapiVocabook {
+        logger.debug("StrapiService: Fetching user's primary vocabook.")
+        // The /api/v1/myvocabook endpoint implicitly filters by the authenticated user
+        // And it populates vocapages and flashcards by default.
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/v1/myvocabook") else { throw URLError(.badURL) }
+        
+        // Use fetchSingle as the response is wrapped in a "data" key, containing the single Vocabook object.
+        let vocabook: StrapiVocabook = try await NetworkManager.shared.fetchSingle(from: url)
+        
+        logger.info("Successfully fetched user's vocabook. Title: \(vocabook.attributes.title, privacy: .public). Vocapages count: \(vocabook.attributes.vocapages?.data.count ?? 0)")
+        
+        return vocabook
     }
 
-    func fetchVocapages(forVocabookId vocabookId: Int) async throws -> [StrapiVocapage] {
-        logger.debug("StrapiService: Fetching vocapages for vocabook ID: \(vocabookId) with populated flashcards.")
-        // Use fetchAllPages to get all vocapages for a vocabook, handling pagination
-        guard let baseURL = URL(string: "\(Config.strapiBaseUrl)/api/vocapages?filters[vocabook][id][$eq]=\(vocabookId)&populate[flashcards]=true&sort[0]=order:asc") else { throw URLError(.badURL) }
-        let components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
-        let allVocapages: [StrapiVocapage] = try await NetworkManager.shared.fetchAllPages(baseURLComponents: components)
-        return allVocapages
+    // MARK: - Vocapage Details (NEW)
+    func fetchVocapageDetails(vocapageId: Int) async throws -> StrapiVocapage {
+        logger.debug("StrapiService: Fetching details for vocapage ID: \(vocapageId) with populated flashcards.")
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/v1/myvocapage/\(vocapageId)") else { throw URLError(.badURL) }
+        
+        // Use fetchSingle as the response is wrapped in a "data" key, containing the single Vocapage object.
+        let vocapage: StrapiVocapage = try await NetworkManager.shared.fetchSingle(from: url)
+        
+        logger.info("Successfully fetched details for vocapage ID \(vocapageId). Title: \(vocapage.attributes.title, privacy: .public). Flashcards count: \(vocapage.attributes.flashcards?.data.count ?? 0)")
+        
+        return vocapage
     }
 
     // MARK: - Other (Example for future use)

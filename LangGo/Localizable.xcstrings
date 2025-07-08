@@ -148,6 +148,9 @@
         }
       }
     },
+    "Base Text" : {
+
+    },
     "Card %lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -428,6 +431,9 @@
     "Enter word or sentence" : {
 
     },
+    "Error: %@" : {
+
+    },
     "Flashcard" : {
       "localizations" : {
         "ja" : {
@@ -602,6 +608,9 @@
     "Loading cards..." : {
 
     },
+    "Loading vocapage details..." : {
+
+    },
     "Login" : {
       "localizations" : {
         "ja" : {
@@ -688,6 +697,9 @@
           }
         }
       }
+    },
+    "No flashcards in this page." : {
+
     },
     "No pages in this vocabook." : {
 
@@ -1142,6 +1154,9 @@
     "Swap" : {
 
     },
+    "Target Text" : {
+
+    },
     "This will control data refreshing behavior in a future update." : {
       "localizations" : {
         "ja" : {
@@ -1352,6 +1367,12 @@
       }
     },
     "Vocabulary Notebook" : {
+
+    },
+    "Vocapage Details" : {
+
+    },
+    "Vocapage details not available." : {
 
     },
     "Welcome to LangGo" : {

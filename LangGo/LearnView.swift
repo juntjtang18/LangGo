@@ -76,9 +76,77 @@ struct LearnView: View {
         .background(Color(.systemGroupedBackground)) // A subtle grey background
         .task {
             await viewModel.fetchAndSyncVocabooks()
+            let testVocapageId = 4
+            await testFetchVocapageDetails(vocapageId: testVocapageId)
         }
     }
-}
+    // MARK: - NEW: Test Function for Vocapage Details
+    private func testFetchVocapageDetails(vocapageId: Int) async {
+        do {
+            print("Attempting to fetch details for vocapage ID: \(vocapageId)")
+            let vocapageDetails = try await StrapiService.shared.fetchVocapageDetails(vocapageId: vocapageId)
+            
+            print("\n--- Fetched Vocapage Details ---")
+            print("ID: \(vocapageDetails.id)")
+            print("Title: \(vocapageDetails.attributes.title)")
+            print("Order: \(vocapageDetails.attributes.order ?? 0)")
+            print("Created At: \(vocapageDetails.attributes.createdAt ?? "N/A")")
+            
+            if let flashcards = vocapageDetails.attributes.flashcards?.data {
+                print("Flashcards in this page (\(flashcards.count) total):")
+                for (index, flashcardData) in flashcards.enumerated() {
+                    print("  Flashcard \(index + 1): ID \(flashcardData.id)")
+                    // Access content details based on component type
+                    let contentComponent = flashcardData.attributes.content?.first
+                    if let userWord = contentComponent?.userWord?.data?.attributes {
+                        print("    Type: User Word")
+                        print("    Base Text: \(userWord.baseText ?? "N/A")")
+                        print("    Target Text: \(userWord.targetText ?? "N/A")")
+                        print("    Part of Speech: \(userWord.partOfSpeech ?? "N/A")")
+                        if let examBase = userWord.examBase {
+                            print("    Exam Base Options:")
+                            for option in examBase {
+                                print("      - Text: \(option.text), Correct: \(option.isCorrect)")
+                            }
+                        }
+                        if let examTarget = userWord.examTarget {
+                            print("    Exam Target Options:")
+                            for option in examTarget {
+                                print("      - Text: \(option.text), Correct: \(option.isCorrect)")
+                            }
+                        }
+                    } else if let word = contentComponent?.word?.data?.attributes {
+                        print("    Type: Official Word")
+                        print("    Word: \(word.word ?? "N/A")")
+                        print("    Base Text: \(word.baseText ?? "N/A")")
+                        print("    Register: \(word.register ?? "N/A")")
+                        // You can add more attributes here as needed
+                    } else if let userSentence = contentComponent?.userSentence?.data?.attributes {
+                        print("    Type: User Sentence")
+                        print("    Base Text: \(userSentence.baseText ?? "N/A")")
+                        print("    Target Text: \(userSentence.targetText ?? "N/A")")
+                    } else if let sentence = contentComponent?.sentence?.data?.attributes {
+                        print("    Type: Official Sentence")
+                        print("    Base Text: \(sentence.baseText ?? "N/A")")
+                        print("    Target Text: \(sentence.targetText ?? "N/A")")
+                        print("    Register: \(sentence.register ?? "N/A")")
+                    } else {
+                        print("    Type: Unknown or Missing Content")
+                    }
+                    print("    Last Reviewed: \(flashcardData.attributes.lastReviewedAt?.description ?? "Never")")
+                    print("    Is Remembered: \(flashcardData.attributes.isRemembered)")
+                    print("    Correct Streak: \(flashcardData.attributes.correctStreak ?? 0)")
+                    print("    Wrong Streak: \(flashcardData.attributes.wrongStreak ?? 0)")
+                }
+            } else {
+                print("No flashcards found for this vocapage.")
+            }
+            print("----------------------------------\n")
+            
+        } catch {
+            print("Failed to fetch vocapage details: \(error.localizedDescription)")
+        }
+    }}
 
 // MARK: - LearnView Components
 
@@ -283,26 +351,35 @@ struct VocabookSectionView: View {
 
 struct VocapageRowView: View {
     let vocapage: Vocapage
-    
+    @State private var isShowingVocapageDetail: Bool = false // State to control presentation
+
     var body: some View {
-        HStack(spacing: 15) {
-            Text("Page \(vocapage.order)") // Display order
-                .font(.headline)
-                .fontWeight(.bold)
-                .foregroundColor(.blue) // Different color for pages
-            
-            Text(vocapage.title)
-                .font(.headline)
-            
-            Spacer()
-            
-            ProgressCircleView(progress: vocapage.progress)
+        Button(action: {
+            isShowingVocapageDetail = true // Set state to show the detail view
+        }) {
+            HStack(spacing: 15) {
+                Text("Page \(vocapage.order)") // Display order
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.blue) // Different color for pages
+                
+                Text(vocapage.title)
+                    .font(.headline)
+                
+                Spacer()
+                
+                ProgressCircleView(progress: vocapage.progress)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.clear) // No fill for rows
+            )
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.clear) // No fill for rows
-        )
+        .buttonStyle(PlainButtonStyle()) // To remove default button styling
+        .fullScreenCover(isPresented: $isShowingVocapageDetail) {
+            VocapageView(vocapageId: vocapage.id) // Present VocapageView with the vocapage ID
+        }
     }
 }
 
