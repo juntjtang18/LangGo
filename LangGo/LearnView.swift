@@ -1,3 +1,4 @@
+// LangGo/LearnView.swift
 //
 //  LearnView.swift
 //  LangGo
@@ -6,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 // MARK: - Learn Tab Container
 // This is the top-level view for the "Learn" tab.
@@ -14,10 +16,12 @@ import SwiftUI
 struct LearnTabView: View {
     @Binding var isSideMenuShowing: Bool
     @EnvironmentObject var languageSettings: LanguageSettings
+    @Environment(\.modelContext) private var modelContext // Inject modelContext
 
     var body: some View {
         NavigationStack {
-            LearnView() // The detailed view goes here.
+            // Pass the modelContext to LearnView
+            LearnView(modelContext: modelContext)
                 .navigationTitle("Learn English")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) }
@@ -28,6 +32,8 @@ struct LearnTabView: View {
 // MARK: - Primary Learn Screen UI
 
 struct LearnView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel: LearnViewModel // Use the new ViewModel
     
     // Sample data to populate the view, matching your design
     let mainUnits: [CourseUnit] = [
@@ -43,6 +49,10 @@ struct LearnView: View {
         .init(icon: "heart.fill", title: "Romance", progress: 0.0),
         .init(icon: "text.quote", title: "Argot", progress: 0.0)
     ]
+
+    init(modelContext: ModelContext) {
+        _viewModel = State(initialValue: LearnViewModel(modelContext: modelContext))
+    }
     
     var body: some View {
         ScrollView {
@@ -50,6 +60,9 @@ struct LearnView: View {
                 
                 // --- Resume Learning Panel ---
                 ResumeLearningView()
+
+                // --- NEW: Vocabulary Notebook Section ---
+                VocabularyNotebookView(viewModel: viewModel) // Pass viewModel directly
                 
                 // --- Main Units List ---
                 UnitListView(title: "Main Units", units: mainUnits)
@@ -61,6 +74,9 @@ struct LearnView: View {
             .padding()
         }
         .background(Color(.systemGroupedBackground)) // A subtle grey background
+        .task {
+            await viewModel.fetchAndSyncVocabooks()
+        }
     }
 }
 
@@ -187,6 +203,108 @@ struct ProgressCircleView: View {
     }
 }
 
+// MARK: - NEW: Vocabulary Notebook Subview
+struct VocabularyNotebookView: View {
+    @Bindable var viewModel: LearnViewModel // Changed from @ObservedObject
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack {
+                Text("Vocabulary Notebook")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+                if viewModel.isLoadingVocabooks {
+                    ProgressView()
+                }
+            }
+            .padding(.horizontal)
+            
+            VStack(spacing: 8) {
+                if viewModel.vocabooks.isEmpty && !viewModel.isLoadingVocabooks {
+                    Text("No vocabooks found.")
+                        .foregroundColor(.secondary)
+                        .padding()
+                } else {
+                    ForEach(viewModel.vocabooks) { vocabook in
+                        VocabookSectionView(vocabook: vocabook, viewModel: viewModel) // Pass viewModel directly
+                    }
+                }
+            }
+            .padding()
+            .background(Color.white)
+            .cornerRadius(16)
+        }
+    }
+}
+
+struct VocabookSectionView: View {
+    let vocabook: Vocabook
+    @Bindable var viewModel: LearnViewModel // Changed from @ObservedObject
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Button(action: {
+                withAnimation {
+                    viewModel.toggleVocabookExpansion(vocabookId: vocabook.id)
+                }
+            }) {
+                HStack {
+                    Text(vocabook.title)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Image(systemName: viewModel.expandedVocabooks.contains(vocabook.id) ? "chevron.up" : "chevron.down")
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 8)
+
+            if viewModel.expandedVocabooks.contains(vocabook.id) {
+                if let vocapages = vocabook.vocapages, !vocapages.isEmpty {
+                    ForEach(vocapages.sorted(by: { $0.order < $1.order })) { vocapage in
+                        VocapageRowView(vocapage: vocapage)
+                    }
+                } else {
+                    Text("No pages in this vocabook.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .padding(.leading)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+struct VocapageRowView: View {
+    let vocapage: Vocapage
+    
+    var body: some View {
+        HStack(spacing: 15) {
+            Text("Page \(vocapage.order)") // Display order
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.blue) // Different color for pages
+            
+            Text(vocapage.title)
+                .font(.headline)
+            
+            Spacer()
+            
+            ProgressCircleView(progress: vocapage.progress)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.clear) // No fill for rows
+        )
+    }
+}
 
 #Preview {
     // This makes it easy to preview your LearnView in isolation

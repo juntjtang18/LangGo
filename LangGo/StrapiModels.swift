@@ -18,7 +18,7 @@ struct FlashcardAttributes: Codable {
     let updatedAt: String?
     let locale: String?
     let lastReviewedAt: Date?
-    let content: [StrapiComponent]
+    let content: [StrapiComponent]? // Made optional to fix decoding error
     
     let correctStreak: Int?
     let wrongStreak: Int?
@@ -30,6 +30,19 @@ struct FlashcardAttributes: Codable {
         case correctStreak = "correct_streak"
         case wrongStreak = "wrong_streak"
         case isRemembered = "is_remembered"
+    }
+
+    // Custom initializer to handle optional 'content' key robustly
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        self.updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+        self.locale = try container.decodeIfPresent(String.self, forKey: .locale)
+        self.lastReviewedAt = try container.decodeIfPresent(Date.self, forKey: .lastReviewedAt)
+        self.content = try container.decodeIfPresent([StrapiComponent].self, forKey: .content)
+        self.correctStreak = try container.decodeIfPresent(Int.self, forKey: .correctStreak)
+        self.wrongStreak = try container.decodeIfPresent(Int.self, forKey: .wrongStreak)
+        self.isRemembered = try container.decode(Bool.self, forKey: .isRemembered) // This is mandatory, not optional based on JSON
     }
 }
 
@@ -331,6 +344,18 @@ struct SentenceAttributes: Codable {
     }
 }
 
+struct MediaFormat: Codable {
+    let name: String?
+    let hash: String?
+    let ext: String?
+    let mime: String?
+    let path: String?
+    let width: Int?
+    let height: Int?
+    let size: Double?
+    let url: String?
+}
+
 struct MediaAttributes: Codable {
     let name: String?
     let alternativeText: String?
@@ -355,18 +380,6 @@ struct MediaAttributes: Codable {
         case previewUrl
         case providerMetadata = "provider_metadata"
     }
-}
-
-struct MediaFormat: Codable {
-    let name: String?
-    let hash: String?
-    let ext: String?
-    let mime: String?
-    let path: String?
-    let width: Int?
-    let height: Int?
-    let size: Double?
-    let url: String?
 }
 
 // Wrapper for the array response from /api/my-reviewlogs
@@ -431,5 +444,48 @@ struct TranslateWordResponse: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case translatedText = "translation"
+    }
+}
+
+// MARK: - NEW: Vocabook and Vocapage Strapi Models
+// The root-level response for vocabooks when fetched directly using fetchAllPages
+// will be an array of StrapiVocabook, not a StrapiVocabookResponse wrapper.
+// So, removing StrapiVocabookResponse and StrapiVocapageResponse is necessary
+// as fetchAllPages returns [T] where T is StrapiVocabook or StrapiVocapage.
+
+struct StrapiVocabook: Codable, Identifiable {
+    let id: Int
+    let attributes: VocabookAttributes
+}
+
+struct VocabookAttributes: Codable {
+    let title: String
+    let createdAt: String?
+    let updatedAt: String?
+    let publishedAt: String?
+    let vocapages: ManyRelation<StrapiData<VocapageAttributes>>?
+
+    enum CodingKeys: String, CodingKey {
+        case title, vocapages
+        case createdAt, updatedAt, publishedAt
+    }
+}
+
+struct StrapiVocapage: Codable, Identifiable {
+    let id: Int
+    let attributes: VocapageAttributes
+}
+
+struct VocapageAttributes: Codable {
+    let title: String
+    let order: Int?
+    let createdAt: String?
+    let updatedAt: String?
+    let publishedAt: String?
+    let flashcards: ManyRelation<StrapiData<FlashcardAttributes>>? // To get progress
+
+    enum CodingKeys: String, CodingKey {
+        case title, order, flashcards
+        case createdAt, updatedAt, publishedAt
     }
 }

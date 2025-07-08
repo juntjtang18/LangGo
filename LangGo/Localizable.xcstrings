@@ -689,6 +689,12 @@
         }
       }
     },
+    "No pages in this vocabook." : {
+
+    },
+    "No vocabooks found." : {
+
+    },
     "OK" : {
       "localizations" : {
         "ja" : {
@@ -716,6 +722,9 @@
           }
         }
       }
+    },
+    "Page %lld" : {
+
     },
     "Part of Speech" : {
 
@@ -1341,6 +1350,9 @@
           }
         }
       }
+    },
+    "Vocabulary Notebook" : {
+
     },
     "Welcome to LangGo" : {
       "localizations" : {

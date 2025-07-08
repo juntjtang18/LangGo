@@ -166,30 +166,28 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
     @MainActor
     @discardableResult
     private func syncCard(_ strapiCard: StrapiFlashcard) async throws -> Flashcard {
-        // Same as before...
-        guard let component = strapiCard.attributes.content.first else {
-            throw NSError(domain: "CardSyncError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Card \(strapiCard.id) has no content component."])
-        }
+        // Access 'content' using optional chaining
+        let contentComponent = strapiCard.attributes.content?.first
 
         var frontContent: String?, backContent: String?, register: String?
 
-        switch component.componentIdentifier {
+        switch contentComponent?.componentIdentifier { // Use optional chaining
         case "a.user-word-ref":
-            frontContent = component.userWord?.data?.attributes.baseText
-            backContent = component.userWord?.data?.attributes.targetText // Changed to use the new field
+            frontContent = contentComponent?.userWord?.data?.attributes.baseText
+            backContent = contentComponent?.userWord?.data?.attributes.targetText // Changed to use the new field
         case "a.word-ref":
-            frontContent = component.word?.data?.attributes.baseText
-            backContent = component.word?.data?.attributes.word
-            register = component.word?.data?.attributes.register
+            frontContent = contentComponent?.word?.data?.attributes.baseText
+            backContent = contentComponent?.word?.data?.attributes.word
+            register = contentComponent?.word?.data?.attributes.register
         case "a.user-sent-ref":
-            frontContent = component.userSentence?.data?.attributes.baseText
-            backContent = component.userSentence?.data?.attributes.targetText
+            frontContent = contentComponent?.userSentence?.data?.attributes.baseText
+            backContent = contentComponent?.userSentence?.data?.attributes.targetText
         case "a.sent-ref":
-            frontContent = component.sentence?.data?.attributes.baseText
-            backContent = component.sentence?.data?.attributes.targetText
-            register = component.sentence?.data?.attributes.register
+            frontContent = contentComponent?.sentence?.data?.attributes.baseText
+            backContent = contentComponent?.sentence?.data?.attributes.targetText
+            register = contentComponent?.sentence?.data?.attributes.register
         default:
-            logger.warning("Unrecognized component type: \(component.componentIdentifier)")
+            logger.warning("Unrecognized component type: \(contentComponent?.componentIdentifier ?? "nil")") // Log if component is nil or unknown
         }
 
         let finalFront = frontContent ?? "Missing Question"
@@ -208,7 +206,8 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
         } else {
             let newCard = Flashcard(
                 id: cardId, frontContent: finalFront, backContent: finalBack, register: register,
-                contentType: component.componentIdentifier, rawComponentData: nil,
+                contentType: contentComponent?.componentIdentifier ?? "", // Default to empty string if nil
+                rawComponentData: nil, // rawComponentData might be nil here too
                 lastReviewedAt: strapiCard.attributes.lastReviewedAt,
                 correctStreak: strapiCard.attributes.correctStreak ?? 0,
                 wrongStreak: strapiCard.attributes.wrongStreak ?? 0,

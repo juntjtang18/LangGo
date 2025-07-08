@@ -103,6 +103,33 @@ class StrapiService {
         return try await NetworkManager.shared.post(to: url, body: requestBody)
     }
     
+    // MARK: - NEW: Vocabook & Vocapage API Calls (Modified to fetch all pages and filter by user)
+
+    func fetchUserVocabooks() async throws -> [StrapiVocabook] {
+        logger.debug("StrapiService: Fetching user vocabooks with populated vocapages.")
+        // Get current user ID from UserDefaults
+        let userId = UserDefaults.standard.integer(forKey: "userId")
+        guard userId != 0 else {
+            logger.error("User ID not found when fetching vocabooks.")
+            throw NSError(domain: "StrapiServiceError", code: 0, userInfo: [NSLocalizedDescriptionKey: "User not logged in or ID missing."])
+        }
+
+        // Add filter for user ID and populate relations
+        guard let baseURL = URL(string: "\(Config.strapiBaseUrl)/api/vocabooks?filters[user][id][$eq]=\(userId)&populate[vocapages][populate][flashcards]=true") else { throw URLError(.badURL) }
+        let components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+        let allVocabooks: [StrapiVocabook] = try await NetworkManager.shared.fetchAllPages(baseURLComponents: components)
+        return allVocabooks
+    }
+
+    func fetchVocapages(forVocabookId vocabookId: Int) async throws -> [StrapiVocapage] {
+        logger.debug("StrapiService: Fetching vocapages for vocabook ID: \(vocabookId) with populated flashcards.")
+        // Use fetchAllPages to get all vocapages for a vocabook, handling pagination
+        guard let baseURL = URL(string: "\(Config.strapiBaseUrl)/api/vocapages?filters[vocabook][id][$eq]=\(vocabookId)&populate[flashcards]=true&sort[0]=order:asc") else { throw URLError(.badURL) }
+        let components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
+        let allVocapages: [StrapiVocapage] = try await NetworkManager.shared.fetchAllPages(baseURLComponents: components)
+        return allVocapages
+    }
+
     // MARK: - Other (Example for future use)
 
     // Example for fetching a list of courses (if you add this endpoint)

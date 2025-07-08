@@ -1,3 +1,4 @@
+// LangGoApp.swift
 import SwiftUI
 import SwiftData
 import KeychainAccess
@@ -30,7 +31,8 @@ struct LangGoApp: App {
                 LoginView(authState: $authState)
             }
         }
-        .modelContainer(for: Flashcard.self)
+        // Updated modelContainer to include new models
+        .modelContainer(for: [Flashcard.self, Vocabook.self, Vocapage.self])
         // Make the language settings available to all child views.
         .environmentObject(languageSettings)
         // Set the app's locale from the published property.
