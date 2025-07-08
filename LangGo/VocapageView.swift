@@ -273,6 +273,7 @@ private class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDele
     @Published var currentIndex: Int = -1
     private var flashcards: [Flashcard] = []
     private var showBaseText: Bool = true
+    private var isSpeakingBasePhase: Bool = false
     private let synthesizer = AVSpeechSynthesizer()
 
     override init() {
@@ -285,30 +286,54 @@ private class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDele
         self.flashcards = flashcards
         self.showBaseText = showBaseText
         self.currentIndex = 0
-        speakCurrentCard()
+        self.isSpeakingBasePhase = false
+        speakCurrent()
     }
 
-    private func speakCurrentCard() {
+    private func speakCurrent() {
         guard currentIndex >= 0 && currentIndex < flashcards.count else {
             currentIndex = -1
             return
         }
+
         let card = flashcards[currentIndex]
-        var textToSpeak = card.backContent
-        if showBaseText {
-            textToSpeak += " " + card.frontContent
+        let textToSpeak: String
+        let languageCode: String
+
+        if !isSpeakingBasePhase {
+            // Speak target text in target language
+            textToSpeak = card.backContent
+            languageCode = Config.learningTargetLanguageCode
+        } else {
+            // Speak base text in base language
+            textToSpeak = card.frontContent
+            languageCode = UserDefaults.standard.string(forKey: "selectedLanguage") ?? Locale.current.languageCode ?? "en"
         }
+
         let utterance = AVSpeechUtterance(string: textToSpeak)
-        utterance.voice = AVSpeechSynthesisVoice(language: Locale.current.languageCode ?? "en-US")
+        utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
         synthesizer.speak(utterance)
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
-            self.currentIndex += 1
+            if self.showBaseText {
+                if !self.isSpeakingBasePhase {
+                    // Finished target phase, now speak base phase
+                    self.isSpeakingBasePhase = true
+                } else {
+                    // Finished base phase, move to next card
+                    self.isSpeakingBasePhase = false
+                    self.currentIndex += 1
+                }
+            } else {
+                // Only target phase
+                self.currentIndex += 1
+            }
+
             if self.currentIndex < self.flashcards.count {
-                self.speakCurrentCard()
+                self.speakCurrent()
             } else {
                 self.currentIndex = -1
             }
