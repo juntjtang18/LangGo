@@ -25,7 +25,6 @@ final class Vocapage {
     @Attribute(.unique) var id: Int
     var title: String
     var order: Int
-    @Relationship(deleteRule: .nullify, inverse: \Flashcard.vocapage)
     var flashcards: [Flashcard]? // One-to-many relationship with Flashcard
     var vocabook: Vocabook? // Many-to-one relationship with Vocabook
 
@@ -54,116 +53,13 @@ class LearnViewModel {
     var vocabooks: [Vocabook] = []
     var isLoadingVocabooks = false
     var expandedVocabooks: Set<Int> = [] // To keep track of expanded vocabooks
+    
+    var flashcards: [Flashcard] = []
+    var totalFlashcards: Int = 0       // ← new
+    var totalPages: Int = 1            // ← new
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
-    }
-
-    @MainActor
-    func fetchAndSyncVocabooks() async {
-        isLoadingVocabooks = true
-        do {
-            logger.info("Fetching vocabook from Strapi.")
-            // REVISED: Expect a single StrapiVocabook object
-            let response = try await StrapiService.shared.fetchUserVocabooks()
-            
-            // REVISED: Process the single vocabook
-            let syncedVocabook = try await syncVocabook(response) // Pass the single object
-            self.vocabooks = [syncedVocabook].sorted { $0.title < $1.title } // Wrap in array
-            try modelContext.save()
-            logger.info("Successfully fetched and synced 1 vocabook.")
-        } catch {
-            logger.error("Failed to fetch and sync vocabooks: \(error.localizedDescription)")
-            // Fallback to local data if server fetch fails
-            await fetchVocabooksLocally()
-        }
-        isLoadingVocabooks = false
-    }
-
-    @MainActor
-    private func fetchVocabooksLocally() async {
-        logger.info("Fetching vocabooks from local SwiftData store.")
-        do {
-            let descriptor = FetchDescriptor<Vocabook>(sortBy: [SortDescriptor(\.title)])
-            self.vocabooks = try modelContext.fetch(descriptor)
-            logger.info("Successfully loaded \(self.vocabooks.count) vocabooks from local storage.")
-        } catch {
-            logger.error("Failed to fetch vocabooks locally: \(error.localizedDescription)")
-            self.vocabooks = []
-        }
-    }
-
-    // REVISED: Parameter type changed to StrapiVocabook (not StrapiListResponse<T> or [StrapiVocabook])
-    @MainActor
-    private func syncVocabook(_ strapiVocabook: StrapiVocabook) async throws -> Vocabook {
-        var fetchDescriptor = FetchDescriptor<Vocabook>(predicate: #Predicate { $0.id == strapiVocabook.id })
-        fetchDescriptor.fetchLimit = 1
-
-        let vocabookToUpdate: Vocabook
-        if let existingVocabook = try modelContext.fetch(fetchDescriptor).first {
-            vocabookToUpdate = existingVocabook
-            vocabookToUpdate.title = strapiVocabook.attributes.title
-            logger.debug("Updating existing vocabook: \(vocabookToUpdate.title)")
-        } else {
-            let newVocabook = Vocabook(id: strapiVocabook.id, title: strapiVocabook.attributes.title)
-            modelContext.insert(newVocabook)
-            vocabookToUpdate = newVocabook
-            logger.debug("Inserting new vocabook: \(newVocabook.title)")
-        }
-
-        // Sync vocapages for this vocabook
-        if let strapiVocapages = strapiVocabook.attributes.vocapages?.data {
-            var syncedVocapages: [Vocapage] = []
-            for strapiVocapageData in strapiVocapages {
-                let syncedVocapage = try await syncVocapage(strapiVocapageData, vocabook: vocabookToUpdate)
-                syncedVocapages.append(syncedVocapage)
-            }
-            vocabookToUpdate.vocapages = syncedVocapages.sorted { ($0.order) < ($1.order) } // Sort by order
-            logger.debug("Synced \(syncedVocapages.count) vocapages for vocabook '\(vocabookToUpdate.title)'.")
-        } else {
-            vocabookToUpdate.vocapages = []
-            logger.debug("No vocapages found or populated for vocabook '\(vocabookToUpdate.title)'.")
-        }
-        
-        return vocabookToUpdate
-    }
-
-    @MainActor
-    private func syncVocapage(_ strapiVocapageData: StrapiData<VocapageAttributes>, vocabook: Vocabook) async throws -> Vocapage {
-        let strapiVocapage = strapiVocapageData.attributes
-        var fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == strapiVocapageData.id })
-        fetchDescriptor.fetchLimit = 1
-
-        let vocapageToUpdate: Vocapage
-        if let existingVocapage = try modelContext.fetch(fetchDescriptor).first {
-            vocapageToUpdate = existingVocapage
-            vocapageToUpdate.title = strapiVocapage.title
-            vocapageToUpdate.order = strapiVocapage.order ?? 0
-            vocapageToUpdate.vocabook = vocabook
-            logger.debug("Updating existing vocapage: \(vocapageToUpdate.title)")
-        } else {
-            let newVocapage = Vocapage(id: strapiVocapageData.id, title: strapiVocapage.title, order: strapiVocapage.order ?? 0)
-            newVocapage.vocabook = vocabook
-            modelContext.insert(newVocapage)
-            vocapageToUpdate = newVocapage
-            logger.debug("Inserting new vocapage: \(newVocapage.title)")
-        }
-
-        // Sync flashcards for this vocapage (only if populated)
-        if let strapiFlashcards = strapiVocapage.flashcards?.data {
-            var syncedFlashcards: [Flashcard] = []
-            for strapiFlashcardData in strapiFlashcards {
-                let syncedFlashcard = try await syncFlashcard(strapiFlashcardData, vocapage: vocapageToUpdate)
-                syncedFlashcards.append(syncedFlashcard)
-            }
-            vocapageToUpdate.flashcards = syncedFlashcards
-            logger.debug("Synced \(syncedFlashcards.count) flashcards for vocapage '\(vocapageToUpdate.title)'.")
-        } else {
-            vocapageToUpdate.flashcards = []
-            logger.debug("No flashcards populated for vocapage '\(vocapageToUpdate.title)'.")
-        }
-        
-        return vocapageToUpdate
     }
 
     @MainActor
@@ -206,7 +102,7 @@ class LearnViewModel {
             flashcardToUpdate.correctStreak = strapiFlashcard.correctStreak ?? 0
             flashcardToUpdate.wrongStreak = strapiFlashcard.wrongStreak ?? 0
             flashcardToUpdate.isRemembered = strapiFlashcard.isRemembered
-            flashcardToUpdate.vocapage = vocapage // Set the relationship
+            
             logger.debug("Updating existing flashcard: \(flashcardToUpdate.id)")
         } else {
             let contentComponent = strapiFlashcard.content?.first // Access 'content' as optional
@@ -247,8 +143,8 @@ class LearnViewModel {
                 lastReviewedAt: strapiFlashcard.lastReviewedAt,
                 correctStreak: strapiFlashcard.correctStreak ?? 0,
                 wrongStreak: strapiFlashcard.wrongStreak ?? 0,
-                isRemembered: strapiFlashcard.isRemembered,
-                vocapage: vocapage // Set the relationship
+                isRemembered: strapiFlashcard.isRemembered
+                
             )
             modelContext.insert(newFlashcard)
             flashcardToUpdate = newFlashcard

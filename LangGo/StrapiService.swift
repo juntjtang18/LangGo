@@ -79,6 +79,24 @@ class StrapiService {
         return try await NetworkManager.shared.fetchDirect(from: url)
     }
 
+    // MARK: - Flashcards Pagination
+
+    /// Fetches the current user's flashcards, page by page.
+    /// - Parameters:
+    ///   - page:    which page to fetch (1-indexed)
+    ///   - pageSize: how many cards per page
+    /// - Returns: a paginated list response wrapping `StrapiFlashcard` items
+    func fetchFlashcards(page: Int, pageSize: Int) async throws -> StrapiListResponse<StrapiFlashcard> {
+        logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize).")
+        guard let url = URL(string:
+            "\(Config.strapiBaseUrl)/api/flashcards/mine?page=\(page)&pageSize=\(pageSize)")
+        else {
+            throw URLError(.badURL)
+        }
+        return try await NetworkManager.shared.fetchDirect(from: url)
+    }
+
+    
     // MARK: - User Words & Translation
 
     func saveNewUserWord(targetText: String, baseText: String, partOfSpeech: String, baseLocale: String, targetLocale: String) async throws -> UserWordResponse {
@@ -96,35 +114,6 @@ class StrapiService {
         return try await NetworkManager.shared.post(to: url, body: requestBody)
     }
     
-    // MARK: - NEW: Vocabook & Vocapage API Calls (Modified to fetch all pages and filter by user)
-
-    func fetchUserVocabooks() async throws -> StrapiVocabook {
-        logger.debug("StrapiService: Fetching user's primary vocabook.")
-        // The /api/v1/myvocabook endpoint implicitly filters by the authenticated user
-        // And it populates vocapages and flashcards by default.
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/v1/myvocabook") else { throw URLError(.badURL) }
-        
-        // Use fetchSingle as the response is wrapped in a "data" key, containing the single Vocabook object.
-        let vocabook: StrapiVocabook = try await NetworkManager.shared.fetchSingle(from: url)
-        
-        logger.info("Successfully fetched user's vocabook. Title: \(vocabook.attributes.title, privacy: .public). Vocapages count: \(vocabook.attributes.vocapages?.data.count ?? 0)")
-        
-        return vocabook
-    }
-
-    // MARK: - Vocapage Details (NEW)
-    func fetchVocapageDetails(vocapageId: Int) async throws -> StrapiVocapage {
-        logger.debug("StrapiService: Fetching details for vocapage ID: \(vocapageId) with populated flashcards.")
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/v1/myvocapage/\(vocapageId)") else { throw URLError(.badURL) }
-        
-        // Use fetchSingle as the response is wrapped in a "data" key, containing the single Vocapage object.
-        let vocapage: StrapiVocapage = try await NetworkManager.shared.fetchSingle(from: url)
-        
-        logger.info("Successfully fetched details for vocapage ID \(vocapageId). Title: \(vocapage.attributes.title, privacy: .public). Flashcards count: \(vocapage.attributes.flashcards?.data.count ?? 0)")
-        
-        return vocapage
-    }
-
     // MARK: - VBSetting Endpoints
 
     /// Fetch the current user's vbsetting.

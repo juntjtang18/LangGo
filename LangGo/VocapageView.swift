@@ -191,60 +191,11 @@ struct VocapageView: View {
                     )
                 }
             }
-            .task { await fetchAndSyncVocapageDetails() }
+            .task {  }
             .fullScreenCover(isPresented: $isShowingPracticeView) {
                 ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings)
             }
         }
-    }
-
-    @MainActor
-    private func fetchAndSyncVocapageDetails() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            let fetched = try await StrapiService.shared.fetchVocapageDetails(vocapageId: vocapageId)
-            let synced = try await syncVocapageFromStrapi(fetched)
-            self.vocapage = synced
-            logger.info("Successfully fetched and synced vocapage details for ID: \(vocapageId)")
-        } catch {
-            errorMessage = error.localizedDescription
-            logger.error("Failed to fetch or sync vocapage details for ID: \(vocapageId). Error: \(error.localizedDescription)")
-        }
-        isLoading = false
-    }
-
-    @MainActor
-    @discardableResult
-    private func syncVocapageFromStrapi(_ strapi: StrapiVocapage) async throws -> Vocapage {
-        var fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == strapi.id })
-        fetchDescriptor.fetchLimit = 1
-        let vocapageToUpdate: Vocapage
-        if let existing = try modelContext.fetch(fetchDescriptor).first {
-            vocapageToUpdate = existing
-            vocapageToUpdate.title = strapi.attributes.title
-            vocapageToUpdate.order = strapi.attributes.order ?? 0
-            logger.debug("Updating existing vocabook: \(vocapageToUpdate.title)")
-        } else {
-            let newVoc = Vocapage(id: strapi.id, title: strapi.attributes.title, order: strapi.attributes.order ?? 0)
-            modelContext.insert(newVoc)
-            vocapageToUpdate = newVoc
-            logger.debug("Inserting new vocabook: \(newVoc.title)")
-        }
-        if let data = strapi.attributes.flashcards?.data {
-            var synced: [Flashcard] = []
-            for item in data {
-                let card = try await syncFlashcardForVocapage(item, vocapage: vocapageToUpdate)
-                synced.append(card)
-            }
-            vocapageToUpdate.flashcards = synced
-            logger.debug("Synced \(synced.count) flashcards for vocapage '\(vocapageToUpdate.title)'.")
-        } else {
-            vocapageToUpdate.flashcards = []
-            logger.debug("No flashcards found for vocapage '\(vocapageToUpdate.title)'.")
-        }
-        try modelContext.save()
-        return vocapageToUpdate
     }
 
     @MainActor
@@ -285,7 +236,7 @@ struct VocapageView: View {
             flashcardToUpdate.correctStreak = strapiFlashcard.correctStreak ?? 0
             flashcardToUpdate.wrongStreak = strapiFlashcard.wrongStreak ?? 0
             flashcardToUpdate.isRemembered = strapiFlashcard.isRemembered
-            flashcardToUpdate.vocapage = vocapage
+            
             logger.debug("Updating existing flashcard: \(flashcardToUpdate.id)")
         } else {
             var front = "Missing Question"
@@ -322,7 +273,7 @@ struct VocapageView: View {
                 wrongStreak: strapiFlashcard.wrongStreak ?? 0,
                 isRemembered: strapiFlashcard.isRemembered
             )
-            newFlashcard.vocapage = vocapage
+            
             modelContext.insert(newFlashcard)
             logger.debug("Inserted new flashcard: \(newFlashcard.id)")
             return newFlashcard

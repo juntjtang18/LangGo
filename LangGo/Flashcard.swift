@@ -24,11 +24,8 @@ final class Flashcard {
     
     var isRemembered: Bool
 
-    // NEW: Relationship to Vocapage
-    var vocapage: Vocapage?
-    
     // UPDATED: The init method now uses the new streak properties.
-    init(id: Int, frontContent: String, backContent: String, register: String?, contentType: String, rawComponentData: Data?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, vocapage: Vocapage? = nil) {
+    init(id: Int, frontContent: String, backContent: String, register: String?, contentType: String, rawComponentData: Data?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool) {
         self.id = id
         self.frontContent = frontContent
         self.backContent = backContent
@@ -39,7 +36,6 @@ final class Flashcard {
         self.correctStreak = correctStreak
         self.wrongStreak = wrongStreak
         self.isRemembered = isRemembered
-        self.vocapage = vocapage
     }
     
     private var decodedComponent: StrapiComponent? {
