@@ -224,12 +224,12 @@ struct VocapageView: View {
             vocapageToUpdate = existing
             vocapageToUpdate.title = strapi.attributes.title
             vocapageToUpdate.order = strapi.attributes.order ?? 0
-            logger.debug("Updating existing vocapage: \(vocapageToUpdate.title)")
+            logger.debug("Updating existing vocabook: \(vocapageToUpdate.title)")
         } else {
             let newVoc = Vocapage(id: strapi.id, title: strapi.attributes.title, order: strapi.attributes.order ?? 0)
             modelContext.insert(newVoc)
             vocapageToUpdate = newVoc
-            logger.debug("Inserting new vocapage: \(newVoc.title)")
+            logger.debug("Inserting new vocabook: \(newVoc.title)")
         }
         if let data = strapi.attributes.flashcards?.data {
             var synced: [Flashcard] = []
@@ -346,18 +346,29 @@ private struct VocapageContentListView: View {
                 .foregroundColor(.secondary)
             Spacer()
         } else {
-            List {
-                ForEach(sortedFlashcards.enumerated().map { (index, card) in (index, card) }, id: \.1.id) { index, card in
-                    HStack {
-                        Text(card.backContent)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if showBaseText {
-                            Text(card.frontContent)
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(sortedFlashcards.enumerated().map { (index, card) in (index, card) }, id: \.1.id) { index, card in
+                        HStack {
+                            Text(card.backContent)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                            if showBaseText {
+                                Text(card.frontContent)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .id(card.id) // Ensure each row has a unique ID for scrolling
+                        .padding(.vertical, 5)
+                        .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
+                    }
+                }
+                .onChange(of: speechManager.currentIndex) { _, newIndex in
+                    if newIndex >= 0 && newIndex < sortedFlashcards.count {
+                        let cardIdToScroll = sortedFlashcards[newIndex].id
+                        withAnimation {
+                            proxy.scrollTo(cardIdToScroll, anchor: .top)
                         }
                     }
-                    .padding(.vertical, 5)
-                    .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
                 }
             }
         }
