@@ -191,7 +191,9 @@ struct VocapageView: View {
                     )
                 }
             }
-            .task {  }
+            .task {
+                await loadVocapageDetails()
+            }
             .fullScreenCover(isPresented: $isShowingPracticeView) {
                 ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings)
             }
@@ -199,88 +201,107 @@ struct VocapageView: View {
     }
 
     @MainActor
+    private func loadVocapageDetails() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // 1. Fetch the Vocapage from local storage first
+        let fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == vocapageId })
+        guard let page = (try? modelContext.fetch(fetchDescriptor))?.first else {
+            errorMessage = "Could not find vocapage with ID \(vocapageId)."
+            return
+        }
+        self.vocapage = page
+
+        // 2. Fetch the flashcards for this page from the server
+        do {
+            // Fetch settings for page size
+            let vbSetting = try await StrapiService.shared.fetchVBSetting()
+            let pageSize = vbSetting.attributes.wordsPerPage
+            
+            let response = try await StrapiService.shared.fetchFlashcards(page: page.order, pageSize: pageSize)
+            
+            // 3. Sync flashcards and link to the vocapage
+            var syncedFlashcards: [Flashcard] = []
+            if let strapiFlashcards = response.data {
+                for strapiCard in strapiFlashcards {
+                    let syncedCard = try await syncFlashcardForVocapage(strapiCard, vocapage: page)
+                    syncedFlashcards.append(syncedCard)
+                }
+            }
+            
+            // Ensure the relationship is updated
+            page.flashcards = syncedFlashcards
+            try modelContext.save()
+            
+            // Refresh the view's vocapage state
+            self.vocapage = page
+
+        } catch {
+            errorMessage = "Failed to load flashcards: \(error.localizedDescription)"
+            logger.error("Failed to load vocapage details: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+    
+    @MainActor
     @discardableResult
-    private func syncFlashcardForVocapage(_ strapiFlashcardData: StrapiData<FlashcardAttributes>, vocapage: Vocapage) async throws -> Flashcard {
-        let strapiFlashcard = strapiFlashcardData.attributes
+    private func syncFlashcardForVocapage(_ strapiFlashcardData: StrapiFlashcard, vocapage: Vocapage) async throws -> Flashcard {
+        let strapiCard = strapiFlashcardData.attributes
         var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == strapiFlashcardData.id })
         fetchDescriptor.fetchLimit = 1
 
-        let flashcardToUpdate: Flashcard
+        let flashcard: Flashcard
         if let existingFlashcard = try modelContext.fetch(fetchDescriptor).first {
-            flashcardToUpdate = existingFlashcard
-            let contentComponent = strapiFlashcard.content?.first
-
-            switch contentComponent?.componentIdentifier {
-            case "a.user-word-ref":
-                flashcardToUpdate.frontContent = contentComponent?.userWord?.data?.attributes.baseText ?? "Missing Question"
-                flashcardToUpdate.backContent = contentComponent?.userWord?.data?.attributes.targetText ?? "Missing Answer"
-            case "a.word-ref":
-                flashcardToUpdate.frontContent = contentComponent?.word?.data?.attributes.baseText ?? "Missing Question"
-                flashcardToUpdate.backContent = contentComponent?.word?.data?.attributes.word ?? "Missing Answer"
-                flashcardToUpdate.register = contentComponent?.word?.data?.attributes.register
-            case "a.user-sent-ref":
-                flashcardToUpdate.frontContent = contentComponent?.userSentence?.data?.attributes.baseText ?? "Missing Question"
-                flashcardToUpdate.backContent = contentComponent?.userSentence?.data?.attributes.targetText ?? "Missing Answer"
-            case "a.sent-ref":
-                flashcardToUpdate.frontContent = contentComponent?.sentence?.data?.attributes.baseText ?? "Missing Question"
-                flashcardToUpdate.backContent = contentComponent?.sentence?.data?.attributes.targetText ?? "Missing Answer"
-                flashcardToUpdate.register = contentComponent?.sentence?.data?.attributes.register
-            default:
-                flashcardToUpdate.frontContent = "Unknown Content (Front)"
-                flashcardToUpdate.backContent = "Unknown Content (Back)"
-            }
-
-            flashcardToUpdate.contentType = contentComponent?.componentIdentifier ?? ""
-            flashcardToUpdate.rawComponentData = try? JSONEncoder().encode(contentComponent)
-            flashcardToUpdate.lastReviewedAt = strapiFlashcard.lastReviewedAt
-            flashcardToUpdate.correctStreak = strapiFlashcard.correctStreak ?? 0
-            flashcardToUpdate.wrongStreak = strapiFlashcard.wrongStreak ?? 0
-            flashcardToUpdate.isRemembered = strapiFlashcard.isRemembered
-            
-            logger.debug("Updating existing flashcard: \(flashcardToUpdate.id)")
+            flashcard = existingFlashcard
+            logger.debug("Updating existing flashcard: \(flashcard.id)")
         } else {
-            var front = "Missing Question"
-            var back = "Missing Answer"
-            var reg: String? = nil
-            let contentComponent = strapiFlashcard.content?.first
-            switch contentComponent?.componentIdentifier {
-            case "a.user-word-ref":
-                front = contentComponent?.userWord?.data?.attributes.baseText ?? front
-                back = contentComponent?.userWord?.data?.attributes.targetText ?? back
-            case "a.word-ref":
-                front = contentComponent?.word?.data?.attributes.baseText ?? front
-                back = contentComponent?.word?.data?.attributes.word ?? back
-                reg = contentComponent?.word?.data?.attributes.register
-            case "a.user-sent-ref":
-                front = contentComponent?.userSentence?.data?.attributes.baseText ?? front
-                back = contentComponent?.userSentence?.data?.attributes.targetText ?? back
-            case "a.sent-ref":
-                front = contentComponent?.sentence?.data?.attributes.baseText ?? front
-                back = contentComponent?.sentence?.data?.attributes.targetText ?? back
-                reg = contentComponent?.sentence?.data?.attributes.register
-            default:
-                break
-            }
-            let newFlashcard = Flashcard(
+            flashcard = Flashcard(
                 id: strapiFlashcardData.id,
-                frontContent: front,
-                backContent: back,
-                register: reg,
-                contentType: contentComponent?.componentIdentifier ?? "",
-                rawComponentData: try? JSONEncoder().encode(contentComponent),
-                lastReviewedAt: strapiFlashcard.lastReviewedAt,
-                correctStreak: strapiFlashcard.correctStreak ?? 0,
-                wrongStreak: strapiFlashcard.wrongStreak ?? 0,
-                isRemembered: strapiFlashcard.isRemembered
+                frontContent: "",
+                backContent: "",
+                register: nil,
+                contentType: "",
+                rawComponentData: nil,
+                lastReviewedAt: nil,
+                correctStreak: 0,
+                wrongStreak: 0,
+                isRemembered: false
             )
-            
-            modelContext.insert(newFlashcard)
-            logger.debug("Inserted new flashcard: \(newFlashcard.id)")
-            return newFlashcard
+            modelContext.insert(flashcard)
+            logger.debug("Inserted new flashcard: \(flashcard.id)")
         }
 
+        // --- Unified Sync Logic ---
+        let contentComponent = strapiCard.content?.first
+        switch contentComponent?.componentIdentifier {
+        case "a.user-word-ref":
+            flashcard.frontContent = contentComponent?.userWord?.data?.attributes.baseText ?? "Missing Question"
+            flashcard.backContent = contentComponent?.userWord?.data?.attributes.targetText ?? "Missing Answer"
+        case "a.word-ref":
+            flashcard.frontContent = contentComponent?.word?.data?.attributes.baseText ?? "Missing Question"
+            flashcard.backContent = contentComponent?.word?.data?.attributes.word ?? "Missing Answer"
+            flashcard.register = contentComponent?.word?.data?.attributes.register
+        case "a.user-sent-ref":
+            flashcard.frontContent = contentComponent?.userSentence?.data?.attributes.baseText ?? "Missing Question"
+            flashcard.backContent = contentComponent?.userSentence?.data?.attributes.targetText ?? "Missing Answer"
+        case "a.sent-ref":
+            flashcard.frontContent = contentComponent?.sentence?.data?.attributes.baseText ?? "Missing Question"
+            flashcard.backContent = contentComponent?.sentence?.data?.attributes.targetText ?? "Missing Answer"
+            flashcard.register = contentComponent?.sentence?.data?.attributes.register
+        default:
+            flashcard.frontContent = "Unknown Content (Front)"
+            flashcard.backContent = "Unknown Content (Back)"
+        }
+
+        flashcard.contentType = contentComponent?.componentIdentifier ?? ""
+        flashcard.rawComponentData = try? JSONEncoder().encode(contentComponent)
+        flashcard.lastReviewedAt = strapiCard.lastReviewedAt
+        flashcard.correctStreak = strapiCard.correctStreak ?? 0
+        flashcard.wrongStreak = strapiCard.wrongStreak ?? 0
+        flashcard.isRemembered = strapiCard.isRemembered
+
         try modelContext.save()
-        return flashcardToUpdate
+        return flashcard
     }
 }
 

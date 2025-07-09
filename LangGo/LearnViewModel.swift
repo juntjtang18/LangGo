@@ -52,14 +52,14 @@ class LearnViewModel {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "LearnViewModel")
     private var modelContext: ModelContext
 
-    var vocabooks: [Vocabook] = []
+    var vocabook: Vocabook?
     var isLoadingVocabooks = false
     var expandedVocabooks: Set<Int> = [] // To keep track of expanded vocabooks
     
     var flashcards: [Flashcard] = []
     var totalFlashcards: Int = 0       // ← new
     var totalPages: Int = 1            // ← new
-
+    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
@@ -81,7 +81,7 @@ class LearnViewModel {
             guard let pag = resp.meta?.pagination else {
                 totalFlashcards = 0
                 totalPages = 1
-                vocabooks = []
+                //vocabooks = []
                 return
             }
             totalFlashcards = pag.total
@@ -92,7 +92,7 @@ class LearnViewModel {
             book.vocapages = (1...totalPages).map { page in
                 Vocapage(id: page, title: "Page \(page)", order: page)
             }
-            vocabooks = [book]
+            vocabook = book
 
         } catch {
             logger.error("loadVocabookPages failed: \(error.localizedDescription)")

@@ -57,11 +57,7 @@ struct LearnView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 25) {
-                
-                // --- Resume Learning Panel ---
                 ResumeLearningView()
-
-                // --- NEW: Vocabulary Notebook Section ---
                 VocabularyNotebookView(viewModel: viewModel) // Pass viewModel directly
                 
                 // --- Main Units List ---
@@ -230,14 +226,12 @@ struct VocabularyNotebookView: View {
             .padding(.horizontal)
             
             VStack(spacing: 8) {
-                if viewModel.vocabooks.isEmpty && !viewModel.isLoadingVocabooks {
+                if let vocabook = viewModel.vocabook, !viewModel.isLoadingVocabooks {
+                    VocabookSectionView(vocabook: vocabook, viewModel: viewModel)
+                } else if !viewModel.isLoadingVocabooks {
                     Text("No vocabooks found.")
                         .foregroundColor(.secondary)
                         .padding()
-                } else {
-                    ForEach(viewModel.vocabooks) { vocabook in
-                        VocabookSectionView(vocabook: vocabook, viewModel: viewModel) // Pass viewModel directly
-                    }
                 }
             }
             .padding()
