@@ -12,17 +12,25 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private var synthesizer = AVSpeechSynthesizer()
     private var flashcards: [Flashcard] = []
     private var languageSettings: LanguageSettings?
+    private var showBaseText: Bool = true
+    
+    private enum ReadingStep {
+        case firstRead, secondRead, baseRead, finished
+    }
+    private var currentStep: ReadingStep = .firstRead
 
     override init() {
         super.init()
         self.synthesizer.delegate = self
     }
 
-    func startReadingSession(flashcards: [Flashcard], languageSettings: LanguageSettings) {
+    func startReadingSession(flashcards: [Flashcard], showBaseText: Bool, languageSettings: LanguageSettings) {
         self.flashcards = flashcards
         self.languageSettings = languageSettings
+        self.showBaseText = showBaseText
         self.isSpeaking = true
         self.currentIndex = 0
+        self.currentStep = .firstRead
         readCurrentCard()
     }
 
@@ -33,23 +41,32 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
 
     private func readCurrentCard() {
-        guard currentIndex < flashcards.count else {
+        guard currentIndex < flashcards.count, isSpeaking else {
             stopReadingSession()
             return
         }
 
         let card = flashcards[currentIndex]
-        let textToSpeak = card.backContent
-        
-        // Use the appropriate language code for speech synthesis
-        let languageCode = languageSettings?.selectedLanguageCode ?? "en-US"
+        var textToSpeak: String
+        var languageCode: String
+
+        switch currentStep {
+        case .firstRead, .secondRead:
+            textToSpeak = card.backContent
+            languageCode = Config.learningTargetLanguageCode
+        case .baseRead:
+            textToSpeak = card.frontContent
+            languageCode = languageSettings?.selectedLanguageCode ?? "en-US"
+        case .finished:
+            goToNextCard()
+            return
+        }
         
         let utterance = AVSpeechUtterance(string: textToSpeak)
         utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
         
         if utterance.voice == nil {
             print("Error: Voice for language code '\(languageCode)' not available.")
-            // Skip to the next card if voice is not available
             speechSynthesizer(synthesizer, didFinish: utterance)
             return
         }
@@ -58,15 +75,36 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         synthesizer.speak(utterance)
     }
 
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        // Add a delay before speaking the next word
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if self.isSpeaking && self.currentIndex < self.flashcards.count - 1 {
-                self.currentIndex += 1
-                self.readCurrentCard()
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        guard isSpeaking else { return }
+
+        switch currentStep {
+        case .firstRead:
+            currentStep = .secondRead
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.readCurrentCard() }
+        case .secondRead:
+            if showBaseText {
+                currentStep = .baseRead
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self.readCurrentCard() }
             } else {
-                self.stopReadingSession()
+                currentStep = .finished
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self.readCurrentCard() }
             }
+        case .baseRead:
+            currentStep = .finished
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self.readCurrentCard() }
+        case .finished:
+            break
+        }
+    }
+    
+    private func goToNextCard() {
+        if currentIndex < flashcards.count - 1 {
+            currentIndex += 1
+            currentStep = .firstRead
+            readCurrentCard()
+        } else {
+            stopReadingSession()
         }
     }
 }
@@ -347,7 +385,7 @@ private struct VocapageBottomBarView: View {
                     speechManager.stopReadingSession()
                 } else {
                     if let flashcards = vocapageFlashcards {
-                        speechManager.startReadingSession(flashcards: flashcards, languageSettings: languageSettings)
+                        speechManager.startReadingSession(flashcards: flashcards, showBaseText: showBaseText, languageSettings: languageSettings)
                     }
                 }
             }) {
