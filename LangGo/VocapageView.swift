@@ -3,6 +3,75 @@ import SwiftData
 import AVFoundation
 import os // For logging
 
+// MARK: - Speech Manager for VocapageView
+@MainActor
+class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    @Published var isSpeaking: Bool = false
+    @Published var currentIndex: Int = -1
+
+    private var synthesizer = AVSpeechSynthesizer()
+    private var flashcards: [Flashcard] = []
+    private var languageSettings: LanguageSettings?
+
+    override init() {
+        super.init()
+        self.synthesizer.delegate = self
+    }
+
+    func startReadingSession(flashcards: [Flashcard], languageSettings: LanguageSettings) {
+        self.flashcards = flashcards
+        self.languageSettings = languageSettings
+        self.isSpeaking = true
+        self.currentIndex = 0
+        readCurrentCard()
+    }
+
+    func stopReadingSession() {
+        synthesizer.stopSpeaking(at: .immediate)
+        isSpeaking = false
+        currentIndex = -1
+    }
+
+    private func readCurrentCard() {
+        guard currentIndex < flashcards.count else {
+            stopReadingSession()
+            return
+        }
+
+        let card = flashcards[currentIndex]
+        let textToSpeak = card.backContent
+        
+        // Use the appropriate language code for speech synthesis
+        let languageCode = languageSettings?.selectedLanguageCode ?? "en-US"
+        
+        let utterance = AVSpeechUtterance(string: textToSpeak)
+        utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
+        
+        if utterance.voice == nil {
+            print("Error: Voice for language code '\(languageCode)' not available.")
+            // Skip to the next card if voice is not available
+            speechSynthesizer(synthesizer, didFinish: utterance)
+            return
+        }
+        
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+        synthesizer.speak(utterance)
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        // Add a delay before speaking the next word
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if self.isSpeaking && self.currentIndex < self.flashcards.count - 1 {
+                self.currentIndex += 1
+                self.readCurrentCard()
+            } else {
+                self.stopReadingSession()
+            }
+        }
+    }
+}
+
+
 struct VocapageView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -24,6 +93,16 @@ struct VocapageView: View {
         self.vocapageId = vocapageId
     }
     
+    // MARK: - Computed property to simplify ForEach data source
+    private var sortedFlashcardsForList: [Flashcard] {
+        guard let flashcards = vocapage?.flashcards else {
+            return []
+        }
+        // This is the sorting logic
+        return flashcards
+            .sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
+    }
+
     var body: some View {
         NavigationStack {
             VStack {
@@ -35,27 +114,12 @@ struct VocapageView: View {
                         .foregroundColor(.red)
                         .padding()
                 } else if let vocapage = vocapage {
-                    if let flashcards = vocapage.flashcards, !flashcards.isEmpty {
-                        List {
-                            ForEach(Array(flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) }).enumerated()), id: \.element.id) { index, card in
-                                HStack {
-                                    Text(card.backContent)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    if showBaseText {
-                                        Text(card.frontContent)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                }
-                                .padding(.vertical, 5)
-                                .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
-                            }
-                        }
-                    } else {
-                        Spacer()
-                        Text("No flashcards in this page.")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
+                    // Pass necessary data to the new subview
+                    VocapageContentListView(
+                        sortedFlashcards: sortedFlashcardsForList,
+                        showBaseText: showBaseText,
+                        speechManager: speechManager
+                    )
                 } else {
                     Text("Vocapage details not available.")
                         .foregroundColor(.secondary)
@@ -79,39 +143,14 @@ struct VocapageView: View {
                     }
                 }
                 ToolbarItem(placement: .bottomBar) {
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            if let flashcards = vocapage?.flashcards {
-                                let sortedCards = flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
-                                speechManager.startReading(sortedCards, showBaseText: showBaseText)
-                            }
-                        }) {
-                            Label("Read", systemImage: "play.circle.fill")
-                                .font(.title)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                        }
-                        .tint(.blue)
-                        Spacer()
-                        Button(action: { isShowingPracticeView = true }) {
-                            Label("Practice", systemImage: "play.circle.fill")
-                                .font(.title)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                        }
-                        .tint(.blue)
-                        Spacer()
-                        Button(action: {}) {
-                            Label("", systemImage: "circle")
-                                .font(.title)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .opacity(0)
-                        }
-                        .disabled(true)
-                        Spacer()
-                    }
+                    // Pass necessary data and bindings to the new subview
+                    VocapageBottomBarView(
+                        vocapageFlashcards: vocapage?.flashcards, // Pass the original flashcards here
+                        showBaseText: showBaseText,
+                        isShowingPracticeView: $isShowingPracticeView,
+                        speechManager: speechManager,
+                        languageSettings: _languageSettings // Correctly pass EnvironmentObject instance
+                    )
                 }
             }
             .task { await fetchAndSyncVocapageDetails() }
@@ -138,6 +177,7 @@ struct VocapageView: View {
     }
 
     @MainActor
+    @discardableResult
     private func syncVocapageFromStrapi(_ strapi: StrapiVocapage) async throws -> Vocapage {
         var fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == strapi.id })
         fetchDescriptor.fetchLimit = 1
@@ -255,96 +295,80 @@ struct VocapageView: View {
     }
 }
 
-// MARK: - Speech Manager for VocapageView
-private class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
-    @Published var currentIndex: Int = -1
-    private var flashcards: [Flashcard] = []
-    private var showBaseText: Bool = true
-    private var utterancePhase: Int = 0  // 0 = first target, 1 = second target, 2 = base
-    private let synthesizer = AVSpeechSynthesizer()
+// MARK: - Subviews for better organization
+private struct VocapageContentListView: View {
+    let sortedFlashcards: [Flashcard]
+    let showBaseText: Bool
+    @ObservedObject var speechManager: SpeechManager
 
-    override init() {
-        super.init()
-        synthesizer.delegate = self
-    }
-
-    func startReading(_ flashcards: [Flashcard], showBaseText: Bool) {
-        synthesizer.stopSpeaking(at: .immediate)
-        self.flashcards = flashcards
-        self.showBaseText = showBaseText
-        self.currentIndex = 0
-        self.utterancePhase = 0
-        speakCurrent()
-    }
-
-    private func speakCurrent() {
-        guard currentIndex >= 0 && currentIndex < flashcards.count else {
-            currentIndex = -1
-            return
-        }
-        // Update highlight before speaking
-        objectWillChange.send()
-
-        let card = flashcards[currentIndex]
-        let targetLang = Config.learningTargetLanguageCode
-        let baseLang = UserDefaults.standard.string(forKey: "selectedLanguage")
-                      ?? Locale.current.language.languageCode?.identifier
-                      ?? "en"
-
-        // Determine utterance based on phase
-        let utterance: AVSpeechUtterance
-        switch utterancePhase {
-        case 0:
-            utterance = AVSpeechUtterance(string: card.backContent)
-            utterance.voice = AVSpeechSynthesisVoice(language: targetLang)
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
-            utterance.postUtteranceDelay = 1.5
-
-        case 1:
-            utterance = AVSpeechUtterance(string: card.backContent)
-            utterance.voice = AVSpeechSynthesisVoice(language: targetLang)
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
-            utterance.postUtteranceDelay = 1.5
-
-        case 2:
-            if showBaseText {
-                utterance = AVSpeechUtterance(string: card.frontContent)
-                utterance.voice = AVSpeechSynthesisVoice(language: baseLang)
-                utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
-                utterance.postUtteranceDelay = 2.0
-            } else {
-                // Skip base phase if disabled: wait 2s then advance
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                    self.advanceToNextCard()
-                }
-                return
-            }
-
-        default:
-            return
-        }
-        synthesizer.speak(utterance)
-    }
-
-    private func advanceToNextCard() {
-        utterancePhase = 0
-        currentIndex += 1
-        if currentIndex < flashcards.count {
-            speakCurrent()
+    var body: some View {
+        if sortedFlashcards.isEmpty {
+            Spacer()
+            Text("No flashcards in this page.")
+                .foregroundColor(.secondary)
+            Spacer()
         } else {
-            currentIndex = -1
+            List {
+                ForEach(sortedFlashcards.enumerated().map { (index, card) in (index, card) }, id: \.1.id) { index, card in
+                    HStack {
+                        Text(card.backContent)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if showBaseText {
+                            Text(card.frontContent)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(.vertical, 5)
+                    .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
+                }
+            }
         }
     }
+}
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        DispatchQueue.main.async {
-            // After finishing an utterance, move to next phase or card
-            self.utterancePhase += 1
-            if self.utterancePhase <= 2 {
-                self.speakCurrent()
-            } else {
-                self.advanceToNextCard()
+private struct VocapageBottomBarView: View {
+    let vocapageFlashcards: [Flashcard]? // Use the original optional array here
+    let showBaseText: Bool
+    @Binding var isShowingPracticeView: Bool
+    @ObservedObject var speechManager: SpeechManager
+    @EnvironmentObject var languageSettings: LanguageSettings // Correctly receives EnvironmentObject
+
+    // Computed property for button disabled state
+    private var isButtonDisabled: Bool {
+        return speechManager.isSpeaking
+    }
+
+    var body: some View {
+        HStack {
+            Spacer()
+            // Read Button
+            Button(action: {
+                if speechManager.isSpeaking {
+                    speechManager.stopReadingSession()
+                } else {
+                    if let flashcards = vocapageFlashcards {
+                        speechManager.startReadingSession(flashcards: flashcards, languageSettings: languageSettings)
+                    }
+                }
+            }) {
+                Label(speechManager.isSpeaking ? "Stop" : "Read", systemImage: speechManager.isSpeaking ? "stop.circle.fill" : "play.circle.fill")
+                    .font(.title)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
             }
+            .tint(speechManager.isSpeaking ? .gray : .blue)
+            
+            Spacer()
+            Button(action: { isShowingPracticeView = true }) {
+                Label("Practice", systemImage: "pencil.circle.fill")
+                    .font(.title)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+            }
+            .tint(.blue)
+            .disabled(isButtonDisabled)
+            
+            Spacer()
         }
     }
 }
