@@ -73,6 +73,39 @@ struct AuthResponse: Codable {
     let user: StrapiUser
 }
 
+// MARK: - VBSetting Models
+
+/// Wraps a single vbsetting item returned by Strapi (/vbsettings/mine).
+struct VBSettingSingleResponse: Codable {
+    let data: VBSetting
+}
+
+/// Represents the vbsetting record.
+struct VBSetting: Codable {
+    let id: Int
+    let attributes: VBSettingAttributes
+}
+
+/// The actual fields on a vbsetting.
+struct VBSettingAttributes: Codable {
+    let wordsPerPage: Int
+    let interval1: Double
+    let interval2: Double
+    let interval3: Double
+}
+
+/// Payload for updating vbsetting via PUT /vbsettings/mine
+struct VBSettingUpdatePayload: Encodable {
+    struct Data: Encodable {
+        let wordsPerPage: Int
+        let interval1: Double
+        let interval2: Double
+        let interval3: Double
+    }
+    let data: Data
+}
+
+
 // MARK: - Generic API Response Wrappers (NEW/REVISED)
 
 /// Represents a paginated list response from Strapi.

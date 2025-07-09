@@ -106,15 +106,22 @@ struct LoginView: View {
                 // Use StrapiService for login
                 let authResponse = try await StrapiService.shared.login(credentials: credentials)
                 
-                // Store the user data in Keychain and UserDefaults
+                // 1️⃣ Store JWT + user info
                 keychain["jwt"] = authResponse.jwt
                 UserDefaults.standard.set(authResponse.user.username, forKey: "username")
-                UserDefaults.standard.set(authResponse.user.email, forKey: "email")
-                UserDefaults.standard.set(authResponse.user.id, forKey: "userId")
-                
-                // Set the login state to true to dismiss this view
+                UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
+                UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
+
+                // 2️⃣ Fetch VBSetting and save all four values
+                let vbSetting = try await StrapiService.shared.fetchVBSetting()
+                UserDefaults.standard.set(Double(vbSetting.attributes.wordsPerPage), forKey: "wordCountPerPage")
+                UserDefaults.standard.set(vbSetting.attributes.interval1, forKey: "interval1")
+                UserDefaults.standard.set(vbSetting.attributes.interval2, forKey: "interval2")
+                UserDefaults.standard.set(vbSetting.attributes.interval3, forKey: "interval3")
+
+                // 3️⃣ Switch state to logged in
                 authState = .loggedIn
-                logger.info("Login successful. User: \(authResponse.user.username, privacy: .public)")
+                logger.info("Login + VBSetting load successful for user: \(authResponse.user.username, privacy: .public)")
             } catch {
                 // FIX: Apply the switch statement for robust error handling
                 var displayErrorMessage: String // Local variable to hold the error message

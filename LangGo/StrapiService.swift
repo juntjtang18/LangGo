@@ -125,6 +125,39 @@ class StrapiService {
         return vocapage
     }
 
+    // MARK: - VBSetting Endpoints
+
+    /// Fetch the current user's vbsetting.
+    func fetchVBSetting() async throws -> VBSetting {
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/vbsettings/mine") else {
+            throw URLError(.badURL)
+        }
+        let response: VBSettingSingleResponse = try await NetworkManager.shared.fetchDirect(from: url)
+        return response.data
+    }
+
+    /// Update the current user's vbsetting.
+    func updateVBSetting(
+        wordsPerPage: Int,
+        interval1: Double,
+        interval2: Double,
+        interval3: Double
+    ) async throws -> VBSetting {
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/vbsettings/mine") else {
+            throw URLError(.badURL)
+        }
+        let payload = VBSettingUpdatePayload(
+            data: .init(
+                wordsPerPage: wordsPerPage,
+                interval1: interval1,
+                interval2: interval2,
+                interval3: interval3
+            )
+        )
+        let response: VBSettingSingleResponse = try await NetworkManager.shared.put(to: url, body: payload)
+        return response.data
+    }
+    
     // MARK: - Other (Example for future use)
 
     // Example for fetching a list of courses (if you add this endpoint)
