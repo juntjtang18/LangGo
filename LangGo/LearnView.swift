@@ -265,8 +265,12 @@ struct VocabookSectionView: View {
 
             if viewModel.expandedVocabooks.contains(vocabook.id) {
                 if let vocapages = vocabook.vocapages, !vocapages.isEmpty {
-                    ForEach(vocapages.sorted(by: { $0.order < $1.order })) { vocapage in
-                        VocapageRowView(vocapage: vocapage)
+                    let sortedPages = vocapages.sorted(by: { $0.order < $1.order })
+                    ForEach(sortedPages) { vocapage in
+                        VocapageRowView(
+                            vocapage: vocapage,
+                            allVocapageIds: sortedPages.map { $0.id }
+                        )
                     }
                 } else {
                     Text("No pages in this vocabook.")
@@ -285,13 +289,16 @@ struct VocabookSectionView: View {
 }
 
 struct VocapageRowView: View {
+    @Environment(\.modelContext) private var modelContext // Get model context
     let vocapage: Vocapage
-    @State private var isShowingVocapageDetail: Bool = false // State to control presentation
+    let allVocapageIds: [Int] // Pass the list of all page IDs
 
     var body: some View {
-        Button(action: {
-            isShowingVocapageDetail = true // Set state to show the detail view
-        }) {
+        NavigationLink(destination: VocapageHostView(
+            allVocapageIds: allVocapageIds,
+            selectedVocapageId: vocapage.id,
+            modelContext: modelContext // Pass the context to the host view
+        )) {
             HStack(spacing: 15) {
                 Text("Page \(vocapage.order)") // Display order
                     .font(.headline)
@@ -312,9 +319,6 @@ struct VocapageRowView: View {
             )
         }
         .buttonStyle(PlainButtonStyle()) // To remove default button styling
-        .fullScreenCover(isPresented: $isShowingVocapageDetail) {
-            VocapageView(vocapageId: vocapage.id) // Present VocapageView with the vocapage ID
-        }
     }
 }
 

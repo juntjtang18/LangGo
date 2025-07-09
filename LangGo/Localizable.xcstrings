@@ -497,9 +497,6 @@
         }
       }
     },
-    "Hide Base Text" : {
-
-    },
     "Input Text (%@)" : {
 
     },
@@ -618,9 +615,6 @@
     "Loading cards..." : {
 
     },
-    "Loading vocapage details..." : {
-
-    },
     "Login" : {
       "localizations" : {
         "ja" : {
@@ -710,9 +704,6 @@
           }
         }
       }
-    },
-    "No flashcards in this page." : {
-
     },
     "No pages in this vocabook." : {
 
@@ -1027,9 +1018,6 @@
         }
       }
     },
-    "Show Base Text" : {
-
-    },
     "Sign Up" : {
       "localizations" : {
         "ja" : {
@@ -1177,6 +1165,9 @@
       }
     },
     "Swap" : {
+
+    },
+    "Swipe to load content." : {
 
     },
     "This will control data refreshing behavior in a future update." : {
@@ -1392,9 +1383,6 @@
 
     },
     "Vocabulary Notebook Settings" : {
-
-    },
-    "Vocapage details not available." : {
 
     },
     "Welcome to LangGo" : {

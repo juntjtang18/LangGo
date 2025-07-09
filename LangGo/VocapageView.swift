@@ -3,249 +3,70 @@ import SwiftData
 import AVFoundation
 import os // For logging
 
-// MARK: - Speech Manager for VocapageView
+
+// MARK: - Vocapage Loader (NEW)
+// This new ObservableObject class handles all data loading and caching.
+// Its lifecycle is tied to the VocapageHostView, so its tasks are not
+// cancelled during swipes.
 @MainActor
-class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
-    @Published var isSpeaking: Bool = false
-    @Published var currentIndex: Int = -1
+@Observable
+class VocapageLoader {
+    private var modelContext: ModelContext
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageLoader")
 
-    private var synthesizer = AVSpeechSynthesizer()
-    private var flashcards: [Flashcard] = []
-    private var languageSettings: LanguageSettings?
-    private var showBaseText: Bool = true
-    
-    private enum ReadingStep {
-        case firstRead, secondRead, baseRead, finished
-    }
-    private var currentStep: ReadingStep = .firstRead
+    // State properties to hold the data and loading status for each page
+    var vocapages: [Int: Vocapage] = [:]
+    var loadingStatus: [Int: Bool] = [:]
+    var errorMessages: [Int: String] = [:]
 
-    override init() {
-        super.init()
-        self.synthesizer.delegate = self
+    init(modelContext: ModelContext) {
+        self.modelContext = modelContext
     }
 
-    func startReadingSession(flashcards: [Flashcard], showBaseText: Bool, languageSettings: LanguageSettings) {
-        self.flashcards = flashcards
-        self.languageSettings = languageSettings
-        self.showBaseText = showBaseText
-        self.isSpeaking = true
-        self.currentIndex = 0
-        self.currentStep = .firstRead
-        readCurrentCard()
-    }
-
-    func stopReadingSession() {
-        synthesizer.stopSpeaking(at: .immediate)
-        isSpeaking = false
-        currentIndex = -1
-    }
-
-    private func readCurrentCard() {
-        guard currentIndex < flashcards.count, isSpeaking else {
-            stopReadingSession()
+    func loadPage(withId vocapageId: Int) async {
+        // Don't re-load if already loading or loaded
+        if loadingStatus[vocapageId] == true || vocapages[vocapageId] != nil {
             return
         }
 
-        let card = flashcards[currentIndex]
-        var textToSpeak: String
-        var languageCode: String
+        loadingStatus[vocapageId] = true
+        errorMessages[vocapageId] = nil
 
-        switch currentStep {
-        case .firstRead, .secondRead:
-            textToSpeak = card.backContent
-            languageCode = Config.learningTargetLanguageCode
-        case .baseRead:
-            textToSpeak = card.frontContent
-            languageCode = languageSettings?.selectedLanguageCode ?? "en-US"
-        case .finished:
-            goToNextCard()
-            return
-        }
-        
-        let utterance = AVSpeechUtterance(string: textToSpeak)
-        utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
-        
-        if utterance.voice == nil {
-            print("Error: Voice for language code '\(languageCode)' not available.")
-            speechSynthesizer(synthesizer, didFinish: utterance)
-            return
-        }
-        
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
-        synthesizer.speak(utterance)
-    }
-
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        guard isSpeaking else { return }
-
-        switch currentStep {
-        case .firstRead:
-            currentStep = .secondRead
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.readCurrentCard() }
-        case .secondRead:
-            if showBaseText {
-                currentStep = .baseRead
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self.readCurrentCard() }
-            } else {
-                currentStep = .finished
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self.readCurrentCard() }
-            }
-        case .baseRead:
-            currentStep = .finished
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self.readCurrentCard() }
-        case .finished:
-            break
-        }
-    }
-    
-    private func goToNextCard() {
-        if currentIndex < flashcards.count - 1 {
-            currentIndex += 1
-            currentStep = .firstRead
-            readCurrentCard()
-        } else {
-            stopReadingSession()
-        }
-    }
-}
-
-
-struct VocapageView: View {
-    @Environment(\.dismiss) var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @EnvironmentObject var languageSettings: LanguageSettings
-
-    let vocapageId: Int
-    
-    @State private var vocapage: Vocapage?
-    @State private var isLoading: Bool = false
-    @State private var showBaseText: Bool = true // Control base text visibility
-    @State private var isShowingPracticeView: Bool = false
-    @State private var errorMessage: String?
-    
-    @StateObject private var speechManager = SpeechManager()
-
-    private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageView")
-
-    init(vocapageId: Int) {
-        self.vocapageId = vocapageId
-    }
-    
-    // MARK: - Computed property to simplify ForEach data source
-    private var sortedFlashcardsForList: [Flashcard] {
-        guard let flashcards = vocapage?.flashcards else {
-            return []
-        }
-        // This is the sorting logic
-        return flashcards
-            .sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack {
-                if isLoading {
-                    ProgressView("Loading vocapage details...")
-                        .padding()
-                } else if let errorMessage = errorMessage {
-                    Text("Error: \(errorMessage)")
-                        .foregroundColor(.red)
-                        .padding()
-                } else if let vocapage = vocapage {
-                    // Pass necessary data to the new subview
-                    VocapageContentListView(
-                        sortedFlashcards: sortedFlashcardsForList,
-                        showBaseText: showBaseText,
-                        speechManager: speechManager
-                    )
-                } else {
-                    Text("Vocapage details not available.")
-                        .foregroundColor(.secondary)
-                }
-            }
-            .navigationTitle("My Vocabulary Notebook")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        HStack {
-                            Image(systemName: "chevron.left")
-                            Text("Back")
-                        }
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showBaseText.toggle() }) {
-                        Image(systemName: showBaseText ? "eye.slash.fill" : "eye.fill")
-                            .accessibilityLabel(showBaseText ? "Hide Base Text" : "Show Base Text")
-                    }
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    // Pass necessary data and bindings to the new subview
-                    VocapageBottomBarView(
-                        vocapageFlashcards: vocapage?.flashcards, // Pass the original flashcards here
-                        showBaseText: showBaseText,
-                        isShowingPracticeView: $isShowingPracticeView,
-                        speechManager: speechManager,
-                        languageSettings: _languageSettings // Correctly pass EnvironmentObject instance
-                    )
-                }
-            }
-            .task {
-                await loadVocapageDetails()
-            }
-            .fullScreenCover(isPresented: $isShowingPracticeView) {
-                ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings)
-            }
-        }
-    }
-
-    @MainActor
-    private func loadVocapageDetails() async {
-        isLoading = true
-        defer { isLoading = false }
-        
-        // 1. Fetch the Vocapage from local storage first
-        let fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == vocapageId })
-        guard let page = (try? modelContext.fetch(fetchDescriptor))?.first else {
-            errorMessage = "Could not find vocapage with ID \(vocapageId)."
-            return
-        }
-        self.vocapage = page
-
-        // 2. Fetch the flashcards for this page from the server
         do {
-            // Fetch settings for page size
+            // 1. Fetch the Vocapage object from SwiftData
+            let fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == vocapageId })
+            guard let page = (try modelContext.fetch(fetchDescriptor)).first else {
+                throw NSError(domain: "VocapageLoader", code: 404, userInfo: [NSLocalizedDescriptionKey: "Could not find vocapage with ID \(vocapageId)."])
+            }
+
+            // 2. Fetch the flashcards for this page from the server
             let vbSetting = try await StrapiService.shared.fetchVBSetting()
             let pageSize = vbSetting.attributes.wordsPerPage
-            
             let response = try await StrapiService.shared.fetchFlashcards(page: page.order, pageSize: pageSize)
             
-            // 3. Sync flashcards and link to the vocapage
+            // 3. Sync flashcards and link them to the vocapage object
             var syncedFlashcards: [Flashcard] = []
             if let strapiFlashcards = response.data {
                 for strapiCard in strapiFlashcards {
-                    let syncedCard = try await syncFlashcardForVocapage(strapiCard, vocapage: page)
+                    let syncedCard = try await syncFlashcard(strapiCard)
                     syncedFlashcards.append(syncedCard)
                 }
             }
-            
-            // Ensure the relationship is updated
             page.flashcards = syncedFlashcards
-            try modelContext.save()
             
-            // Refresh the view's vocapage state
-            self.vocapage = page
+            // 4. Save to the database and update our state
+            try modelContext.save()
+            vocapages[vocapageId] = page
 
         } catch {
-            errorMessage = "Failed to load flashcards: \(error.localizedDescription)"
-            logger.error("Failed to load vocapage details: \(error.localizedDescription, privacy: .public)")
+            logger.error("Failed to load details for vocapage \(vocapageId): \(error.localizedDescription)")
+            errorMessages[vocapageId] = error.localizedDescription
         }
+
+        loadingStatus[vocapageId] = false
     }
-    
-    @MainActor
-    @discardableResult
-    private func syncFlashcardForVocapage(_ strapiFlashcardData: StrapiFlashcard, vocapage: Vocapage) async throws -> Flashcard {
+
+    private func syncFlashcard(_ strapiFlashcardData: StrapiFlashcard) async throws -> Flashcard {
         let strapiCard = strapiFlashcardData.attributes
         var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == strapiFlashcardData.id })
         fetchDescriptor.fetchLimit = 1
@@ -253,25 +74,11 @@ struct VocapageView: View {
         let flashcard: Flashcard
         if let existingFlashcard = try modelContext.fetch(fetchDescriptor).first {
             flashcard = existingFlashcard
-            logger.debug("Updating existing flashcard: \(flashcard.id)")
         } else {
-            flashcard = Flashcard(
-                id: strapiFlashcardData.id,
-                frontContent: "",
-                backContent: "",
-                register: nil,
-                contentType: "",
-                rawComponentData: nil,
-                lastReviewedAt: nil,
-                correctStreak: 0,
-                wrongStreak: 0,
-                isRemembered: false
-            )
+            flashcard = Flashcard(id: strapiFlashcardData.id, frontContent: "", backContent: "", register: nil, contentType: "", rawComponentData: nil, lastReviewedAt: nil, correctStreak: 0, wrongStreak: 0, isRemembered: false)
             modelContext.insert(flashcard)
-            logger.debug("Inserted new flashcard: \(flashcard.id)")
         }
 
-        // --- Unified Sync Logic ---
         let contentComponent = strapiCard.content?.first
         switch contentComponent?.componentIdentifier {
         case "a.user-word-ref":
@@ -300,8 +107,253 @@ struct VocapageView: View {
         flashcard.wrongStreak = strapiCard.wrongStreak ?? 0
         flashcard.isRemembered = strapiCard.isRemembered
 
-        try modelContext.save()
         return flashcard
+    }
+}
+
+
+// MARK: - VocapageHostView (REVISED)
+struct VocapageHostView: View {
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.modelContext) private var modelContext
+    
+    @State private var loader: VocapageLoader
+    
+    @State private var showBaseText: Bool = true
+    @State private var isShowingPracticeView: Bool = false
+    @StateObject private var speechManager = SpeechManager()
+    
+    let allVocapageIds: [Int]
+    @State private var currentPageIndex: Int
+
+    init(allVocapageIds: [Int], selectedVocapageId: Int, modelContext: ModelContext) {
+        self.allVocapageIds = allVocapageIds
+        _currentPageIndex = State(initialValue: allVocapageIds.firstIndex(of: selectedVocapageId) ?? 0)
+        _loader = State(initialValue: VocapageLoader(modelContext: modelContext))
+    }
+
+    private var currentVocapage: Vocapage? {
+        guard !allVocapageIds.isEmpty else { return nil }
+        let currentId = allVocapageIds[currentPageIndex]
+        return loader.vocapages[currentId]
+    }
+
+    var body: some View {
+        TabView(selection: $currentPageIndex) {
+            ForEach(allVocapageIds.indices, id: \.self) { index in
+                VocapageView(
+                    vocapageId: allVocapageIds[index],
+                    showBaseText: $showBaseText,
+                    speechManager: speechManager,
+                    loader: loader
+                )
+                .tag(index)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .navigationTitle("My Vocabulary Notebook")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
+                    }
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showBaseText.toggle() }) {
+                    Image(systemName: showBaseText ? "eye.slash.fill" : "eye.fill")
+                }
+            }
+            ToolbarItem(placement: .bottomBar) {
+                VocapageBottomBarView(
+                    vocapageFlashcards: currentVocapage?.flashcards,
+                    showBaseText: showBaseText,
+                    isShowingPracticeView: $isShowingPracticeView,
+                    speechManager: speechManager
+                )
+            }
+        }
+        .toolbar(.hidden, for: .tabBar)
+        .onChange(of: currentPageIndex) {
+            speechManager.stopReadingSession()
+        }
+    }
+}
+
+
+// MARK: - Speech Manager for VocapageView
+@MainActor
+class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    @Published var isSpeaking: Bool = false
+    @Published var currentIndex: Int = -1
+
+    private var synthesizer = AVSpeechSynthesizer()
+    private var flashcards: [Flashcard] = []
+    private var languageSettings: LanguageSettings?
+    private var showBaseText: Bool = true
+    
+    private var interval1: TimeInterval = 1.5
+    private var interval2: TimeInterval = 2.0
+    private var interval3: TimeInterval = 2.0
+    
+    private enum ReadingStep {
+        case firstReadTarget, secondReadTarget, readBase, finished
+    }
+    private var currentStep: ReadingStep = .firstReadTarget
+
+    override init() {
+        super.init()
+        self.synthesizer.delegate = self
+    }
+
+    func startReadingSession(flashcards: [Flashcard], showBaseText: Bool, languageSettings: LanguageSettings, settings: VBSettingAttributes) {
+        self.flashcards = flashcards
+        self.languageSettings = languageSettings
+        self.showBaseText = showBaseText
+        
+        self.interval1 = settings.interval1
+        self.interval2 = settings.interval2
+        self.interval3 = settings.interval3
+        
+        self.isSpeaking = true
+        self.currentIndex = 0
+        self.currentStep = .firstReadTarget
+        readCurrentCard()
+    }
+
+    func stopReadingSession() {
+        synthesizer.stopSpeaking(at: .immediate)
+        isSpeaking = false
+        currentIndex = -1
+    }
+
+    private func readCurrentCard() {
+        guard currentIndex < flashcards.count, isSpeaking else {
+            stopReadingSession()
+            return
+        }
+
+        let card = flashcards[currentIndex]
+        let textToSpeak: String
+        let languageCode: String
+
+        switch currentStep {
+        case .firstReadTarget, .secondReadTarget:
+            textToSpeak = card.backContent
+            languageCode = Config.learningTargetLanguageCode
+        case .readBase:
+            textToSpeak = card.frontContent
+            languageCode = languageSettings?.selectedLanguageCode ?? "en-US"
+        case .finished:
+            goToNextCard()
+            return
+        }
+        
+        let utterance = AVSpeechUtterance(string: textToSpeak)
+        utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
+        
+        if utterance.voice == nil {
+            print("Error: Voice for language code '\(languageCode)' not available.")
+            speechSynthesizer(synthesizer, didFinish: utterance)
+            return
+        }
+        
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+        synthesizer.speak(utterance)
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            guard self.isSpeaking else { return }
+
+            switch self.currentStep {
+            case .firstReadTarget:
+                self.currentStep = .secondReadTarget
+                DispatchQueue.main.asyncAfter(deadline: .now() + self.interval1) { self.readCurrentCard() }
+            
+            case .secondReadTarget:
+                if self.showBaseText {
+                    self.currentStep = .readBase
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.interval2) { self.readCurrentCard() }
+                } else {
+                    self.currentStep = .finished
+                    DispatchQueue.main.asyncAfter(deadline: .now() + self.interval3) { self.readCurrentCard() }
+                }
+            
+            case .readBase:
+                self.currentStep = .finished
+                DispatchQueue.main.asyncAfter(deadline: .now() + self.interval3) { self.readCurrentCard() }
+
+            case .finished:
+                break
+            }
+        }
+    }
+    
+    private func goToNextCard() {
+        if currentIndex < flashcards.count - 1 {
+            currentIndex += 1
+            currentStep = .firstReadTarget
+            readCurrentCard()
+        } else {
+            stopReadingSession()
+        }
+    }
+}
+
+
+struct VocapageView: View {
+    @EnvironmentObject var languageSettings: LanguageSettings
+
+    let vocapageId: Int
+    @Binding var showBaseText: Bool
+    @ObservedObject var speechManager: SpeechManager
+    @State var loader: VocapageLoader
+    
+    private var vocapage: Vocapage? {
+        loader.vocapages[vocapageId]
+    }
+    
+    private var isLoading: Bool {
+        loader.loadingStatus[vocapageId] ?? false
+    }
+    
+    private var errorMessage: String? {
+        loader.errorMessages[vocapageId]
+    }
+    
+    private var sortedFlashcardsForList: [Flashcard] {
+        guard let flashcards = vocapage?.flashcards else { return [] }
+        return flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
+    }
+
+    var body: some View {
+        VStack {
+            if isLoading {
+                ProgressView()
+            } else if let errorMessage = errorMessage {
+                Text("Error: \(errorMessage)")
+                    .foregroundColor(.red)
+                    .padding()
+                    .multilineTextAlignment(.center)
+            } else if vocapage != nil {
+                VocapageContentListView(
+                    sortedFlashcards: sortedFlashcardsForList,
+                    showBaseText: showBaseText,
+                    speechManager: speechManager
+                )
+            } else {
+                Text("Swipe to load content.")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .task {
+            await loader.loadPage(withId: vocapageId)
+        }
     }
 }
 
@@ -314,8 +366,7 @@ private struct VocapageContentListView: View {
     var body: some View {
         if sortedFlashcards.isEmpty {
             Spacer()
-            Text("No flashcards in this page.")
-                .foregroundColor(.secondary)
+            ProgressView()
             Spacer()
         } else {
             ScrollViewReader { proxy in
@@ -329,7 +380,7 @@ private struct VocapageContentListView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
-                        .id(card.id) // Ensure each row has a unique ID for scrolling
+                        .id(card.id)
                         .padding(.vertical, 5)
                         .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
                     }
@@ -348,48 +399,55 @@ private struct VocapageContentListView: View {
 }
 
 private struct VocapageBottomBarView: View {
-    let vocapageFlashcards: [Flashcard]? // Use the original optional array here
+    let vocapageFlashcards: [Flashcard]?
     let showBaseText: Bool
     @Binding var isShowingPracticeView: Bool
     @ObservedObject var speechManager: SpeechManager
-    @EnvironmentObject var languageSettings: LanguageSettings // Correctly receives EnvironmentObject
-
-    // Computed property for button disabled state
-    private var isButtonDisabled: Bool {
-        return speechManager.isSpeaking
-    }
+    @EnvironmentObject var languageSettings: LanguageSettings
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         HStack {
             Spacer()
-            // Read Button
             Button(action: {
                 if speechManager.isSpeaking {
                     speechManager.stopReadingSession()
                 } else {
-                    if let flashcards = vocapageFlashcards {
-                        speechManager.startReadingSession(flashcards: flashcards, showBaseText: showBaseText, languageSettings: languageSettings)
+                    Task {
+                        do {
+                            let settings = try await StrapiService.shared.fetchVBSetting()
+                            if let flashcards = vocapageFlashcards, !flashcards.isEmpty {
+                                speechManager.startReadingSession(
+                                    flashcards: flashcards,
+                                    showBaseText: showBaseText,
+                                    languageSettings: languageSettings,
+                                    settings: settings.attributes
+                                )
+                            }
+                        } catch {
+                            print("Failed to fetch vocabook settings: \(error)")
+                        }
                     }
                 }
             }) {
-                Label(speechManager.isSpeaking ? "Stop" : "Read", systemImage: speechManager.isSpeaking ? "stop.circle.fill" : "play.circle.fill")
+                Label("Read", systemImage: speechManager.isSpeaking ? "stop.circle.fill" : "play.circle.fill")
                     .font(.title)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
             }
             .tint(speechManager.isSpeaking ? .gray : .blue)
+            .disabled(vocapageFlashcards?.isEmpty ?? true)
             
             Spacer()
             Button(action: { isShowingPracticeView = true }) {
                 Label("Practice", systemImage: "pencil.circle.fill")
                     .font(.title)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
             }
             .tint(.blue)
-            .disabled(isButtonDisabled)
-            
+            .disabled(speechManager.isSpeaking || vocapageFlashcards?.isEmpty ?? true)
+            .fullScreenCover(isPresented: $isShowingPracticeView) {
+                 ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings)
+            }
             Spacer()
         }
+        .padding()
     }
 }

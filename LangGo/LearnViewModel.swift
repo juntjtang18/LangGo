@@ -1,4 +1,3 @@
-
 // LangGo/LearnViewModel.swift
 import Foundation
 import SwiftData
@@ -57,8 +56,8 @@ class LearnViewModel {
     var expandedVocabooks: Set<Int> = [] // To keep track of expanded vocabooks
     
     var flashcards: [Flashcard] = []
-    var totalFlashcards: Int = 0       // ← new
-    var totalPages: Int = 1            // ← new
+    var totalFlashcards: Int = 0
+    var totalPages: Int = 1
     
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
@@ -70,29 +69,54 @@ class LearnViewModel {
         defer { isLoadingVocabooks = false }
 
         do {
-            // 1. Fetch setting
+            // 1. Fetch settings and pagination info
             let vb = try await StrapiService.shared.fetchVBSetting()
             let pageSize = vb.attributes.wordsPerPage
-
-            // 2. Fetch first page
             let resp = try await StrapiService.shared.fetchFlashcards(page: 1, pageSize: pageSize)
 
-            // 3. Pull out pagination meta
             guard let pag = resp.meta?.pagination else {
                 totalFlashcards = 0
                 totalPages = 1
-                //vocabooks = []
                 return
             }
             totalFlashcards = pag.total
             totalPages = pag.pageCount
 
-            // 4. Build a single Vocabook with 1…pageCount
-            let book = Vocabook(id: 1, title: "All Flashcards")
-            book.vocapages = (1...totalPages).map { page in
-                Vocapage(id: page, title: "Page \(page)", order: page)
+            // 2. Find or create the main Vocabook
+            let bookId = 1
+            var fetchDescriptor = FetchDescriptor<Vocabook>(predicate: #Predicate { $0.id == bookId })
+            fetchDescriptor.fetchLimit = 1
+            
+            let book: Vocabook
+            if let existingBook = try modelContext.fetch(fetchDescriptor).first {
+                book = existingBook
+            } else {
+                book = Vocabook(id: bookId, title: "All Flashcards")
+                modelContext.insert(book)
             }
-            vocabook = book
+
+            // 3. Sync Vocapages
+            let existingPages = book.vocapages ?? []
+            let existingPageIds = Set(existingPages.map { $0.id })
+            let pageNumbersToKeep = Set(1...totalPages)
+
+            // Delete stale pages that are no longer valid
+            let pagesToDelete = existingPages.filter { !pageNumbersToKeep.contains($0.id) }
+            for page in pagesToDelete {
+                modelContext.delete(page)
+            }
+
+            // Add new pages that don't exist yet
+            let newPageNumbers = pageNumbersToKeep.subtracting(existingPageIds)
+            for pageNum in newPageNumbers {
+                let newPage = Vocapage(id: pageNum, title: "Page \(pageNum)", order: pageNum)
+                newPage.vocabook = book // Establish relationship
+                modelContext.insert(newPage)
+            }
+            
+            // 4. Save changes and update the view model's vocabook property
+            try modelContext.save()
+            self.vocabook = book
 
         } catch {
             logger.error("loadVocabookPages failed: \(error.localizedDescription)")
