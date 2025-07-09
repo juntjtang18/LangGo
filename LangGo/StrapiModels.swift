@@ -59,14 +59,14 @@ struct RegistrationPayload: Encodable {
     let email: String
     let password: String
     let username: String
-    let baseLanguage: String // Added based on SignupView.swift
+    let baseLanguage: String
+    let telephone: String?    // optional for future
 
     enum CodingKeys: String, CodingKey {
-        case email, password, username
-        case baseLanguage = "base_language" // Explicitly map to snake_case for backend
+        case email, password, username, baseLanguage
+        case telephone
     }
 }
-
 /// Response for authentication (login and signup).
 struct AuthResponse: Codable {
     let jwt: String

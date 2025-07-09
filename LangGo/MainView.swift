@@ -9,6 +9,7 @@ struct MainView: View {
     @State private var isSideMenuShowing = false
     @State private var isShowingProfileSheet = false
     @State private var isShowingSettingSheet = false
+    @State private var isShowingVocabookSettingSheet = false
     
     init(authState: Binding<AuthState>) {
         _authState = authState
@@ -59,7 +60,8 @@ struct MainView: View {
                     isShowing: $isSideMenuShowing,
                     authState: $authState,
                     isShowingProfileSheet: $isShowingProfileSheet,
-                    isShowingSettingSheet: $isShowingSettingSheet
+                    isShowingSettingSheet: $isShowingSettingSheet,
+                    isShowingVocabookSettingSheet: $isShowingVocabookSettingSheet
                 )
                 .frame(width: UIScreen.main.bounds.width * 0.75)
                 .transition(.move(edge: .trailing)) // Slide in from the right
@@ -71,6 +73,9 @@ struct MainView: View {
         }
         .sheet(isPresented: $isShowingSettingSheet) {
             SettingView()
+        }
+        .sheet(isPresented: $isShowingVocabookSettingSheet) {
+            VocabookSettingView()
         }
     }
 }

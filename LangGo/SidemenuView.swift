@@ -8,7 +8,8 @@ struct SideMenuView: View {
     @Binding var authState: AuthState
     @Binding var isShowingProfileSheet: Bool
     @Binding var isShowingSettingSheet: Bool
-    
+    @Binding var isShowingVocabookSettingSheet: Bool
+
     @State private var username: String = ""
     @State private var email: String = ""
     
@@ -62,7 +63,15 @@ struct SideMenuView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                SideMenuButton(title: "Settings", iconName: "gearshape.fill") { isShowingSettingSheet.toggle() }
+                SideMenuButton(title: "Vocabulary Notebook Setting", iconName: "book.fill") {
+                    isShowingVocabookSettingSheet.toggle()
+                    isShowing = false
+                }
+
+                SideMenuButton(title: "Settings", iconName: "gearshape.fill") {
+                    isShowingSettingSheet.toggle()
+                    isShowing = false
+                }
                 
                 Spacer()
                 

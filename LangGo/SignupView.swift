@@ -1,21 +1,18 @@
+// LangGo/SignupView.swift
 import Foundation
 import SwiftUI
 import KeychainAccess
 import os
 
 struct SignupView: View {
-    // Access the shared language settings from the environment.
     @EnvironmentObject var languageSettings: LanguageSettings
-    
-    // This binding allows us to switch back to the login view.
     @Binding var currentView: LoginView.ViewState
-    // This binding allows us to change the global authentication state.
     @Binding var authState: AuthState
-    
+
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
-    @State private var errorMessage = "" // This is a @State property
+    @State private var errorMessage = ""
 
     let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "SignupView")
@@ -56,10 +53,8 @@ struct SignupView: View {
                     .clipShape(Capsule())
             }
             .padding(.horizontal)
-
         }
         .padding()
-        // The toolbar now contains both the back button and the new icon-based language picker.
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: { currentView = .login }) {
@@ -69,9 +64,9 @@ struct SignupView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    Picker("Language", selection: $languageSettings.selectedLanguageCode) { //
+                    Picker("Language", selection: $languageSettings.selectedLanguageCode) {
                         ForEach(languageSettings.availableLanguages) { language in
-                            Text(language.name).tag(language.id) //
+                            Text(language.name).tag(language.id)
                         }
                     }
                 } label: {
@@ -83,7 +78,7 @@ struct SignupView: View {
         }
         .navigationTitle("Sign Up")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true) // Hide the default back button
+        .navigationBarBackButtonHidden(true)
     }
 
     func signup() {
@@ -101,34 +96,28 @@ struct SignupView: View {
                 let payload = RegistrationPayload(
                     email: email,
                     password: password,
-                    username: email, // Strapi still needs a username; email is a safe default.
-                    baseLanguage: languageSettings.selectedLanguageCode
+                    username: email,
+                    baseLanguage: languageSettings.selectedLanguageCode,
+                    telephone: nil    // always nil for now
                 )
-                
-                // Use StrapiService for signup
+
                 let authResponse = try await StrapiService.shared.signup(payload: payload)
-                
-                // Store credentials and set app state to logged in
                 keychain["jwt"] = authResponse.jwt
                 UserDefaults.standard.set(authResponse.user.username, forKey: "username")
-                UserDefaults.standard.set(authResponse.user.email, forKey: "email")
-                UserDefaults.standard.set(authResponse.user.id, forKey: "userId")
-                
-                // This will switch the root view to MainView
+                UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
+                UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
+
                 authState = .loggedIn
                 logger.info("Signup successful. User: \(authResponse.user.username, privacy: .public)")
-                
             } catch {
-                // FIX: Create a local variable to hold the error text to avoid capturing '@State errorMessage'
-                var displayErrorMessage: String
-                switch error {
-                case let nsError as NSError where nsError.domain == "NetworkManager.StrapiError":
-                    displayErrorMessage = nsError.localizedDescription
-                default:
+                let displayErrorMessage: String
+                if let ns = error as NSError?, ns.domain == "NetworkManager.StrapiError" {
+                    displayErrorMessage = ns.localizedDescription
+                } else {
                     displayErrorMessage = "An unexpected error occurred during registration: \(error.localizedDescription)"
                 }
-                self.errorMessage = displayErrorMessage // Update @State property
-                logger.error("Signup failed: \(displayErrorMessage, privacy: .public)") // Pass local variable
+                errorMessage = displayErrorMessage
+                logger.error("Signup failed: \(displayErrorMessage, privacy: .public)")
             }
         }
     }

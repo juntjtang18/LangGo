@@ -710,6 +710,9 @@
     "No vocabooks found." : {
 
     },
+    "Notebook Settings" : {
+
+    },
     "OK" : {
       "localizations" : {
         "ja" : {
@@ -1378,6 +1381,9 @@
     "Vocabulary Notebook" : {
 
     },
+    "Vocabulary Notebook Settings" : {
+
+    },
     "Vocapage details not available." : {
 
     },
@@ -1408,6 +1414,9 @@
           }
         }
       }
+    },
+    "Word Count Per Page: %lld" : {
+
     },
     "Word saved successfully!" : {
 
