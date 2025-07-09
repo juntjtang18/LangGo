@@ -1,3 +1,4 @@
+
 // LangGo/LearnViewModel.swift
 import Foundation
 import SwiftData
@@ -45,6 +46,7 @@ final class Vocapage {
 
 // MARK: - LearnViewModel
 
+
 @Observable
 class LearnViewModel {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "LearnViewModel")
@@ -61,7 +63,42 @@ class LearnViewModel {
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
+    
+    @MainActor
+    func loadVocabookPages() async {
+        isLoadingVocabooks = true
+        defer { isLoadingVocabooks = false }
 
+        do {
+            // 1. Fetch setting
+            let vb = try await StrapiService.shared.fetchVBSetting()
+            let pageSize = vb.attributes.wordsPerPage
+
+            // 2. Fetch first page
+            let resp = try await StrapiService.shared.fetchFlashcards(page: 1, pageSize: pageSize)
+
+            // 3. Pull out pagination meta
+            guard let pag = resp.meta?.pagination else {
+                totalFlashcards = 0
+                totalPages = 1
+                vocabooks = []
+                return
+            }
+            totalFlashcards = pag.total
+            totalPages = pag.pageCount
+
+            // 4. Build a single Vocabook with 1…pageCount
+            let book = Vocabook(id: 1, title: "All Flashcards")
+            book.vocapages = (1...totalPages).map { page in
+                Vocapage(id: page, title: "Page \(page)", order: page)
+            }
+            vocabooks = [book]
+
+        } catch {
+            logger.error("loadVocabookPages failed: \(error.localizedDescription)")
+        }
+    }
+    
     @MainActor
     @discardableResult
     private func syncFlashcard(_ strapiFlashcardData: StrapiData<FlashcardAttributes>, vocapage: Vocapage) async throws -> Flashcard {

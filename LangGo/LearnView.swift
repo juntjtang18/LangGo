@@ -75,9 +75,7 @@ struct LearnView: View {
         }
         .background(Color(.systemGroupedBackground)) // A subtle grey background
         .task {
-            
-            let testVocapageId = 4
-            await testFetchVocapageDetails(vocapageId: testVocapageId)
+            await viewModel.loadVocabookPages()
         }
     }
     // MARK: - NEW: Test Function for Vocapage Details

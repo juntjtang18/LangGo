@@ -11,6 +11,32 @@ struct StrapiResponse: Codable {
 struct StrapiFlashcard: Codable {
     let id: Int
     let attributes: FlashcardAttributes
+
+    enum CodingKeys: String, CodingKey {
+        case id, attributes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // always decode the id
+        id = try container.decode(Int.self, forKey: .id)
+
+        if let wrapped = try container.decodeIfPresent(FlashcardAttributes.self, forKey: .attributes) {
+            // API returned { id, attributes: { … } }
+            attributes = wrapped
+        } else {
+            // API returned flat { id, createdAt, updatedAt, … }
+            // FlashcardAttributes has its own init(from:) that reads those keys
+            attributes = try FlashcardAttributes(from: decoder)
+        }
+    }
+
+    // (optional) encode back with the wrapper if you need it:
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(attributes, forKey: .attributes)
+    }
 }
 
 struct FlashcardAttributes: Codable {

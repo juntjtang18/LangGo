@@ -89,7 +89,7 @@ class StrapiService {
     func fetchFlashcards(page: Int, pageSize: Int) async throws -> StrapiListResponse<StrapiFlashcard> {
         logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize).")
         guard let url = URL(string:
-            "\(Config.strapiBaseUrl)/api/flashcards/mine?page=\(page)&pageSize=\(pageSize)")
+            "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate=content")
         else {
             throw URLError(.badURL)
         }
