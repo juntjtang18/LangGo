@@ -3,7 +3,6 @@ import SwiftData
 import AVFoundation
 import os // For logging
 
-
 // MARK: - Vocapage Loader (NEW)
 // This new ObservableObject class handles all data loading and caching.
 // Its lifecycle is tied to the VocapageHostView, so its tasks are not
@@ -115,7 +114,6 @@ class VocapageLoader {
 // MARK: - VocapageHostView (REVISED)
 struct VocapageHostView: View {
     @Environment(\.dismiss) var dismiss
-    @Environment(\.modelContext) private var modelContext
     
     @State private var loader: VocapageLoader
     
@@ -307,8 +305,6 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
 
 struct VocapageView: View {
-    @EnvironmentObject var languageSettings: LanguageSettings
-
     let vocapageId: Int
     @Binding var showBaseText: Bool
     @ObservedObject var speechManager: SpeechManager
@@ -327,8 +323,7 @@ struct VocapageView: View {
     }
     
     private var sortedFlashcardsForList: [Flashcard] {
-        guard let flashcards = vocapage?.flashcards else { return [] }
-        return flashcards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
+        return vocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
     }
 
     var body: some View {
