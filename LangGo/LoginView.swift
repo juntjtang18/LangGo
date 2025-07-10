@@ -10,6 +10,7 @@ struct LoginView: View {
     @State private var errorMessage = ""
     
     @EnvironmentObject var languageSettings: LanguageSettings
+    @EnvironmentObject var appEnvironment: AppEnvironment
 
     let keychain = Keychain(service: Config.keychainService)
     
@@ -103,36 +104,31 @@ struct LoginView: View {
         Task {
             do {
                 let credentials = LoginCredentials(identifier: email, password: password)
-                // Use StrapiService for login
-                let authResponse = try await StrapiService.shared.login(credentials: credentials)
+                let authResponse = try await appEnvironment.strapiService.login(credentials: credentials)
                 
-                // 1️⃣ Store JWT + user info
                 keychain["jwt"] = authResponse.jwt
                 UserDefaults.standard.set(authResponse.user.username, forKey: "username")
                 UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
                 UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
 
-                // 2️⃣ Fetch VBSetting and save all four values
-                let vbSetting = try await StrapiService.shared.fetchVBSetting()
+                let vbSetting = try await appEnvironment.strapiService.fetchVBSetting()
                 UserDefaults.standard.set(Double(vbSetting.attributes.wordsPerPage), forKey: "wordCountPerPage")
                 UserDefaults.standard.set(vbSetting.attributes.interval1, forKey: "interval1")
                 UserDefaults.standard.set(vbSetting.attributes.interval2, forKey: "interval2")
                 UserDefaults.standard.set(vbSetting.attributes.interval3, forKey: "interval3")
 
-                // 3️⃣ Switch state to logged in
                 authState = .loggedIn
                 logger.info("Login + VBSetting load successful for user: \(authResponse.user.username, privacy: .public)")
             } catch {
-                // FIX: Apply the switch statement for robust error handling
-                var displayErrorMessage: String // Local variable to hold the error message
+                var displayErrorMessage: String
                 switch error {
                 case let nsError as NSError where nsError.domain == "NetworkManager.StrapiError":
                     displayErrorMessage = nsError.localizedDescription
                 default:
                     displayErrorMessage = "Network error: \(error.localizedDescription)"
                 }
-                self.errorMessage = displayErrorMessage // Update @State property
-                logger.error("Login failed: \(displayErrorMessage, privacy: .public)") // Pass local variable
+                self.errorMessage = displayErrorMessage
+                logger.error("Login failed: \(displayErrorMessage, privacy: .public)")
             }
         }
     }

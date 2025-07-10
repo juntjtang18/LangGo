@@ -4,12 +4,15 @@ import os
 import SwiftData
 
 /// A service layer for interacting with the Strapi backend API.
-/// This class abstracts away the specific Strapi endpoints and request/response structures.
+/// This class is now instantiated once at app launch and holds a reference to the modelContext.
 class StrapiService {
-    static let shared = StrapiService()
+    private let modelContext: ModelContext
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StrapiService")
 
-    private init() {}
+    /// The modelContext is now injected during initialization.
+    init(modelContext: ModelContext) {
+        self.modelContext = modelContext
+    }
 
     // MARK: - Authentication & User Management
 
@@ -28,7 +31,6 @@ class StrapiService {
     func fetchCurrentUser() async throws -> StrapiUser {
         logger.debug("StrapiService: Fetching current user profile.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/users/me") else { throw URLError(.badURL) }
-        // Note: fetchDirect is used here because /api/users/me returns the user object directly, not wrapped in a 'data' key.
         return try await NetworkManager.shared.fetchDirect(from: url)
     }
     
@@ -36,7 +38,6 @@ class StrapiService {
         logger.debug("StrapiService: Updating username for user ID: \(userId).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/users/\(userId)") else { throw URLError(.badURL) }
         let body = ["username": username]
-        // Note: fetchDirect is used as /api/users/:id returns the updated user object directly.
         return try await NetworkManager.shared.put(to: url, body: body)
     }
 
@@ -48,7 +49,6 @@ class StrapiService {
             "password": newPassword,
             "passwordConfirmation": confirmNewPassword
         ]
-        // Now EmptyResponse is accessible globally from StrapiModels.swift
         return try await NetworkManager.shared.post(to: url, body: body)
     }
 
@@ -61,14 +61,14 @@ class StrapiService {
     }
 
     @MainActor
-    func fetchReviewFlashcards(modelContext: ModelContext) async throws -> [Flashcard] {
+    func fetchReviewFlashcards() async throws -> [Flashcard] {
         logger.debug("StrapiService: Fetching and syncing review flashcards.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else { throw URLError(.badURL) }
         let response: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
         
         var syncedFlashcards: [Flashcard] = []
         for strapiCard in response.data {
-            let syncedCard = try await syncCard(strapiCard, modelContext: modelContext)
+            let syncedCard = try await syncCard(strapiCard)
             syncedFlashcards.append(syncedCard)
         }
         try modelContext.save()
@@ -76,7 +76,7 @@ class StrapiService {
     }
 
     @MainActor
-    func submitFlashcardReview(cardId: Int, result: ReviewResult, modelContext: ModelContext) async throws -> Flashcard {
+    func submitFlashcardReview(cardId: Int, result: ReviewResult) async throws -> Flashcard {
         logger.debug("StrapiService: Submitting review for card ID: \(cardId) with result: \(result.rawValue).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcards/\(cardId)/review") else { throw URLError(.badURL) }
         let body = ReviewBody(result: result.rawValue)
@@ -86,7 +86,7 @@ class StrapiService {
             throw NSError(domain: "StrapiServiceError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server response was missing the 'data' object."])
         }
         
-        let syncedCard = try await syncCard(updatedStrapiCard, modelContext: modelContext)
+        let syncedCard = try await syncCard(updatedStrapiCard)
         try modelContext.save()
         return syncedCard
     }
@@ -94,7 +94,7 @@ class StrapiService {
     // MARK: - Flashcards Pagination
     
     @MainActor
-    func fetchFlashcards(page: Int, pageSize: Int, modelContext: ModelContext) async throws -> [Flashcard] {
+    func fetchFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize).")
         guard let url = URL(string:
             "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate=content,review_tire")
@@ -106,13 +106,12 @@ class StrapiService {
         var syncedFlashcards: [Flashcard] = []
         if let strapiFlashcards = response.data {
             for strapiCard in strapiFlashcards {
-                let syncedCard = try await syncCard(strapiCard, modelContext: modelContext)
+                let syncedCard = try await syncCard(strapiCard)
                 syncedFlashcards.append(syncedCard)
             }
         }
-        return syncedFlashcards
+        return (syncedFlashcards, response.meta?.pagination)
     }
-
     
     // MARK: - User Words & Translation
 
@@ -133,7 +132,6 @@ class StrapiService {
     
     // MARK: - VBSetting Endpoints
 
-    /// Fetch the current user's vbsetting.
     func fetchVBSetting() async throws -> VBSetting {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/vbsettings/mine") else {
             throw URLError(.badURL)
@@ -142,24 +140,11 @@ class StrapiService {
         return response.data
     }
 
-    /// Update the current user's vbsetting.
-    func updateVBSetting(
-        wordsPerPage: Int,
-        interval1: Double,
-        interval2: Double,
-        interval3: Double
-    ) async throws -> VBSetting {
+    func updateVBSetting(wordsPerPage: Int, interval1: Double, interval2: Double, interval3: Double) async throws -> VBSetting {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/vbsettings/mine") else {
             throw URLError(.badURL)
         }
-        let payload = VBSettingUpdatePayload(
-            data: .init(
-                wordsPerPage: wordsPerPage,
-                interval1: interval1,
-                interval2: interval2,
-                interval3: interval3
-            )
-        )
+        let payload = VBSettingUpdatePayload(data: .init(wordsPerPage: wordsPerPage, interval1: interval1, interval2: interval2, interval3: interval3))
         let response: VBSettingSingleResponse = try await NetworkManager.shared.put(to: url, body: payload)
         return response.data
     }
@@ -168,7 +153,7 @@ class StrapiService {
     
     @MainActor
     @discardableResult
-    private func syncCard(_ strapiCard: StrapiFlashcard, modelContext: ModelContext) async throws -> Flashcard {
+    private func syncCard(_ strapiCard: StrapiFlashcard) async throws -> Flashcard {
         let cardId = strapiCard.id
         var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == cardId })
         fetchDescriptor.fetchLimit = 1

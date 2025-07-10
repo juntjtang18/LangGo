@@ -5,6 +5,8 @@ struct FlashcardTabView: View {
     @Binding var isSideMenuShowing: Bool
     
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var appEnvironment: AppEnvironment
+    
     @State private var viewModel: FlashcardViewModel?
 
     @State private var isReviewing: Bool = false
@@ -28,12 +30,7 @@ struct FlashcardTabView: View {
                 .fullScreenCover(isPresented: $isAddingNewWord) {
                     NewWordInputView(viewModel: viewModel)
                 }
-                // Add this fullScreenCover to present FlashcardReviewView
                 .fullScreenCover(isPresented: $isReviewing) {
-                    // Assuming FlashcardReviewView exists and takes these parameters
-                    // Removed 'isReviewing' argument as it caused the "Extra argument" error.
-                    // The dismissal of FlashcardReviewView should typically be handled internally
-                    // using @Environment(\.dismiss) or a similar mechanism.
                     FlashcardReviewView(viewModel: viewModel)
                 }
                 .toolbar {
@@ -46,7 +43,7 @@ struct FlashcardTabView: View {
                 ProgressView()
                     .onAppear {
                         if viewModel == nil {
-                            viewModel = FlashcardViewModel(modelContext: modelContext)
+                            viewModel = FlashcardViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
                         }
                     }
             }
@@ -64,20 +61,16 @@ private struct FlashcardProgressCircleView: View {
 
     var body: some View {
         ZStack {
-            // This is the outer, gray stroke
             Circle().stroke(Color.gray.opacity(0.2), lineWidth: 15)
             
-            // This is the inner circle that will be filled green
-            Circle().fill(Color.green.opacity(0.1)) // Added this line to fill the inner circle with green
+            Circle().fill(Color.green.opacity(0.1))
 
-            // This is the progress arc, which remains green
             Circle()
                 .trim(from: 0, to: progress)
                 .stroke(Color.green, style: StrokeStyle(lineWidth: 15, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.easeOut, value: progress)
             
-            // Use NumberFormatter for locale-sensitive percentage formatting
             Text(percentageString)
                 .font(.largeTitle)
                 .bold()
@@ -88,13 +81,9 @@ private struct FlashcardProgressCircleView: View {
     private var percentageString: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .percent
-        // Set minimum and maximum fraction digits as needed.
-        // For whole percentages, use 0. If you want to show decimals, adjust these.
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
-        // Ensure the percentage symbol is locale-appropriate
         formatter.locale = Locale.current
-        // Directly format the 'progress' (Double) value
         return formatter.string(from: NSNumber(value: progress)) ?? "\(Int(progress * 100))%"
     }
 }
@@ -116,7 +105,7 @@ private struct ActionButtonsView: View {
                 ActionButton(icon: "play.circle.fill", text: "Start review", isLarge: true) {
                     Task {
                         await viewModel.prepareReviewSession()
-                        isReviewing = true // This will now trigger the fullScreenCover
+                        isReviewing = true
                     }
                 }
                 .gridCellAnchor(.center)

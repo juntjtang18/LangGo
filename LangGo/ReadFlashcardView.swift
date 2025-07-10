@@ -9,9 +9,9 @@ struct ReadFlashcardView: View {
     @State private var cardOffset: CGFloat = 0
     @State private var cardOpacity: Double = 1
 
-    init(modelContext: ModelContext, languageSettings: LanguageSettings) {
-        // The viewModel is now initialized with the necessary languageSettings.
-        _viewModel = State(initialValue: ReadFlashcardViewModel(modelContext: modelContext, languageSettings: languageSettings))
+    init(modelContext: ModelContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
+        // The viewModel is now initialized with the necessary languageSettings and strapiService.
+        _viewModel = State(initialValue: ReadFlashcardViewModel(modelContext: modelContext, languageSettings: languageSettings, strapiService: strapiService))
     }
 
     var body: some View {

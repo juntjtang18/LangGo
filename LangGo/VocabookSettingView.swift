@@ -14,6 +14,7 @@ struct VocabookSettingView: View {
     @State private var initialInterval3: Double? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appEnvironment: AppEnvironment
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookSettingView")
 
     var body: some View {
@@ -67,7 +68,7 @@ struct VocabookSettingView: View {
                                 return
                             }
                             do {
-                                let updated = try await StrapiService.shared.updateVBSetting(
+                                let updated = try await appEnvironment.strapiService.updateVBSetting(
                                     wordsPerPage: Int(wordCountPerPage),
                                     interval1: interval1,
                                     interval2: interval2,
@@ -94,7 +95,7 @@ struct VocabookSettingView: View {
             }
             .task {
                 do {
-                    let vbSetting = try await StrapiService.shared.fetchVBSetting()
+                    let vbSetting = try await appEnvironment.strapiService.fetchVBSetting()
                     // Load into UI and initial trackers
                     wordCountPerPage = Double(vbSetting.attributes.wordsPerPage)
                     interval1 = vbSetting.attributes.interval1

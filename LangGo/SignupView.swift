@@ -6,6 +6,7 @@ import os
 
 struct SignupView: View {
     @EnvironmentObject var languageSettings: LanguageSettings
+    @EnvironmentObject var appEnvironment: AppEnvironment
     @Binding var currentView: LoginView.ViewState
     @Binding var authState: AuthState
 
@@ -101,7 +102,7 @@ struct SignupView: View {
                     telephone: nil    // always nil for now
                 )
 
-                let authResponse = try await StrapiService.shared.signup(payload: payload)
+                let authResponse = try await appEnvironment.strapiService.signup(payload: payload)
                 keychain["jwt"] = authResponse.jwt
                 UserDefaults.standard.set(authResponse.user.username, forKey: "username")
                 UserDefaults.standard.set(authResponse.user.email,    forKey: "email")

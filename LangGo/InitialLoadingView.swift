@@ -3,7 +3,8 @@ import KeychainAccess
 import os
 
 struct InitialLoadingView: View {
-    @Binding var authState: AuthState // Binding to control the app's root view
+    @Binding var authState: AuthState
+    @EnvironmentObject var appEnvironment: AppEnvironment
 
     let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "InitialLoadingView")
@@ -29,8 +30,8 @@ struct InitialLoadingView: View {
         // 2. If a token exists, validate it by fetching the user profile
         Task {
             do {
-                // Use StrapiService to fetch current user
-                let user = try await StrapiService.shared.fetchCurrentUser()
+                // Use the injected StrapiService instance
+                let user = try await appEnvironment.strapiService.fetchCurrentUser()
                 // SUCCESS: Token is valid. Refresh user details.
                 UserDefaults.standard.set(user.username, forKey: "username")
                 UserDefaults.standard.set(user.email, forKey: "email")

@@ -4,6 +4,7 @@ import os
 
 struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var appEnvironment: AppEnvironment
     
     @State private var username: String = ""
     @State private var email: String = ""
@@ -112,13 +113,11 @@ struct ProfileView: View {
     /// Handles the network request to update the username.
     private func updateUsername(userId: Int, messages: inout [String]) async {
         do {
-            // Use StrapiService to update username
-            let updatedUser = try await StrapiService.shared.updateUsername(userId: userId, username: username)
+            let updatedUser = try await appEnvironment.strapiService.updateUsername(userId: userId, username: username)
             UserDefaults.standard.set(updatedUser.username, forKey: "username")
             messages.append("Username updated successfully!")
             logger.info("Username updated to \(updatedUser.username, privacy: .public)")
         } catch {
-            // FIX: Create a local variable to hold the error text to avoid capturing 'inout messages'
             var currentErrorText: String
             switch error {
             case let nsError as NSError where nsError.domain == "NetworkManager.StrapiError":
@@ -126,8 +125,8 @@ struct ProfileView: View {
             default:
                 currentErrorText = "Failed to update username: \(error.localizedDescription)"
             }
-            messages.append(currentErrorText) // Append to inout messages
-            logger.error("Failed to update username: \(currentErrorText, privacy: .public)") // Pass local variable
+            messages.append(currentErrorText)
+            logger.error("Failed to update username: \(currentErrorText, privacy: .public)")
         }
     }
     
@@ -139,8 +138,7 @@ struct ProfileView: View {
         }
         
         do {
-            // Use StrapiService to change password
-            let _: EmptyResponse = try await StrapiService.shared.changePassword(currentPassword: currentPassword, newPassword: newPassword, confirmNewPassword: confirmNewPassword)
+            let _: EmptyResponse = try await appEnvironment.strapiService.changePassword(currentPassword: currentPassword, newPassword: newPassword, confirmNewPassword: confirmNewPassword)
             messages.append("Password changed successfully!")
             // Clear password fields after successful change
             currentPassword = ""
@@ -148,7 +146,6 @@ struct ProfileView: View {
             confirmNewPassword = ""
             logger.info("Password changed successfully.")
         } catch {
-            // FIX: Create a local variable to hold the error text to avoid capturing 'inout messages'
             var currentErrorText: String
             switch error {
             case let nsError as NSError where nsError.domain == "NetworkManager.StrapiError":
@@ -156,8 +153,8 @@ struct ProfileView: View {
             default:
                 currentErrorText = "Failed to change password: \(error.localizedDescription)"
             }
-            messages.append(currentErrorText) // Append to inout messages
-            logger.error("Failed to change password: \(currentErrorText, privacy: .public)") // Pass local variable
+            messages.append(currentErrorText)
+            logger.error("Failed to change password: \(currentErrorText, privacy: .public)")
         }
     }
 }

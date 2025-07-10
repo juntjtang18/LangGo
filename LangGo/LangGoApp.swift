@@ -3,6 +3,16 @@ import SwiftUI
 import SwiftData
 import KeychainAccess
 
+// A new class to hold our services, making them available to the entire app.
+@MainActor
+class AppEnvironment: ObservableObject {
+    let strapiService: StrapiService
+
+    init(modelContainer: ModelContainer) {
+        self.strapiService = StrapiService(modelContext: modelContainer.mainContext)
+    }
+}
+
 // Define the possible authentication states for the app
 enum AuthState {
     case checking
@@ -12,31 +22,36 @@ enum AuthState {
 
 @main
 struct LangGoApp: App {
-    // 1. Use an enum for a more robust state management
     @State private var authState: AuthState = .checking
     @StateObject private var languageSettings = LanguageSettings()
 
+    // The single instance of our environment object and the model container.
+    @StateObject private var appEnvironment: AppEnvironment
+    private let modelContainer: ModelContainer
+
+    init() {
+        // 1. Create the model container once.
+        let container = try! ModelContainer(for: Flashcard.self, Vocabook.self, Vocapage.self)
+        self.modelContainer = container
+        
+        // 2. Create the environment object that holds the service, injecting the container.
+        _appEnvironment = StateObject(wrappedValue: AppEnvironment(modelContainer: container))
+    }
+
     var body: some Scene {
         WindowGroup {
-            // 2. Switch the view based on the authentication state
+            // 3. Switch the view based on the authentication state
             switch authState {
             case .checking:
-                // Show a loading view while verifying the token
                 InitialLoadingView(authState: $authState)
             case .loggedIn:
-                // Pass a binding to allow logout
                 MainView(authState: $authState)
             case .loggedOut:
-                // Pass a binding to allow login
                 LoginView(authState: $authState)
             }
         }
-        // Updated modelContainer to include new models
-        .modelContainer(for: [Flashcard.self, Vocabook.self, Vocapage.self])
-        // Make the language settings available to all child views.
+        .modelContainer(modelContainer) // Use the container created in the initializer.
         .environmentObject(languageSettings)
-        // Set the app's locale from the published property.
-        // The UI will automatically update when this value changes.
-        .environment(\.locale, .init(identifier: languageSettings.selectedLanguageCode))
+        .environmentObject(appEnvironment) // 4. Inject the AppEnvironment into the SwiftUI Environment.
     }
 }

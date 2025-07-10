@@ -1,27 +1,17 @@
 // LangGo/LearnView.swift
-//
-//  LearnView.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/6/25.
-//
-
 import SwiftUI
 import SwiftData
 
 // MARK: - Learn Tab Container
-// This is the top-level view for the "Learn" tab.
-// It's placed in the TabView in MainView.swift.
-
 struct LearnTabView: View {
     @Binding var isSideMenuShowing: Bool
     @EnvironmentObject var languageSettings: LanguageSettings
-    @Environment(\.modelContext) private var modelContext // Inject modelContext
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var appEnvironment: AppEnvironment
 
     var body: some View {
         NavigationStack {
-            // Pass the modelContext to LearnView
-            LearnView(modelContext: modelContext)
+            LearnView(modelContext: modelContext, strapiService: appEnvironment.strapiService)
                 .navigationTitle("Learn English")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) }
@@ -30,12 +20,10 @@ struct LearnTabView: View {
 }
 
 // MARK: - Primary Learn Screen UI
-
 struct LearnView: View {
     @Environment(\.modelContext) private var modelContext
-    @State private var viewModel: LearnViewModel // Use the new ViewModel
+    @State private var viewModel: LearnViewModel
     
-    // Sample data to populate the view, matching your design
     let mainUnits: [CourseUnit] = [
         .init(number: 1, title: "Introductions", progress: 1.0, isSelected: true),
         .init(number: 2, title: "Connections", progress: 0.6),
@@ -50,41 +38,31 @@ struct LearnView: View {
         .init(icon: "text.quote", title: "Argot", progress: 0.0)
     ]
 
-    init(modelContext: ModelContext) {
-        _viewModel = State(initialValue: LearnViewModel(modelContext: modelContext))
+    init(modelContext: ModelContext, strapiService: StrapiService) {
+        _viewModel = State(initialValue: LearnViewModel(modelContext: modelContext, strapiService: strapiService))
     }
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 25) {
                 ResumeLearningView()
-                VocabularyNotebookView(viewModel: viewModel) // Pass viewModel directly
+                VocabularyNotebookView(viewModel: viewModel)
                 
-                // --- Main Units List ---
                 UnitListView(title: "Main Units", units: mainUnits)
                 
-                // --- Specialty Units List ---
                 UnitListView(title: "Specialty Units", units: specialtyUnits)
                 
             }
             .padding()
         }
-        .background(Color(.systemGroupedBackground)) // A subtle grey background
+        .background(Color(.systemGroupedBackground))
         .task {
             await viewModel.loadVocabookPages()
         }
     }
-    
-    // MARK: - Test Function
-    private func testFetchVocapageDetails(vocapageId: Int) {
-        print("Attempting to fetch details for vocapage ID: \(vocapageId)")
-        print("----------------------------------\n")
-    }
 }
 
 // MARK: - LearnView Components
-
-// Data Model for a Unit
 struct CourseUnit: Identifiable {
     let id = UUID()
     var number: Int? = nil
@@ -94,7 +72,6 @@ struct CourseUnit: Identifiable {
     var isSelected: Bool = false
 }
 
-// The Top "Resume Learning" Panel
 struct ResumeLearningView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -125,7 +102,6 @@ struct ResumeLearningView: View {
     }
 }
 
-// A Reusable View for a List of Units
 struct UnitListView: View {
     var title: String
     var units: [CourseUnit]
@@ -149,14 +125,11 @@ struct UnitListView: View {
     }
 }
 
-
-// A View for a Single Row in the Unit List
 struct UnitRowView: View {
     var unit: CourseUnit
     
     var body: some View {
         HStack(spacing: 15) {
-            // Icon or Number
             if let number = unit.number {
                 Text("\(number)")
                     .font(.headline)
@@ -183,7 +156,6 @@ struct UnitRowView: View {
     }
 }
 
-// The Circular Progress Indicator
 struct ProgressCircleView: View {
     var progress: Double
     
@@ -205,10 +177,10 @@ struct ProgressCircleView: View {
     }
 }
 
-// MARK: - NEW: Vocabulary Notebook Subview
+// MARK: - Vocabulary Notebook Subview
 struct VocabularyNotebookView: View {
-    @Bindable var viewModel: LearnViewModel // Changed from @ObservedObject
-    
+    @Bindable var viewModel: LearnViewModel
+
     var body: some View {
         VStack(alignment: .leading) {
             HStack {
@@ -240,7 +212,7 @@ struct VocabularyNotebookView: View {
 
 struct VocabookSectionView: View {
     let vocabook: Vocabook
-    @Bindable var viewModel: LearnViewModel // Changed from @ObservedObject
+    @Bindable var viewModel: LearnViewModel
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -286,21 +258,23 @@ struct VocabookSectionView: View {
 }
 
 struct VocapageRowView: View {
-    @Environment(\.modelContext) private var modelContext // Get model context
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var appEnvironment: AppEnvironment
     let vocapage: Vocapage
-    let allVocapageIds: [Int] // Pass the list of all page IDs
+    let allVocapageIds: [Int]
 
     var body: some View {
         NavigationLink(destination: VocapageHostView(
             allVocapageIds: allVocapageIds,
             selectedVocapageId: vocapage.id,
-            modelContext: modelContext // Pass the context to the host view
+            modelContext: modelContext,
+            strapiService: appEnvironment.strapiService
         )) {
             HStack(spacing: 15) {
-                Text("Page \(vocapage.order)") // Display order
+                Text("Page \(vocapage.order)")
                     .font(.headline)
                     .fontWeight(.bold)
-                    .foregroundColor(.blue) // Different color for pages
+                    .foregroundColor(.blue)
                 
                 Text(vocapage.title)
                     .font(.headline)
@@ -312,14 +286,9 @@ struct VocapageRowView: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.clear) // No fill for rows
+                    .fill(Color.clear)
             )
         }
-        .buttonStyle(PlainButtonStyle()) // To remove default button styling
+        .buttonStyle(PlainButtonStyle())
     }
-}
-
-#Preview {
-    // This makes it easy to preview your LearnView in isolation
-    LearnTabView(isSideMenuShowing: .constant(false))
 }

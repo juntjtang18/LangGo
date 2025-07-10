@@ -21,6 +21,7 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ReadFlashcardViewModel")
     private var modelContext: ModelContext
     private var languageSettings: LanguageSettings // To get the correct language code
+    private let strapiService: StrapiService
     
     private enum ReadingStep {
         case firstWord, secondWord, baseText, finished
@@ -28,9 +29,10 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
     private var currentStep: ReadingStep = .firstWord
 
     // MARK: - Initialization
-    init(modelContext: ModelContext, languageSettings: LanguageSettings) {
+    init(modelContext: ModelContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
         self.modelContext = modelContext
         self.languageSettings = languageSettings
+        self.strapiService = strapiService
         super.init()
         synthesizer.delegate = self
     }
@@ -40,7 +42,8 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
     func fetchFlashcards() async {
         isLoading = true
         do {
-            let fetchedCards = try await StrapiService.shared.fetchReviewFlashcards(modelContext: modelContext)
+            // Use the injected StrapiService instance
+            let fetchedCards = try await strapiService.fetchReviewFlashcards()
             self.flashcards = fetchedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
             logger.info("Successfully loaded \(self.flashcards.count) cards for reading.")
         } catch {

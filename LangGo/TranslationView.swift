@@ -12,12 +12,13 @@ enum InputDirection: String, CaseIterable, Identifiable {
 
 struct TranslationTabView: View {
     @Binding var isSideMenuShowing: Bool
-    @Environment(\.modelContext) private var modelContext // Needed for FlashcardViewModel
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var languageSettings: LanguageSettings
+    @EnvironmentObject var appEnvironment: AppEnvironment
 
     var body: some View {
         NavigationStack {
-            TranslationView(modelContext: modelContext) // Pass modelContext
+            TranslationView(modelContext: modelContext, strapiService: appEnvironment.strapiService)
                 .navigationTitle("Translation")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -55,8 +56,8 @@ struct TranslationView: View {
     @State private var lastTranslatedInput: String?
     @State private var lastTranslatedOutput: String?
 
-    init(modelContext: ModelContext) {
-        _viewModel = State(initialValue: FlashcardViewModel(modelContext: modelContext))
+    init(modelContext: ModelContext, strapiService: StrapiService) {
+        _viewModel = State(initialValue: FlashcardViewModel(modelContext: modelContext, strapiService: strapiService))
     }
 
     var body: some View {

@@ -4,15 +4,12 @@ import SwiftData
 import os
 
 // MARK: - SwiftData Models (Moved from separate files)
-// These models are now defined within the same file as LearnViewModel
-// to reduce file count, but remain top-level @Model classes as required by SwiftData.
-
 @Model
 final class Vocabook {
     @Attribute(.unique) var id: Int
     var title: String
     @Relationship(deleteRule: .cascade, inverse: \Vocapage.vocabook)
-    var vocapages: [Vocapage]? // One-to-many relationship with Vocapage
+    var vocapages: [Vocapage]?
 
     init(id: Int, title: String) {
         self.id = id
@@ -26,8 +23,8 @@ final class Vocapage {
     var title: String
     var order: Int
     @Relationship(deleteRule: .nullify)
-    var flashcards: [Flashcard]? // One-to-many relationship with Flashcard
-    var vocabook: Vocabook? // Many-to-one relationship with Vocabook
+    var flashcards: [Flashcard]?
+    var vocabook: Vocabook?
 
     init(id: Int, title: String, order: Int) {
         self.id = id
@@ -35,7 +32,6 @@ final class Vocapage {
         self.order = order
     }
 
-    // Helper to calculate progress based on remembered flashcards
     var progress: Double {
         guard let cards = flashcards, !cards.isEmpty else { return 0.0 }
         let rememberedCount = cards.filter { $0.isRemembered || $0.correctStreak >= 11 }.count
@@ -45,23 +41,22 @@ final class Vocapage {
 
 
 // MARK: - LearnViewModel
-
-
 @Observable
 class LearnViewModel {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "LearnViewModel")
-    private var modelContext: ModelContext
+    private let modelContext: ModelContext
+    private let strapiService: StrapiService
 
     var vocabook: Vocabook?
     var isLoadingVocabooks = false
-    var expandedVocabooks: Set<Int> = [] // To keep track of expanded vocabooks
+    var expandedVocabooks: Set<Int> = []
     
-    var flashcards: [Flashcard] = []
     var totalFlashcards: Int = 0
     var totalPages: Int = 1
     
-    init(modelContext: ModelContext) {
+    init(modelContext: ModelContext, strapiService: StrapiService) {
         self.modelContext = modelContext
+        self.strapiService = strapiService
     }
     
     @MainActor
@@ -70,22 +65,12 @@ class LearnViewModel {
         defer { isLoadingVocabooks = false }
 
         do {
-            // 1. Fetch settings and pagination info
-            let vb = try await StrapiService.shared.fetchVBSetting()
+            // 1. Fetch settings and pagination info in one call
+            let vb = try await strapiService.fetchVBSetting()
             let pageSize = vb.attributes.wordsPerPage
-            // The result of this call is not directly used, but it warms the cache and syncs data.
-            _ = try await StrapiService.shared.fetchFlashcards(page: 1, pageSize: pageSize, modelContext: modelContext)
+            let (_, pagination) = try await strapiService.fetchFlashcards(page: 1, pageSize: pageSize)
 
-            // Since fetchFlashcards now returns [Flashcard], we need to adjust how we get pagination info.
-            // This part of the logic might need rethinking. For now, we'll assume a separate call or a different response structure is needed for pagination meta.
-            // Let's call the network manager directly for the meta data for now.
-            guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=1&pagination[pageSize]=\(pageSize)") else {
-                return
-            }
-            let metaResponse: StrapiListResponse<StrapiFlashcard> = try await NetworkManager.shared.fetchDirect(from: url)
-
-
-            guard let pag = metaResponse.meta?.pagination else {
+            guard let pag = pagination else {
                 totalFlashcards = 0
                 totalPages = 1
                 return
@@ -121,7 +106,7 @@ class LearnViewModel {
             let newPageNumbers = pageNumbersToKeep.subtracting(existingPageIds)
             for pageNum in newPageNumbers {
                 let newPage = Vocapage(id: pageNum, title: "Page \(pageNum)", order: pageNum)
-                newPage.vocabook = book // Establish relationship
+                newPage.vocabook = book
                 modelContext.insert(newPage)
             }
             
