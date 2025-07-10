@@ -13,8 +13,10 @@ class ExamViewModel {
     var selectedOption: ExamOption?
     var isAnswerSubmitted = false
     var direction: ExamDirection = .baseToTarget // Default direction
+    
+    private let strapiService: StrapiService
 
-    init(flashcards: [Flashcard]) {
+    init(flashcards: [Flashcard], strapiService: StrapiService) {
         // Filter for cards that have exam data for BOTH directions
         self.flashcards = flashcards.filter { card in
             let wordAttrs = card.wordAttributes
@@ -25,6 +27,7 @@ class ExamViewModel {
             
             return hasWordExam || hasUserWordExam
         }
+        self.strapiService = strapiService
     }
 
     var currentCard: Flashcard? {
@@ -54,6 +57,20 @@ class ExamViewModel {
         selectedOption = option
         isAnswerSubmitted = true
         
+        // --- ADDED: Submit review to Strapi ---
+        guard let card = currentCard else { return }
+        let result: ReviewResult = option.isCorrect ? .correct : .wrong
+        
+        Task {
+            do {
+                _ = try await strapiService.submitFlashcardReview(cardId: card.id, result: result)
+                print("Successfully submitted review for card \(card.id) with result: \(result.rawValue)")
+            } catch {
+                print("Error submitting review from ExamView: \(error.localizedDescription)")
+            }
+        }
+        // --- END ADDED ---
+
         // If the answer is correct, wait one second then move to the next card.
         if option.isCorrect {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

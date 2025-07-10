@@ -4,8 +4,8 @@ struct ExamView: View {
     @Environment(\.dismiss) var dismiss
     @State var viewModel: ExamViewModel
 
-    init(vocapage: Vocapage) {
-        _viewModel = State(initialValue: ExamViewModel(flashcards: vocapage.flashcards ?? []))
+    init(vocapage: Vocapage, strapiService: StrapiService) {
+        _viewModel = State(initialValue: ExamViewModel(flashcards: vocapage.flashcards ?? [], strapiService: strapiService))
     }
 
     var body: some View {

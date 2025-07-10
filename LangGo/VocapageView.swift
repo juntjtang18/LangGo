@@ -62,7 +62,7 @@ struct VocapageHostView: View {
         }
         .sheet(isPresented: $isShowingExamView) {
             if let vocapage = currentVocapage {
-                ExamView(vocapage: vocapage)
+                ExamView(vocapage: vocapage, strapiService: loader.strapiService)
             }
         }
     }
