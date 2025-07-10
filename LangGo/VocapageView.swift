@@ -117,8 +117,10 @@ struct VocapageHostView: View {
     
     @State private var loader: VocapageLoader
     
-    @State private var showBaseText: Bool = true
-    @State private var isShowingPracticeView: Bool = false
+    // Use @AppStorage to automatically save the user's preference
+    @AppStorage("showBaseTextInVocapage") private var showBaseText: Bool = true
+    
+    @State private var isShowingExamView: Bool = false
     @StateObject private var speechManager = SpeechManager()
     
     let allVocapageIds: [Int]
@@ -140,10 +142,16 @@ struct VocapageHostView: View {
         TabView(selection: $currentPageIndex) {
             ForEach(allVocapageIds.indices, id: \.self) { index in
                 VocapageView(
-                    vocapageId: allVocapageIds[index],
+                    vocapage: loader.vocapages[allVocapageIds[index]],
+                    isLoading: loader.loadingStatus[allVocapageIds[index]] ?? false,
+                    errorMessage: loader.errorMessages[allVocapageIds[index]],
                     showBaseText: $showBaseText,
                     speechManager: speechManager,
-                    loader: loader
+                    onLoad: {
+                        Task {
+                            await loader.loadPage(withId: allVocapageIds[index])
+                        }
+                    }
                 )
                 .tag(index)
             }
@@ -170,7 +178,7 @@ struct VocapageHostView: View {
                 VocapageBottomBarView(
                     vocapageFlashcards: currentVocapage?.flashcards,
                     showBaseText: showBaseText,
-                    isShowingPracticeView: $isShowingPracticeView,
+                    isShowingExamView: $isShowingExamView,
                     speechManager: speechManager
                 )
             }
@@ -178,6 +186,11 @@ struct VocapageHostView: View {
         .toolbar(.hidden, for: .tabBar)
         .onChange(of: currentPageIndex) {
             speechManager.stopReadingSession()
+        }
+        .sheet(isPresented: $isShowingExamView) {
+            if let vocapage = currentVocapage {
+                ExamView(vocapage: vocapage)
+            }
         }
     }
 }
@@ -305,52 +318,53 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
 
 struct VocapageView: View {
-    let vocapageId: Int
+    let vocapage: Vocapage?
+    let isLoading: Bool
+    let errorMessage: String?
     @Binding var showBaseText: Bool
     @ObservedObject var speechManager: SpeechManager
-    @State var loader: VocapageLoader
-    
-    private var vocapage: Vocapage? {
-        loader.vocapages[vocapageId]
-    }
-    
-    private var isLoading: Bool {
-        loader.loadingStatus[vocapageId] ?? false
-    }
-    
-    private var errorMessage: String? {
-        loader.errorMessages[vocapageId]
-    }
-    
+    let onLoad: () -> Void
+
     private var sortedFlashcardsForList: [Flashcard] {
         return vocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
     }
 
     var body: some View {
-        VStack {
-            if isLoading {
-                ProgressView()
-            } else if let errorMessage = errorMessage {
-                Text("Error: \(errorMessage)")
-                    .foregroundColor(.red)
-                    .padding()
-                    .multilineTextAlignment(.center)
-            } else if vocapage != nil {
-                VocapageContentListView(
-                    sortedFlashcards: sortedFlashcardsForList,
-                    showBaseText: showBaseText,
-                    speechManager: speechManager
-                )
-            } else {
-                Text("Swipe to load content.")
-                    .foregroundColor(.secondary)
+        ZStack {
+            Color(red: 0.98, green: 0.97, blue: 0.94).ignoresSafeArea()
+            
+            VStack {
+                if isLoading {
+                    ProgressView()
+                } else if let errorMessage = errorMessage {
+                    Text("Error: \(errorMessage)")
+                        .foregroundColor(.red)
+                        .padding()
+                        .multilineTextAlignment(.center)
+                } else if let vocapage = vocapage {
+                    VocapageContentListView(
+                        sortedFlashcards: sortedFlashcardsForList,
+                        showBaseText: showBaseText,
+                        speechManager: speechManager
+                    )
+                    
+                    Text("\(vocapage.order)")
+                        .font(.system(.caption, design: .serif))
+                        .foregroundColor(.secondary)
+                        .padding(.bottom, 8)
+                    
+                } else {
+                    Text("Swipe to load content.")
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .task {
-            await loader.loadPage(withId: vocapageId)
+            onLoad()
         }
     }
 }
+
 
 // MARK: - Subviews for better organization
 private struct VocapageContentListView: View {
@@ -366,20 +380,30 @@ private struct VocapageContentListView: View {
         } else {
             ScrollViewReader { proxy in
                 List {
-                    ForEach(sortedFlashcards.enumerated().map { (index, card) in (index, card) }, id: \.1.id) { index, card in
-                        HStack {
-                            Text(card.backContent)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if showBaseText {
-                                Text(card.frontContent)
+                    // Transparent spacer to push the content down
+                    Section(header: Color.clear.frame(height: 10)) {
+                        ForEach(sortedFlashcards.enumerated().map { (index, card) in (index, card) }, id: \.1.id) { index, card in
+                            HStack {
+                                Text(card.backContent)
+                                    .font(.system(.title3, design: .serif))
                                     .frame(maxWidth: .infinity, alignment: .leading)
+                                
+                                if showBaseText {
+                                    Text(card.frontContent)
+                                        .font(.system(.body, design: .serif))
+                                        .foregroundColor(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
                             }
+                            .id(card.id)
+                            .padding(.vertical, 8)
+                            .listRowBackground(Color.clear)
+                            .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
                         }
-                        .id(card.id)
-                        .padding(.vertical, 5)
-                        .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
                     }
                 }
+                .listStyle(.plain)
+                .background(Color.clear)
                 .onChange(of: speechManager.currentIndex) { _, newIndex in
                     if newIndex >= 0 && newIndex < sortedFlashcards.count {
                         let cardIdToScroll = sortedFlashcards[newIndex].id
@@ -396,14 +420,14 @@ private struct VocapageContentListView: View {
 private struct VocapageBottomBarView: View {
     let vocapageFlashcards: [Flashcard]?
     let showBaseText: Bool
-    @Binding var isShowingPracticeView: Bool
+    @Binding var isShowingExamView: Bool
     @ObservedObject var speechManager: SpeechManager
     @EnvironmentObject var languageSettings: LanguageSettings
-    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         HStack {
             Spacer()
+            
             Button(action: {
                 if speechManager.isSpeaking {
                     speechManager.stopReadingSession()
@@ -425,22 +449,27 @@ private struct VocapageBottomBarView: View {
                     }
                 }
             }) {
-                Label("Read", systemImage: speechManager.isSpeaking ? "stop.circle.fill" : "play.circle.fill")
-                    .font(.title)
-            }
-            .tint(speechManager.isSpeaking ? .gray : .blue)
-            .disabled(vocapageFlashcards?.isEmpty ?? true)
-            
-            Spacer()
-            Button(action: { isShowingPracticeView = true }) {
-                Label("Practice", systemImage: "pencil.circle.fill")
+                Image(systemName: speechManager.isSpeaking ? "stop.fill" : "play.fill")
                     .font(.title)
             }
             .tint(.blue)
-            .disabled(speechManager.isSpeaking || vocapageFlashcards?.isEmpty ?? true)
-            .fullScreenCover(isPresented: $isShowingPracticeView) {
-                 ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings)
+            .disabled(vocapageFlashcards?.isEmpty ?? true)
+            
+            Spacer()
+            
+            Rectangle()
+                .frame(width: 50, height: 50)
+                .hidden()
+            
+            Spacer()
+            
+            Button(action: { isShowingExamView = true }) {
+                Image(systemName: "graduationcap.fill")
+                    .font(.title)
             }
+            .tint(.blue)
+            .disabled(vocapageFlashcards?.isEmpty ?? true)
+            
             Spacer()
         }
         .padding()

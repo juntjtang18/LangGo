@@ -74,16 +74,13 @@ struct LearnView: View {
             await viewModel.loadVocabookPages()
         }
     }
-    // MARK: - NEW: Test Function for Vocapage Details
-    private func testFetchVocapageDetails(vocapageId: Int) async {
-        do {
-            print("Attempting to fetch details for vocapage ID: \(vocapageId)")
-            print("----------------------------------\n")
-            
-        } catch {
-            print("Failed to fetch vocapage details: \(error.localizedDescription)")
-        }
-    }}
+    
+    // MARK: - Test Function
+    private func testFetchVocapageDetails(vocapageId: Int) {
+        print("Attempting to fetch details for vocapage ID: \(vocapageId)")
+        print("----------------------------------\n")
+    }
+}
 
 // MARK: - LearnView Components
 

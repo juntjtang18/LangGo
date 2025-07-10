@@ -196,6 +196,9 @@
         }
       }
     },
+    "Close" : {
+
+    },
     "Confirm New Password" : {
       "localizations" : {
         "ja" : {
@@ -439,6 +442,9 @@
 
     },
     "Error: %@" : {
+
+    },
+    "Exam" : {
 
     },
     "Flashcard" : {
@@ -705,6 +711,9 @@
         }
       }
     },
+    "No exam questions available." : {
+
+    },
     "No pages in this vocabook." : {
 
     },
@@ -775,9 +784,6 @@
           }
         }
       }
-    },
-    "Practice" : {
-
     },
     "Profile" : {
       "localizations" : {
@@ -862,9 +868,6 @@
           }
         }
       }
-    },
-    "Read" : {
-
     },
     "Read Flashcards" : {
 
@@ -1168,6 +1171,9 @@
 
     },
     "Swipe to load content." : {
+
+    },
+    "The correct answer is: **%@**" : {
 
     },
     "This will control data refreshing behavior in a future update." : {
