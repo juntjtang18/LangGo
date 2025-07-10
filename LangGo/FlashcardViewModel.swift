@@ -75,7 +75,7 @@ class FlashcardViewModel {
     func prepareReviewSession() async {
         logger.info("Attempting to fetch review session from server.")
         do {
-            let fetchedCards = try await strapiService.fetchReviewFlashcards()
+            let fetchedCards = try await strapiService.fetchAllReviewFlashcards()
             self.reviewCards = fetchedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
             logger.info("prepareReviewSession: Successfully loaded \(self.reviewCards.count) cards for review from server.")
         } catch {

@@ -60,19 +60,61 @@ class StrapiService {
         return try await NetworkManager.shared.fetchSingle(from: url)
     }
 
+    /// Fetches a single page of review flashcards.
     @MainActor
-    func fetchReviewFlashcards() async throws -> [Flashcard] {
-        logger.debug("StrapiService: Fetching and syncing review flashcards.")
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else { throw URLError(.badURL) }
-        let response: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
+    func fetchReviewFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+        logger.debug("StrapiService: Fetching review flashcards page \(page), size \(pageSize).")
+        guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else {
+            throw URLError(.badURL)
+        }
+        urlComponents.queryItems = [
+            URLQueryItem(name: "pagination[page]", value: "\(page)"),
+            URLQueryItem(name: "pagination[pageSize]", value: "\(pageSize)")
+        ]
+        
+        guard let url = urlComponents.url else {
+            throw URLError(.badURL)
+        }
+
+        let response: StrapiListResponse<StrapiFlashcard> = try await NetworkManager.shared.fetchDirect(from: url)
         
         var syncedFlashcards: [Flashcard] = []
-        for strapiCard in response.data {
-            let syncedCard = try await syncCard(strapiCard)
-            syncedFlashcards.append(syncedCard)
+        if let strapiFlashcards = response.data {
+            for strapiCard in strapiFlashcards {
+                let syncedCard = try await syncCard(strapiCard)
+                syncedFlashcards.append(syncedCard)
+            }
         }
         try modelContext.save()
-        return syncedFlashcards
+        return (syncedFlashcards, response.meta?.pagination)
+    }
+    
+    /// Fetches all available review flashcards by handling pagination internally.
+    @MainActor
+    func fetchAllReviewFlashcards() async throws -> [Flashcard] {
+        var allCards: [Flashcard] = []
+        var currentPage = 1
+        let pageSize = 100 // Use a larger page size for efficiency
+        var hasMorePages = true
+
+        logger.debug("StrapiService: Fetching all pages of review flashcards.")
+
+        while hasMorePages {
+            let (cards, pagination) = try await self.fetchReviewFlashcards(page: currentPage, pageSize: pageSize)
+            
+            if !cards.isEmpty {
+                allCards.append(contentsOf: cards)
+            }
+            
+            if let pag = pagination {
+                hasMorePages = pag.page < pag.pageCount
+                currentPage += 1
+            } else {
+                // If pagination info is missing, assume we are done.
+                hasMorePages = false
+            }
+        }
+        return allCards
     }
 
     @MainActor

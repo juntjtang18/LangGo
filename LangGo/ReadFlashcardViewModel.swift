@@ -1,3 +1,4 @@
+// LangGo/ReadFlashcardViewModel.swift
 import SwiftUI
 import SwiftData
 import AVFoundation
@@ -42,8 +43,8 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
     func fetchFlashcards() async {
         isLoading = true
         do {
-            // Use the injected StrapiService instance
-            let fetchedCards = try await strapiService.fetchReviewFlashcards()
+            // Use the injected StrapiService instance to get all review cards
+            let fetchedCards = try await strapiService.fetchAllReviewFlashcards()
             self.flashcards = fetchedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
             logger.info("Successfully loaded \(self.flashcards.count) cards for reading.")
         } catch {
