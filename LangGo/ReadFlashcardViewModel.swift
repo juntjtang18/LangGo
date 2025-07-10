@@ -40,17 +40,8 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
     func fetchFlashcards() async {
         isLoading = true
         do {
-            // Use StrapiService to fetch review flashcards
-            let fetchedData: StrapiResponse = try await StrapiService.shared.fetchReviewFlashcards()
-            var processedCards: [Flashcard] = []
-
-            for strapiCard in fetchedData.data {
-                let card = try await syncCard(strapiCard)
-                processedCards.append(card)
-            }
-            try modelContext.save()
-            
-            self.flashcards = processedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
+            let fetchedCards = try await StrapiService.shared.fetchReviewFlashcards(modelContext: modelContext)
+            self.flashcards = fetchedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
             logger.info("Successfully loaded \(self.flashcards.count) cards for reading.")
         } catch {
             logger.error("Failed to fetch or process flashcards for reading: \(error.localizedDescription)")
@@ -160,61 +151,6 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
         } else {
             self.currentStep = .firstWord
             self.readCurrentCard()
-        }
-    }
-    
-    @MainActor
-    @discardableResult
-    private func syncCard(_ strapiCard: StrapiFlashcard) async throws -> Flashcard {
-        // Access 'content' using optional chaining
-        let contentComponent = strapiCard.attributes.content?.first
-
-        var frontContent: String?, backContent: String?, register: String?
-
-        switch contentComponent?.componentIdentifier { // Use optional chaining
-        case "a.user-word-ref":
-            frontContent = contentComponent?.userWord?.data?.attributes.baseText
-            backContent = contentComponent?.userWord?.data?.attributes.targetText // Changed to use the new field
-        case "a.word-ref":
-            frontContent = contentComponent?.word?.data?.attributes.baseText
-            backContent = contentComponent?.word?.data?.attributes.word
-            register = contentComponent?.word?.data?.attributes.register
-        case "a.user-sent-ref":
-            frontContent = contentComponent?.userSentence?.data?.attributes.baseText
-            backContent = contentComponent?.userSentence?.data?.attributes.targetText
-        case "a.sent-ref":
-            frontContent = contentComponent?.sentence?.data?.attributes.baseText
-            backContent = contentComponent?.sentence?.data?.attributes.targetText
-            register = contentComponent?.sentence?.data?.attributes.register
-        default:
-            logger.warning("Unrecognized component type: \(contentComponent?.componentIdentifier ?? "nil")") // Log if component is nil or unknown
-        }
-
-        let finalFront = frontContent ?? "Missing Question"
-        let finalBack = backContent ?? "Missing Answer"
-        let cardId = strapiCard.id
-        
-        var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == cardId })
-        fetchDescriptor.fetchLimit = 1
-
-        if let cardToUpdate = try modelContext.fetch(fetchDescriptor).first {
-            cardToUpdate.frontContent = finalFront
-            cardToUpdate.backContent = finalBack
-            cardToUpdate.register = register
-            cardToUpdate.lastReviewedAt = strapiCard.attributes.lastReviewedAt
-            return cardToUpdate
-        } else {
-            let newCard = Flashcard(
-                id: cardId, frontContent: finalFront, backContent: finalBack, register: register,
-                contentType: contentComponent?.componentIdentifier ?? "", // Default to empty string if nil
-                rawComponentData: nil, // rawComponentData might be nil here too
-                lastReviewedAt: strapiCard.attributes.lastReviewedAt,
-                correctStreak: strapiCard.attributes.correctStreak ?? 0,
-                wrongStreak: strapiCard.attributes.wrongStreak ?? 0,
-                isRemembered: strapiCard.attributes.isRemembered
-            )
-            modelContext.insert(newCard)
-            return newCard
         }
     }
 }

@@ -23,6 +23,7 @@ struct FlashcardAttributes: Codable {
     let correctStreak: Int?
     let wrongStreak: Int?
     let isRemembered: Bool
+    let reviewTire: ReviewTireRelation? // NEW: Added for the new relation
 
     enum CodingKeys: String, CodingKey {
         case createdAt, updatedAt, locale, content
@@ -30,7 +31,21 @@ struct FlashcardAttributes: Codable {
         case correctStreak = "correct_streak"
         case wrongStreak = "wrong_streak"
         case isRemembered = "is_remembered"
+        case reviewTire = "review_tire" // NEW: Coding key for review_tire
     }
+}
+
+// MARK: - NEW: ReviewTire Models
+struct ReviewTire: Codable {
+    let data: StrapiData<ReviewTireAttributes>?
+}
+
+struct ReviewTireAttributes: Codable {
+    let tier: String
+    let min_streak: Int
+    let max_streak: Int
+    let cooldown_hours: Int
+    let demote_bar: Int
 }
 
 // MARK: - Authentication Models
@@ -196,6 +211,8 @@ typealias SentenceRelation = Relation<StrapiData<SentenceAttributes>>
 typealias MediaRelation = Relation<StrapiData<MediaAttributes>>
 typealias ExampleSentencesRelation = ManyRelation<StrapiData<SentenceAttributes>>
 typealias WordsRelation = ManyRelation<StrapiData<WordAttributes>>
+typealias ReviewTireRelation = Relation<StrapiData<ReviewTireAttributes>> // NEW: Typealias for the review tire relation
+
 
 // MARK: - Component Schemas & Attributes
 struct TagListComponent: Codable {

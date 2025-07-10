@@ -55,31 +55,15 @@ class FlashcardViewModel {
         do {
             let descriptor = FetchDescriptor<Flashcard>()
             let allCards = try modelContext.fetch(descriptor)
-            
-            // A card is "remembered" if the flag is true OR its streak is 11 or higher.
-            let rememberedCards = allCards.filter { $0.isRemembered || $0.correctStreak >= 11 }
-            
-            // "Active" cards are those not remembered
-            let activeCards = allCards.filter { !($0.isRemembered || $0.correctStreak >= 11) }
 
             self.totalCardCount = allCards.count
-            self.rememberedCount = rememberedCards.count
-            
-            // New Cards (correct_streak is 0-3)
-            self.newCardCount = activeCards.filter { (0...3).contains($0.correctStreak) }.count
+            self.rememberedCount = allCards.filter { $0.reviewTire == "remembered" }.count
+            self.newCardCount = allCards.filter { $0.reviewTire == "new" }.count
+            self.warmUpCardCount = allCards.filter { $0.reviewTire == "warmup" }.count
+            self.weeklyReviewCardCount = allCards.filter { $0.reviewTire == "weekly" }.count
+            self.monthlyCardCount = allCards.filter { $0.reviewTire == "monthly" }.count
+            self.hardToRememberCount = allCards.filter { $0.wrongStreak >= 3 }.count
 
-            // Warm-up Cards (correct_streak is 4-6)
-            self.warmUpCardCount = activeCards.filter { (4...6).contains($0.correctStreak) }.count
-
-            // Weekly Review Cards (correct_streak is 7-8)
-            self.weeklyReviewCardCount = activeCards.filter { (7...8).contains($0.correctStreak) }.count
-
-            // Monthly Cards (correct_streak is 9-10)
-            self.monthlyCardCount = activeCards.filter { (9...10).contains($0.correctStreak) }.count
-            
-            // Hard to remember (wrong_streak >= 3)
-            self.hardToRememberCount = activeCards.filter { $0.wrongStreak >= 3 }.count
-            
             logger.info("Successfully calculated statistics locally from \(allCards.count) cards.")
 
         } catch {
@@ -91,7 +75,9 @@ class FlashcardViewModel {
     func prepareReviewSession() async {
         logger.info("Attempting to fetch review session from server.")
         do {
-            try await fetchAndLoadReviewCardsFromServer()
+            let fetchedCards = try await StrapiService.shared.fetchReviewFlashcards(modelContext: modelContext)
+            self.reviewCards = fetchedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
+            logger.info("prepareReviewSession: Successfully loaded \(self.reviewCards.count) cards for review from server.")
         } catch {
             logger.warning("Could not fetch review session from server. Error: \(error.localizedDescription). Falling back to local data.")
             do {
@@ -107,43 +93,12 @@ class FlashcardViewModel {
             }
         }
     }
-
-    @MainActor
-    private func fetchAndLoadReviewCardsFromServer() async throws {
-        logger.debug("fetchAndLoadReviewCardsFromServer called.")
-
-        do {
-            // Use StrapiService to fetch review flashcards
-            let fetchedData: StrapiResponse = try await StrapiService.shared.fetchReviewFlashcards()
-            var processedCards: [Flashcard] = []
-
-            for strapiCard in fetchedData.data {
-                do {
-                    let card = try await syncCard(strapiCard)
-                    processedCards.append(card)
-                } catch {
-                    logger.error("Error processing card \(strapiCard.id): \(error.localizedDescription)")
-                }
-            }
-
-            try modelContext.save()
-            logger.info("Successfully saved/updated \(fetchedData.data.count) cards from review endpoint.")
-
-            self.reviewCards = processedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
-            logger.info("prepareReviewSession: Successfully loaded \(self.reviewCards.count) cards for review from server.")
-
-        } catch {
-            logger.error("fetchAndLoadReviewCardsFromServer: Failed to fetch or save data: \(error.localizedDescription)")
-            throw error
-        }
-    }
     
     // MARK: - Review Logic
 
     func markReview(for card: Flashcard, result: ReviewResult) {
         Task {
             await submitReview(for: card, result: result)
-            //await loadStatistics()
         }
     }
 
@@ -151,119 +106,10 @@ class FlashcardViewModel {
     private func submitReview(for card: Flashcard, result: ReviewResult) async {
         do {
             logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)'")
-            
-            // Use StrapiService to submit flashcard review
-            let response: Relation<StrapiFlashcard> = try await StrapiService.shared.submitFlashcardReview(cardId: card.id, result: result)
-            
-            guard let updatedStrapiCard = response.data else {
-                logger.error("Failed to submit review for card \(card.id): Server response was missing the 'data' object.")
-                return
-            }
-            
-            _ = try await self.syncCard(updatedStrapiCard)
-            
-            try self.modelContext.save()
-            
+            _ = try await StrapiService.shared.submitFlashcardReview(cardId: card.id, result: result, modelContext: modelContext)
             logger.info("Successfully synced updated card \(card.id) from server after review.")
-            
         } catch {
             logger.error("Failed to submit and sync review for flashcard \(card.id): \(error.localizedDescription)")
-        }
-    }
-    // MARK: - Data Syncing
-    
-    public func fetchDataFromServer(forceRefresh: Bool = false) async {
-        do {
-            // Use StrapiService to fetch all flashcards
-            let fetchedData: StrapiResponse = try await StrapiService.shared.fetchAllFlashcardsWithContent()
-            await updateLocalDatabase(with: fetchedData.data)
-        } catch {
-            logger.error("fetchDataFromServer: Failed to fetch or decode data: \(error.localizedDescription)")
-        }
-    }
-
-    @MainActor
-    private func updateLocalDatabase(with strapiFlashcards: [StrapiFlashcard]) async {
-        logger.debug("updateLocalDatabase called.")
-        for strapiCard in strapiFlashcards {
-            do {
-                try await syncCard(strapiCard)
-            } catch {
-                 logger.error("updateLocalDatabase: Error processing card: \(error.localizedDescription)")
-            }
-        }
-
-        do {
-            try modelContext.save()
-        } catch {
-            logger.error("updateLocalDatabase: Failed to save context: \(error.localizedDescription)")
-        }
-    }
-    
-    @MainActor
-    @discardableResult
-    private func syncCard(_ strapiCard: StrapiFlashcard) async throws -> Flashcard {
-        // Access 'content' using optional chaining
-        let contentComponent = strapiCard.attributes.content?.first
-        
-        var frontContent: String?
-        var backContent: String?
-        var register: String?
-
-        switch contentComponent?.componentIdentifier { // Use optional chaining
-        case "a.user-word-ref":
-            frontContent = contentComponent?.userWord?.data?.attributes.baseText
-            backContent = contentComponent?.userWord?.data?.attributes.targetText
-        case "a.word-ref":
-            frontContent = contentComponent?.word?.data?.attributes.baseText
-            backContent = contentComponent?.word?.data?.attributes.word
-            register = contentComponent?.word?.data?.attributes.register
-        case "a.user-sent-ref":
-            frontContent = contentComponent?.userSentence?.data?.attributes.baseText
-            backContent = contentComponent?.userSentence?.data?.attributes.targetText
-        case "a.sent-ref":
-            frontContent = contentComponent?.sentence?.data?.attributes.baseText
-            backContent = contentComponent?.sentence?.data?.attributes.targetText
-            register = contentComponent?.sentence?.data?.attributes.register
-        default:
-            logger.warning("Unrecognized component type: \(contentComponent?.componentIdentifier ?? "nil")") // Log if component is nil or unknown
-        }
-
-        let finalFront = frontContent ?? "Missing Question"
-        let finalBack = backContent ?? "Missing Answer"
-        let contentType = contentComponent?.componentIdentifier ?? "" // Default to empty string if nil
-        let rawData = try? JSONEncoder().encode(contentComponent) // Encode optional
-        let cardId = strapiCard.id
-        
-        var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == cardId })
-        fetchDescriptor.fetchLimit = 1
-
-        if let cardToUpdate = try modelContext.fetch(fetchDescriptor).first {
-            cardToUpdate.frontContent = finalFront
-            cardToUpdate.backContent = finalBack
-            cardToUpdate.register = register
-            cardToUpdate.contentType = contentType
-            cardToUpdate.rawComponentData = rawData
-            cardToUpdate.lastReviewedAt = strapiCard.attributes.lastReviewedAt
-            cardToUpdate.isRemembered = strapiCard.attributes.isRemembered
-            cardToUpdate.correctStreak = strapiCard.attributes.correctStreak ?? 0
-            cardToUpdate.wrongStreak = strapiCard.attributes.wrongStreak ?? 0
-            return cardToUpdate
-        } else {
-            let newCard = Flashcard(
-                id: cardId,
-                frontContent: finalFront,
-                backContent: finalBack,
-                register: register,
-                contentType: contentType,
-                rawComponentData: rawData,
-                lastReviewedAt: strapiCard.attributes.lastReviewedAt,
-                correctStreak: strapiCard.attributes.correctStreak ?? 0,
-                wrongStreak: strapiCard.attributes.wrongStreak ?? 0,
-                isRemembered: strapiCard.attributes.isRemembered
-            )
-            modelContext.insert(newCard)
-            return newCard
         }
     }
 

@@ -142,7 +142,6 @@ private struct StatisticsView: View {
                 Spacer()
                 Button(action: {
                     Task {
-                        await viewModel.fetchDataFromServer(forceRefresh: true)
                         await viewModel.loadStatistics()
                     }
                 }) {

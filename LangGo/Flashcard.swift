@@ -23,9 +23,10 @@ final class Flashcard {
     var wrongStreak: Int
     
     var isRemembered: Bool
+    var reviewTire: String? // FIX: Correctly added the reviewTire property
 
     // UPDATED: The init method now uses the new streak properties.
-    init(id: Int, frontContent: String, backContent: String, register: String?, contentType: String, rawComponentData: Data?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool) {
+    init(id: Int, frontContent: String, backContent: String, register: String?, contentType: String, rawComponentData: Data?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, reviewTire: String?) {
         self.id = id
         self.frontContent = frontContent
         self.backContent = backContent
@@ -36,6 +37,7 @@ final class Flashcard {
         self.correctStreak = correctStreak
         self.wrongStreak = wrongStreak
         self.isRemembered = isRemembered
+        self.reviewTire = reviewTire // FIX: Assigned in the initializer
     }
     
     private var decodedComponent: StrapiComponent? {

@@ -38,22 +38,13 @@ class VocapageLoader {
                 throw NSError(domain: "VocapageLoader", code: 404, userInfo: [NSLocalizedDescriptionKey: "Could not find vocapage with ID \(vocapageId)."])
             }
 
-            // 2. Fetch the flashcards for this page from the server
+            // 2. Fetch and sync the flashcards for this page from the server
             let vbSetting = try await StrapiService.shared.fetchVBSetting()
             let pageSize = vbSetting.attributes.wordsPerPage
-            let response = try await StrapiService.shared.fetchFlashcards(page: page.order, pageSize: pageSize)
+            let syncedFlashcards = try await StrapiService.shared.fetchFlashcards(page: page.order, pageSize: pageSize, modelContext: modelContext)
             
-            // 3. Sync flashcards and link them to the vocapage object
-            var syncedFlashcards: [Flashcard] = []
-            if let strapiFlashcards = response.data {
-                for strapiCard in strapiFlashcards {
-                    let syncedCard = try await syncFlashcard(strapiCard)
-                    syncedFlashcards.append(syncedCard)
-                }
-            }
+            // 3. Link flashcards to the vocapage object and save
             page.flashcards = syncedFlashcards
-            
-            // 4. Save to the database and update our state
             try modelContext.save()
             vocapages[vocapageId] = page
 
@@ -63,50 +54,6 @@ class VocapageLoader {
         }
 
         loadingStatus[vocapageId] = false
-    }
-
-    private func syncFlashcard(_ strapiFlashcardData: StrapiFlashcard) async throws -> Flashcard {
-        let strapiCard = strapiFlashcardData.attributes
-        var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == strapiFlashcardData.id })
-        fetchDescriptor.fetchLimit = 1
-
-        let flashcard: Flashcard
-        if let existingFlashcard = try modelContext.fetch(fetchDescriptor).first {
-            flashcard = existingFlashcard
-        } else {
-            flashcard = Flashcard(id: strapiFlashcardData.id, frontContent: "", backContent: "", register: nil, contentType: "", rawComponentData: nil, lastReviewedAt: nil, correctStreak: 0, wrongStreak: 0, isRemembered: false)
-            modelContext.insert(flashcard)
-        }
-
-        let contentComponent = strapiCard.content?.first
-        switch contentComponent?.componentIdentifier {
-        case "a.user-word-ref":
-            flashcard.frontContent = contentComponent?.userWord?.data?.attributes.baseText ?? "Missing Question"
-            flashcard.backContent = contentComponent?.userWord?.data?.attributes.targetText ?? "Missing Answer"
-        case "a.word-ref":
-            flashcard.frontContent = contentComponent?.word?.data?.attributes.baseText ?? "Missing Question"
-            flashcard.backContent = contentComponent?.word?.data?.attributes.word ?? "Missing Answer"
-            flashcard.register = contentComponent?.word?.data?.attributes.register
-        case "a.user-sent-ref":
-            flashcard.frontContent = contentComponent?.userSentence?.data?.attributes.baseText ?? "Missing Question"
-            flashcard.backContent = contentComponent?.userSentence?.data?.attributes.targetText ?? "Missing Answer"
-        case "a.sent-ref":
-            flashcard.frontContent = contentComponent?.sentence?.data?.attributes.baseText ?? "Missing Question"
-            flashcard.backContent = contentComponent?.sentence?.data?.attributes.targetText ?? "Missing Answer"
-            flashcard.register = contentComponent?.sentence?.data?.attributes.register
-        default:
-            flashcard.frontContent = "Unknown Content (Front)"
-            flashcard.backContent = "Unknown Content (Back)"
-        }
-
-        flashcard.contentType = contentComponent?.componentIdentifier ?? ""
-        flashcard.rawComponentData = try? JSONEncoder().encode(contentComponent)
-        flashcard.lastReviewedAt = strapiCard.lastReviewedAt
-        flashcard.correctStreak = strapiCard.correctStreak ?? 0
-        flashcard.wrongStreak = strapiCard.wrongStreak ?? 0
-        flashcard.isRemembered = strapiCard.isRemembered
-
-        return flashcard
     }
 }
 
@@ -137,12 +84,19 @@ struct VocapageHostView: View {
         let currentId = allVocapageIds[currentPageIndex]
         return loader.vocapages[currentId]
     }
+    
+    // REFACTORED: Sort the list once here.
+    private var sortedFlashcardsForCurrentPage: [Flashcard] {
+        return currentVocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
+    }
 
     var body: some View {
         TabView(selection: $currentPageIndex) {
             ForEach(allVocapageIds.indices, id: \.self) { index in
+                // REFACTORED: Pass the vocapage object directly, as it contains the order info
                 VocapageView(
                     vocapage: loader.vocapages[allVocapageIds[index]],
+                    sortedFlashcards: loader.vocapages[allVocapageIds[index]]?.flashcards?.sorted { $0.id < $1.id } ?? [],
                     isLoading: loader.loadingStatus[allVocapageIds[index]] ?? false,
                     errorMessage: loader.errorMessages[allVocapageIds[index]],
                     showBaseText: $showBaseText,
@@ -175,8 +129,9 @@ struct VocapageHostView: View {
                 }
             }
             ToolbarItem(placement: .bottomBar) {
+                // REFACTORED: Pass the single sorted list to the bottom bar.
                 VocapageBottomBarView(
-                    vocapageFlashcards: currentVocapage?.flashcards,
+                    sortedFlashcards: sortedFlashcardsForCurrentPage,
                     showBaseText: showBaseText,
                     isShowingExamView: $isShowingExamView,
                     speechManager: speechManager
@@ -319,15 +274,12 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
 struct VocapageView: View {
     let vocapage: Vocapage?
+    let sortedFlashcards: [Flashcard] // REFACTORED: Receive the pre-sorted list
     let isLoading: Bool
     let errorMessage: String?
     @Binding var showBaseText: Bool
     @ObservedObject var speechManager: SpeechManager
     let onLoad: () -> Void
-
-    private var sortedFlashcardsForList: [Flashcard] {
-        return vocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
-    }
 
     var body: some View {
         ZStack {
@@ -342,8 +294,9 @@ struct VocapageView: View {
                         .padding()
                         .multilineTextAlignment(.center)
                 } else if let vocapage = vocapage {
+                    // REFACTORED: Pass the pre-sorted list directly
                     VocapageContentListView(
-                        sortedFlashcards: sortedFlashcardsForList,
+                        sortedFlashcards: sortedFlashcards,
                         showBaseText: showBaseText,
                         speechManager: speechManager
                     )
@@ -418,7 +371,7 @@ private struct VocapageContentListView: View {
 }
 
 private struct VocapageBottomBarView: View {
-    let vocapageFlashcards: [Flashcard]?
+    let sortedFlashcards: [Flashcard] // REFACTORED: Receive the pre-sorted list
     let showBaseText: Bool
     @Binding var isShowingExamView: Bool
     @ObservedObject var speechManager: SpeechManager
@@ -435,9 +388,10 @@ private struct VocapageBottomBarView: View {
                     Task {
                         do {
                             let settings = try await StrapiService.shared.fetchVBSetting()
-                            if let flashcards = vocapageFlashcards, !flashcards.isEmpty {
+                            // REFACTORED: Use the pre-sorted list directly
+                            if !sortedFlashcards.isEmpty {
                                 speechManager.startReadingSession(
-                                    flashcards: flashcards,
+                                    flashcards: sortedFlashcards,
                                     showBaseText: showBaseText,
                                     languageSettings: languageSettings,
                                     settings: settings.attributes
@@ -453,7 +407,7 @@ private struct VocapageBottomBarView: View {
                     .font(.title)
             }
             .tint(.blue)
-            .disabled(vocapageFlashcards?.isEmpty ?? true)
+            .disabled(sortedFlashcards.isEmpty)
             
             Spacer()
             
@@ -468,7 +422,7 @@ private struct VocapageBottomBarView: View {
                     .font(.title)
             }
             .tint(.blue)
-            .disabled(vocapageFlashcards?.isEmpty ?? true)
+            .disabled(sortedFlashcards.isEmpty)
             
             Spacer()
         }

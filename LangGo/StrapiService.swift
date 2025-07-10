@@ -1,6 +1,7 @@
 // LangGo/StrapiService.swift
 import Foundation
 import os
+import SwiftData
 
 /// A service layer for interacting with the Strapi backend API.
 /// This class abstracts away the specific Strapi endpoints and request/response structures.
@@ -59,41 +60,57 @@ class StrapiService {
         return try await NetworkManager.shared.fetchSingle(from: url)
     }
 
-    func fetchReviewFlashcards() async throws -> StrapiResponse {
-        logger.debug("StrapiService: Fetching review flashcards.")
+    @MainActor
+    func fetchReviewFlashcards(modelContext: ModelContext) async throws -> [Flashcard] {
+        logger.debug("StrapiService: Fetching and syncing review flashcards.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else { throw URLError(.badURL) }
-        return try await NetworkManager.shared.fetchDirect(from: url)
+        let response: StrapiResponse = try await NetworkManager.shared.fetchDirect(from: url)
+        
+        var syncedFlashcards: [Flashcard] = []
+        for strapiCard in response.data {
+            let syncedCard = try await syncCard(strapiCard, modelContext: modelContext)
+            syncedFlashcards.append(syncedCard)
+        }
+        try modelContext.save()
+        return syncedFlashcards
     }
 
-    func submitFlashcardReview(cardId: Int, result: ReviewResult) async throws -> Relation<StrapiFlashcard> {
+    @MainActor
+    func submitFlashcardReview(cardId: Int, result: ReviewResult, modelContext: ModelContext) async throws -> Flashcard {
         logger.debug("StrapiService: Submitting review for card ID: \(cardId) with result: \(result.rawValue).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcards/\(cardId)/review") else { throw URLError(.badURL) }
         let body = ReviewBody(result: result.rawValue)
-        // Note: Relation<StrapiFlashcard> is used as the response is wrapped in a 'data' key.
-        return try await NetworkManager.shared.post(to: url, body: body)
-    }
-
-    func fetchAllFlashcardsWithContent() async throws -> StrapiResponse {
-        logger.debug("StrapiService: Fetching all flashcards with content population.")
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcards?populate=content") else { throw URLError(.badURL) }
-        return try await NetworkManager.shared.fetchDirect(from: url)
+        let response: Relation<StrapiFlashcard> = try await NetworkManager.shared.post(to: url, body: body)
+        
+        guard let updatedStrapiCard = response.data else {
+            throw NSError(domain: "StrapiServiceError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server response was missing the 'data' object."])
+        }
+        
+        let syncedCard = try await syncCard(updatedStrapiCard, modelContext: modelContext)
+        try modelContext.save()
+        return syncedCard
     }
 
     // MARK: - Flashcards Pagination
-
-    /// Fetches the current user's flashcards, page by page.
-    /// - Parameters:
-    ///   - page:    which page to fetch (1-indexed)
-    ///   - pageSize: how many cards per page
-    /// - Returns: a paginated list response wrapping `StrapiFlashcard` items
-    func fetchFlashcards(page: Int, pageSize: Int) async throws -> StrapiListResponse<StrapiFlashcard> {
+    
+    @MainActor
+    func fetchFlashcards(page: Int, pageSize: Int, modelContext: ModelContext) async throws -> [Flashcard] {
         logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize).")
         guard let url = URL(string:
-            "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate=content")
+            "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate=content,review_tire")
         else {
             throw URLError(.badURL)
         }
-        return try await NetworkManager.shared.fetchDirect(from: url)
+        let response: StrapiListResponse<StrapiFlashcard> = try await NetworkManager.shared.fetchDirect(from: url)
+
+        var syncedFlashcards: [Flashcard] = []
+        if let strapiFlashcards = response.data {
+            for strapiCard in strapiFlashcards {
+                let syncedCard = try await syncCard(strapiCard, modelContext: modelContext)
+                syncedFlashcards.append(syncedCard)
+            }
+        }
+        return syncedFlashcards
     }
 
     
@@ -147,13 +164,54 @@ class StrapiService {
         return response.data
     }
     
-    // MARK: - Other (Example for future use)
+    // MARK: - Private Syncing Logic
+    
+    @MainActor
+    @discardableResult
+    private func syncCard(_ strapiCard: StrapiFlashcard, modelContext: ModelContext) async throws -> Flashcard {
+        let cardId = strapiCard.id
+        var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == cardId })
+        fetchDescriptor.fetchLimit = 1
+        
+        let cardToUpdate: Flashcard
+        if let existingCard = try modelContext.fetch(fetchDescriptor).first {
+            cardToUpdate = existingCard
+        } else {
+            cardToUpdate = Flashcard(id: cardId, frontContent: "", backContent: "", register: nil, contentType: "", rawComponentData: nil, lastReviewedAt: nil, correctStreak: 0, wrongStreak: 0, isRemembered: false, reviewTire: nil)
+            modelContext.insert(cardToUpdate)
+        }
+        
+        let attributes = strapiCard.attributes
+        let contentComponent = attributes.content?.first
+        
+        switch contentComponent?.componentIdentifier {
+        case "a.user-word-ref":
+            cardToUpdate.frontContent = contentComponent?.userWord?.data?.attributes.baseText ?? "Missing Question"
+            cardToUpdate.backContent = contentComponent?.userWord?.data?.attributes.targetText ?? "Missing Answer"
+        case "a.word-ref":
+            cardToUpdate.frontContent = contentComponent?.word?.data?.attributes.baseText ?? "Missing Question"
+            cardToUpdate.backContent = contentComponent?.word?.data?.attributes.word ?? "Missing Answer"
+            cardToUpdate.register = contentComponent?.word?.data?.attributes.register
+        case "a.user-sent-ref":
+            cardToUpdate.frontContent = contentComponent?.userSentence?.data?.attributes.baseText ?? "Missing Question"
+            cardToUpdate.backContent = contentComponent?.userSentence?.data?.attributes.targetText ?? "Missing Answer"
+        case "a.sent-ref":
+            cardToUpdate.frontContent = contentComponent?.sentence?.data?.attributes.baseText ?? "Missing Question"
+            cardToUpdate.backContent = contentComponent?.sentence?.data?.attributes.targetText ?? "Missing Answer"
+            cardToUpdate.register = contentComponent?.sentence?.data?.attributes.register
+        default:
+            cardToUpdate.frontContent = "Unknown Content (Front)"
+            cardToUpdate.backContent = "Unknown Content (Back)"
+        }
 
-    // Example for fetching a list of courses (if you add this endpoint)
-    // func getCourseList(page: Int = 1, pageSize: Int = 25) async throws -> StrapiListResponse<Course> {
-    //     logger.debug("StrapiService: Fetching course list.")
-    //     var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/courses")!
-    //     // Add any specific filters or populations needed for courses
-    //     return try await NetworkManager.shared.fetchPage(baseURLComponents: components, page: page, pageSize: pageSize)
-    // }
+        cardToUpdate.contentType = contentComponent?.componentIdentifier ?? ""
+        cardToUpdate.rawComponentData = try? JSONEncoder().encode(contentComponent)
+        cardToUpdate.lastReviewedAt = attributes.lastReviewedAt
+        cardToUpdate.isRemembered = attributes.isRemembered
+        cardToUpdate.correctStreak = attributes.correctStreak ?? 0
+        cardToUpdate.wrongStreak = attributes.wrongStreak ?? 0
+        cardToUpdate.reviewTire = attributes.reviewTire?.data?.attributes.tier
+        
+        return cardToUpdate
+    }
 }
