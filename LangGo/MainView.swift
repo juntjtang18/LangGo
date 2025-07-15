@@ -32,7 +32,7 @@ struct MainView: View {
             // The TabView selection is now bound to our state variable
             TabView(selection: $selectedTab) {
                 // The Home tab receives a binding to control the selected tab
-                LearnTabView(isSideMenuShowing: $isSideMenuShowing, selectedTab: $selectedTab)
+                HomeTabView(isSideMenuShowing: $isSideMenuShowing, selectedTab: $selectedTab)
                     .tabItem { Label("Home", systemImage: "house.fill") }
                     .tag(0)
 

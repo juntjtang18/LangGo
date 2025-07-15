@@ -10,15 +10,15 @@ struct VocabookTabView: View {
     
     // View models required by the new screen
     @State private var flashcardViewModel: FlashcardViewModel?
-    @State private var learnViewModel: LearnViewModel?
+    @State private var vocabookViewModel: VocabookViewModel?
 
     var body: some View {
         NavigationStack {
-            if let flashcardViewModel = flashcardViewModel, let learnViewModel = learnViewModel {
+            if let flashcardViewModel = flashcardViewModel, let vocabookViewModel = vocabookViewModel {
                 // The new view is composed in a separate file for clarity
                 MyVocabookView(
                     flashcardViewModel: flashcardViewModel,
-                    learnViewModel: learnViewModel
+                    vocabookViewModel: vocabookViewModel
                 )
                 .navigationTitle("My Vocabulary Book")
                 .navigationBarTitleDisplayMode(.inline)
@@ -28,7 +28,7 @@ struct VocabookTabView: View {
                 .task {
                     // Load all necessary data when the view appears
                     await flashcardViewModel.loadStatistics()
-                    await learnViewModel.loadVocabookPages()
+                    await vocabookViewModel.loadVocabookPages()
                 }
             } else {
                 // Show a loading indicator while view models are being initialized
@@ -37,8 +37,8 @@ struct VocabookTabView: View {
                         if flashcardViewModel == nil {
                             flashcardViewModel = FlashcardViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
                         }
-                        if learnViewModel == nil {
-                            learnViewModel = LearnViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                        if vocabookViewModel == nil {
+                            vocabookViewModel = VocabookViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
                         }
                     }
             }

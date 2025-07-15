@@ -1,4 +1,4 @@
-// LangGo/LearnViewModel.swift
+// LangGo/VocabookViewModel.swift
 import Foundation
 import SwiftData
 import os
@@ -40,10 +40,10 @@ final class Vocapage {
 }
 
 
-// MARK: - LearnViewModel
+// MARK: - VocabookViewModel
 @Observable
-class LearnViewModel {
-    private let logger = Logger(subsystem: "com.langGo.swift", category: "LearnViewModel")
+class VocabookViewModel {
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
     private let modelContext: ModelContext
     private let strapiService: StrapiService
 

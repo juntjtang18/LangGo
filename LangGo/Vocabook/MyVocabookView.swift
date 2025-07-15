@@ -3,7 +3,7 @@ import SwiftUI
 
 struct MyVocabookView: View {
     let flashcardViewModel: FlashcardViewModel
-    let learnViewModel: LearnViewModel
+    let vocabookViewModel: VocabookViewModel
     
     @EnvironmentObject var appEnvironment: AppEnvironment
     @Environment(\.modelContext) private var modelContext
@@ -30,7 +30,7 @@ struct MyVocabookView: View {
             .padding(.horizontal)
 
             // This list view now handles its own scrolling
-            PagesListView(viewModel: learnViewModel)
+            PagesListView(viewModel: vocabookViewModel)
         }
         .padding(.top)
         .background(theme.background.ignoresSafeArea())
@@ -167,7 +167,7 @@ private struct VocabookActionButton: View {
 }
 
 private struct PagesListView: View {
-    let viewModel: LearnViewModel
+    let viewModel: VocabookViewModel
     @Environment(\.theme) var theme: Theme
 
     var body: some View {

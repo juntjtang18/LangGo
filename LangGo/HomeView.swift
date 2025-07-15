@@ -1,4 +1,4 @@
-// LangGo/AcademyView.swift
+// LangGo/HomeView.swift
 import SwiftUI
 
 /// A model representing a single learning module in the horizontal carousel.
@@ -10,12 +10,12 @@ struct LearningModule: Identifiable {
 }
 
 /// The main view for the "LangGo Academy" tab.
-struct AcademyView: View {
+struct HomeView: View {
     @Environment(\.theme) var theme
     
     // The view models are passed in from the parent `LearnTabView`.
     let flashcardViewModel: FlashcardViewModel
-    let learnViewModel: LearnViewModel
+    let vocabookViewModel: VocabookViewModel
     
     // Binding to control the app's main tab view
     @Binding var selectedTab: Int
@@ -85,18 +85,19 @@ private struct GreetingAndStatsView: View {
                     CircledNumberView(number: "5")
                     Text("lessons, reviewed")
                     CircledNumberView(number: "123")
-                    Text("words")
                 }
                 HStack(spacing: 4) {
-                    Text("and remembered")
+                    Text("words and remembered ")
                     CircledNumberView(number: "56")
-                    Text("words. You beat ")
-                    CircledNumberView(number:"54350")
-                    Text(" people. ")
+                    Text("words. ")
+                }
+                HStack(spacing: 4) {
+                    Text("You beat ")
+                    CircledNumberView(number: "54350")
+                    Text("people")
                 }
                 HStack(spacing: 4) {
                     Text("Great Job! Ready to continue?")
-                        .padding(6)
                 }
             }
             .font(.subheadline)
@@ -183,9 +184,9 @@ private struct ModuleCardView: View {
         .padding()
         .frame(width: 200, height: 260)
         .background(theme.secondary.opacity(0.1))
-        .cornerRadius(20)
+        .cornerRadius(12)
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: 12)
                 .stroke(theme.secondary.opacity(0.3), lineWidth: 1)
         )
     }

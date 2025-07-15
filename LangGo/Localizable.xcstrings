@@ -4,9 +4,6 @@
     "" : {
 
     },
-    " people. " : {
-
-    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
@@ -43,97 +40,7 @@
     "Adding..." : {
 
     },
-    "AI" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ai"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "일체 포함"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ai"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "人工智能"
-          }
-        }
-      }
-    },
-    "AI Assistant" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AIアシスタント"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI 보조"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Trợ lý AI"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI助手"
-          }
-        }
-      }
-    },
     "AI Translation" : {
-
-    },
-    "AI View" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AIビュー"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI보기"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Xem ai"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI视图"
-          }
-        }
-      }
-    },
-    "and remembered" : {
 
     },
     "Back" : {
@@ -484,35 +391,6 @@
         }
       }
     },
-    "Flashcards" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "フラッシュカード"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "플래시 카드"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flashcards"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "抽认卡"
-          }
-        }
-      }
-    },
     "Great Job! Ready to continue?" : {
 
     },
@@ -552,64 +430,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "语言"
-          }
-        }
-      }
-    },
-    "Learn" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "学ぶ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "배우다"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Học hỏi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "学习"
-          }
-        }
-      }
-    },
-    "Learn English" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "英語を学ぶ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "영어를 배우십시오"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Học tiếng Anh"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "学习英语"
           }
         }
       }
@@ -820,6 +640,9 @@
           }
         }
       }
+    },
+    "people" : {
+
     },
     "Profile" : {
       "localizations" : {
@@ -1292,35 +1115,6 @@
     "Translation (%@)" : {
 
     },
-    "Translation View" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "翻訳ビュー"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "번역보기"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chế độ xem dịch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "翻译视图"
-          }
-        }
-      }
-    },
     "Unit 1 Introductions" : {
       "localizations" : {
         "ja" : {
@@ -1473,10 +1267,10 @@
     "Word saved successfully!" : {
 
     },
-    "words" : {
+    "words and remembered " : {
 
     },
-    "words. You beat " : {
+    "words. " : {
 
     },
     "Wrong" : {
@@ -1506,6 +1300,9 @@
           }
         }
       }
+    },
+    "You beat " : {
+
     },
     "Your Modules" : {
 
