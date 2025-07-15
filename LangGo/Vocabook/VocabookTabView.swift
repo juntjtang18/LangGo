@@ -16,7 +16,7 @@ struct VocabookTabView: View {
         NavigationStack {
             if let flashcardViewModel = flashcardViewModel, let vocabookViewModel = vocabookViewModel {
                 // The new view is composed in a separate file for clarity
-                MyVocabookView(
+                VocabookView(
                     flashcardViewModel: flashcardViewModel,
                     vocabookViewModel: vocabookViewModel
                 )

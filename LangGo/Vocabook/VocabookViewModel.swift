@@ -46,6 +46,7 @@ class VocabookViewModel {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
     private let modelContext: ModelContext
     private let strapiService: StrapiService
+    var loadCycle: Int = 0
 
     var vocabook: Vocabook?
     var isLoadingVocabooks = false
@@ -113,6 +114,7 @@ class VocabookViewModel {
             // 4. Save changes and update the view model's vocabook property
             try modelContext.save()
             self.vocabook = book
+            self.loadCycle += 1
 
         } catch {
             logger.error("loadVocabookPages failed: \(error.localizedDescription)")

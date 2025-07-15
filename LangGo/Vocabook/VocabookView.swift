@@ -1,7 +1,8 @@
 // LangGo/MyVocabookView.swift
 import SwiftUI
+import os
 
-struct MyVocabookView: View {
+struct VocabookView: View {
     let flashcardViewModel: FlashcardViewModel
     let vocabookViewModel: VocabookViewModel
     
@@ -167,29 +168,49 @@ private struct VocabookActionButton: View {
 }
 
 private struct PagesListView: View {
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "PagesListView")
     let viewModel: VocabookViewModel
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if viewModel.isLoadingVocabooks {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else if let vocabook = viewModel.vocabook, let pages = vocabook.vocapages, !pages.isEmpty {
-                    let sortedPages = pages.sorted(by: { $0.order < $1.order })
-                    ForEach(sortedPages) { page in
-                        VocabookPageRow(vocapage: page, allVocapageIds: sortedPages.map { $0.id })
+        // The ScrollViewReader provides the 'proxy' to its content.
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if viewModel.isLoadingVocabooks {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else if let vocabook = viewModel.vocabook, let pages = vocabook.vocapages, !pages.isEmpty {
+                        let sortedPages = pages.sorted(by: { $0.order < $1.order })
+                        ForEach(sortedPages) { page in
+                            VocabookPageRow(vocapage: page, allVocapageIds: sortedPages.map { $0.id })
+                                .id(page.id) // Ensure each row has an ID
+                        }
+                    } else {
+                        Text("No vocabulary pages found. Start learning to create them!")
+                            .style(.caption)
+                            .multilineTextAlignment(.center)
+                            .padding()
+                            .frame(maxWidth: .infinity)
                     }
-                } else {
-                    Text("No vocabulary pages found. Start learning to create them!")
-                        .style(.caption)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                        .frame(maxWidth: .infinity)
+                }
+                .padding()
+            }
+            // THIS IS THE CORRECT PLACEMENT
+            // The .onChange modifier is now on the ScrollView, inside the reader's scope.
+            .onChange(of: viewModel.loadCycle) {
+                // Use a tiny delay to ensure views are rendered before scrolling
+                logger.debug("PageListView::onChange()")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
+                    if lastViewedID != 0 {
+                        withAnimation {
+                            // The 'proxy' is now correctly found and used here
+                            proxy.scrollTo(lastViewedID, anchor: .center)
+                        }
+                    }
                 }
             }
-            .padding()
         }
     }
 }
@@ -239,6 +260,11 @@ private struct VocabookPageRow: View {
             .cornerRadius(12)
         }
         .buttonStyle(PlainButtonStyle())
+        // ADD THIS GESTURE MODIFIER
+        .simultaneousGesture(TapGesture().onEnded {
+            UserDefaults.standard.set(vocapage.id, forKey: "lastViewedVocapageID")
+        })
+
     }
 }
 

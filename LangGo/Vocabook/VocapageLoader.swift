@@ -25,7 +25,7 @@ class VocapageLoader: ObservableObject {
         if loadingStatus[vocapageId] == true || vocapages[vocapageId] != nil {
             return
         }
-
+        logger.debug("VocapageLoder::loadPage(\(vocapageId))")
         loadingStatus[vocapageId] = true
         errorMessages[vocapageId] = nil
 
