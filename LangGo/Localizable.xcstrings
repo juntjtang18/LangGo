@@ -4,6 +4,9 @@
     "" : {
 
     },
+    " people. " : {
+
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
@@ -129,6 +132,9 @@
           }
         }
       }
+    },
+    "and remembered" : {
+
     },
     "Back" : {
       "localizations" : {
@@ -507,7 +513,10 @@
         }
       }
     },
-    "Hi, %@! Ready to learn?" : {
+    "Great Job! Ready to continue?" : {
+
+    },
+    "Hi, %@! " : {
 
     },
     "Home" : {
@@ -1464,7 +1473,10 @@
     "Word saved successfully!" : {
 
     },
-    "words and remembered 56 words. You beat 54350 people, Great Job!" : {
+    "words" : {
+
+    },
+    "words. You beat " : {
 
     },
     "Wrong" : {

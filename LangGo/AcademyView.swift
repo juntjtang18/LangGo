@@ -75,7 +75,7 @@ private struct GreetingAndStatsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Hi, \(username)! Ready to learn?")
+            Text("Hi, \(username)! ")
                 .font(.headline)
                 .foregroundColor(theme.text)
             
@@ -85,8 +85,19 @@ private struct GreetingAndStatsView: View {
                     CircledNumberView(number: "5")
                     Text("lessons, reviewed")
                     CircledNumberView(number: "123")
+                    Text("words")
                 }
-                Text("words and remembered 56 words. You beat 54350 people, Great Job!")
+                HStack(spacing: 4) {
+                    Text("and remembered")
+                    CircledNumberView(number: "56")
+                    Text("words. You beat ")
+                    CircledNumberView(number:"54350")
+                    Text(" people. ")
+                }
+                HStack(spacing: 4) {
+                    Text("Great Job! Ready to continue?")
+                        .padding(6)
+                }
             }
             .font(.subheadline)
             .foregroundColor(theme.text.opacity(0.8))
