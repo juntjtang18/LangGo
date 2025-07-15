@@ -23,6 +23,11 @@ class FlashcardViewModel {
     var monthlyCardCount: Int = 0
     var hardToRememberCount: Int = 0
 
+    var inProgressCount: Int {
+        let count = totalCardCount - rememberedCount - newCardCount
+        return max(0, count)
+    }
+
     init(modelContext: ModelContext, strapiService: StrapiService) {
         self.modelContext = modelContext
         self.strapiService = strapiService

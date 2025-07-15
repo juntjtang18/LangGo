@@ -5,19 +5,47 @@ import SwiftData
 // MARK: - Learn Tab Container
 struct LearnTabView: View {
     @Binding var isSideMenuShowing: Bool
-    @EnvironmentObject var languageSettings: LanguageSettings
+    @Binding var selectedTab: Int // Accepts binding to control the tab
+    
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var appEnvironment: AppEnvironment
 
+    // View models needed for the destination view are initialized here
+    @State private var flashcardViewModel: FlashcardViewModel?
+    @State private var learnViewModel: LearnViewModel?
+
     var body: some View {
         NavigationStack {
-            LearnView(modelContext: modelContext, strapiService: appEnvironment.strapiService)
-                .navigationTitle("Learn English")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) }
+            if let flashcardViewModel = flashcardViewModel, let learnViewModel = learnViewModel {
+                // Pass the view models and the tab selection binding to the AcademyView
+                AcademyView(
+                    flashcardViewModel: flashcardViewModel,
+                    learnViewModel: learnViewModel,
+                    selectedTab: $selectedTab
+                )
+            } else {
+                ProgressView()
+                    .onAppear {
+                        // Initialize view models on appear
+                        if flashcardViewModel == nil {
+                            flashcardViewModel = FlashcardViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                        }
+                        if learnViewModel == nil {
+                            learnViewModel = LearnViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                        }
+                    }
+            }
         }
+        .navigationTitle("Home") // Title is set on the container
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) }
     }
 }
+
+
+// The old LearnView and its components are no longer directly used in the tab
+// but are kept to prevent breaking other parts of the app.
+// They can be safely removed in a future refactor.
 
 // MARK: - Primary Learn Screen UI
 struct LearnView: View {

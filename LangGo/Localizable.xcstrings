@@ -199,6 +199,9 @@
     "Close" : {
 
     },
+    "Complete some lessons or add new words to get cards for your quiz." : {
+
+    },
     "Confirm New Password" : {
       "localizations" : {
         "ja" : {
@@ -476,6 +479,7 @@
       }
     },
     "Flashcards" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -503,7 +507,16 @@
         }
       }
     },
+    "Hi, %@! Ready to learn?" : {
+
+    },
+    "Home" : {
+
+    },
     "Input Text (%@)" : {
+
+    },
+    "LangGo Academy" : {
 
     },
     "Language" : {
@@ -535,6 +548,7 @@
       }
     },
     "Learn" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -563,6 +577,7 @@
       }
     },
     "Learn English" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -618,6 +633,9 @@
         }
       }
     },
+    "lessons, reviewed" : {
+
+    },
     "Loading cards..." : {
 
     },
@@ -648,6 +666,9 @@
           }
         }
       }
+    },
+    "My Vocabulary Book" : {
+
     },
     "My Vocabulary Notebook" : {
 
@@ -681,6 +702,9 @@
       }
     },
     "No cards available for reading." : {
+
+    },
+    "No Cards for Quiz" : {
 
     },
     "No cards to review." : {
@@ -718,6 +742,9 @@
 
     },
     "No vocabooks found." : {
+
+    },
+    "No vocabulary pages found. Start learning to create them!" : {
 
     },
     "Notebook Settings" : {
@@ -870,6 +897,12 @@
       }
     },
     "Read Flashcards" : {
+
+    },
+    "Reading Session" : {
+
+    },
+    "Recently, you learned" : {
 
     },
     "REFRESH mode" : {
@@ -1079,6 +1112,9 @@
           }
         }
       }
+    },
+    "Start" : {
+
     },
     "Start Reading" : {
 
@@ -1388,6 +1424,9 @@
         }
       }
     },
+    "Vocabulary Book" : {
+
+    },
     "Vocabulary Notebook" : {
 
     },
@@ -1425,6 +1464,9 @@
     "Word saved successfully!" : {
 
     },
+    "words and remembered 56 words. You beat 54350 people, Great Job!" : {
+
+    },
     "Wrong" : {
       "localizations" : {
         "ja" : {
@@ -1452,6 +1494,12 @@
           }
         }
       }
+    },
+    "Your Modules" : {
+
+    },
+    "Your personal language learning campus." : {
+
     }
   },
   "version" : "1.0"

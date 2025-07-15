@@ -6,6 +6,9 @@ import KeychainAccess
 struct MainView: View {
     @Binding var authState: AuthState
     
+    // State to control the active tab
+    @State private var selectedTab = 0
+    
     @State private var isSideMenuShowing = false
     @State private var isShowingProfileSheet = false
     @State private var isShowingSettingSheet = false
@@ -26,22 +29,28 @@ struct MainView: View {
 
     var body: some View {
         ZStack {
-            // Main TabView for the app's primary sections
-            TabView {
-                LearnTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Learn", systemImage: "leaf.fill") }
+            // The TabView selection is now bound to our state variable
+            TabView(selection: $selectedTab) {
+                // The Home tab receives a binding to control the selected tab
+                LearnTabView(isSideMenuShowing: $isSideMenuShowing, selectedTab: $selectedTab)
+                    .tabItem { Label("Home", systemImage: "house.fill") }
+                    .tag(0)
 
-                FlashcardTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Flashcards", systemImage: "square.stack.3d.up.fill") }
+                VocabookTabView(isSideMenuShowing: $isSideMenuShowing)
+                    .tabItem { Label("Vocabulary Book", systemImage: "square.stack.3d.up.fill") }
+                    .tag(1)
 
                 ReadFlashcardTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Read Flashcards", systemImage: "speaker.wave.2.fill") }
+                    .tag(2)
                 
                 StoriesTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Stories", systemImage: "book.fill") }
+                    .tag(3)
 
                 TranslationTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Translation", systemImage: "captions.bubble.fill") }
+                    .tag(4)
             }
             .tint(Color.purple)
             

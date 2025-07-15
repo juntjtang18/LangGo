@@ -15,107 +15,119 @@ struct ReadFlashcardView: View {
     }
 
     var body: some View {
-        VStack {
-            if viewModel.isLoading {
-                ProgressView("Loading cards...")
-            } else if viewModel.flashcards.isEmpty {
-                Text("No cards available for reading.")
-                    .foregroundColor(.secondary)
-            } else {
-                VStack {
-                    // Progress View
-                    ProgressView(value: Double(viewModel.currentCardIndex + 1), total: Double(viewModel.flashcards.count)) {
-                        Text("Card \(viewModel.currentCardIndex + 1) of \(viewModel.flashcards.count)")
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 20)
-
-                    // Card display area
-                    ZStack {
-                        // This creates the "deck" effect by showing the next card slightly behind.
-                        if let nextCard = viewModel.flashcards[safe: viewModel.currentCardIndex + 1] {
-                            CardReadingView(card: nextCard, readingState: .idle)
-                                .scaleEffect(0.95)
-                                .offset(y: -20)
-                        } else if !viewModel.flashcards.isEmpty {
-                            // Show the first card behind the last card to complete the loop illusion
-                             CardReadingView(card: viewModel.flashcards[0], readingState: .idle)
-                                .scaleEffect(0.95)
-                                .offset(y: -20)
+        NavigationStack {
+            VStack {
+                if viewModel.isLoading {
+                    ProgressView("Loading cards...")
+                } else if viewModel.flashcards.isEmpty {
+                    Text("No cards available for reading.")
+                        .foregroundColor(.secondary)
+                } else {
+                    VStack {
+                        // Progress View
+                        ProgressView(value: Double(viewModel.currentCardIndex + 1), total: Double(viewModel.flashcards.count)) {
+                            Text("Card \(viewModel.currentCardIndex + 1) of \(viewModel.flashcards.count)")
                         }
+                        .padding(.horizontal)
+                        .padding(.bottom, 20)
 
-                        if let currentCard = viewModel.flashcards[safe: viewModel.currentCardIndex] {
-                            CardReadingView(card: currentCard, readingState: viewModel.readingState)
-                                .id(viewModel.currentCardIndex) // Use index to ensure view redraws
-                                .offset(y: cardOffset)
-                                .opacity(cardOpacity)
-                                .gesture(
-                                    DragGesture()
-                                        .onChanged { value in
-                                            if value.translation.height < 0 {
-                                                cardOffset = value.translation.height
-                                            }
-                                        }
-                                        .onEnded { value in
-                                            if value.translation.height < -100 {
-                                                // Swipe up to skip card
-                                                viewModel.skipToNextCard()
-                                            } else {
-                                                withAnimation(.spring) {
-                                                    cardOffset = 0
+                        // Card display area
+                        ZStack {
+                            // This creates the "deck" effect by showing the next card slightly behind.
+                            if let nextCard = viewModel.flashcards[safe: viewModel.currentCardIndex + 1] {
+                                CardReadingView(card: nextCard, readingState: .idle)
+                                    .scaleEffect(0.95)
+                                    .offset(y: -20)
+                            } else if !viewModel.flashcards.isEmpty {
+                                // Show the first card behind the last card to complete the loop illusion
+                                 CardReadingView(card: viewModel.flashcards[0], readingState: .idle)
+                                    .scaleEffect(0.95)
+                                    .offset(y: -20)
+                            }
+
+                            if let currentCard = viewModel.flashcards[safe: viewModel.currentCardIndex] {
+                                CardReadingView(card: currentCard, readingState: viewModel.readingState)
+                                    .id(viewModel.currentCardIndex) // Use index to ensure view redraws
+                                    .offset(y: cardOffset)
+                                    .opacity(cardOpacity)
+                                    .gesture(
+                                        DragGesture()
+                                            .onChanged { value in
+                                                if value.translation.height < 0 {
+                                                    cardOffset = value.translation.height
                                                 }
                                             }
-                                        }
-                                )
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    Spacer()
-
-                    // Control Buttons - This logic correctly swaps between Start and Stop.
-                    HStack {
-                        Button(action: {
-                            if viewModel.isReading {
-                                viewModel.stopReading()
-                            } else {
-                                viewModel.startReadingSession()
+                                            .onEnded { value in
+                                                if value.translation.height < -100 {
+                                                    // Swipe up to skip card
+                                                    viewModel.skipToNextCard()
+                                                } else {
+                                                    withAnimation(.spring) {
+                                                        cardOffset = 0
+                                                    }
+                                                }
+                                            }
+                                    )
                             }
-                        }) {
-                            Text(viewModel.isReading ? "Stop" : "Start Reading")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(viewModel.isReading ? Color.gray : Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
                         }
+                        .padding(.horizontal)
+                        
+                        Spacer()
+
+                        // Control Buttons - This logic correctly swaps between Start and Stop.
+                        HStack {
+                            Button(action: {
+                                if viewModel.isReading {
+                                    viewModel.stopReading()
+                                } else {
+                                    viewModel.startReadingSession()
+                                }
+                            }) {
+                                Text(viewModel.isReading ? "Stop" : "Start Reading")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(viewModel.isReading ? Color.gray : Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                            }
+                        }
+                        .padding()
                     }
-                    .padding()
                 }
             }
-        }
-        .onAppear {
-            if viewModel.flashcards.isEmpty {
-                Task {
-                    await viewModel.fetchFlashcards()
+            .navigationTitle("Reading Session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Back") {
+                        viewModel.stopReading()
+                        dismiss()
+                    }
                 }
             }
-        }
-        .onChange(of: viewModel.currentCardIndex) { _, _ in
-            // Animate card sliding up and away
-            cardOffset = 0
-            cardOpacity = 1
-            withAnimation(.easeInOut(duration: 0.3)) {
-                cardOffset = -UIScreen.main.bounds.height
-                cardOpacity = 0
+            .onAppear {
+                if viewModel.flashcards.isEmpty {
+                    Task {
+                        await viewModel.fetchFlashcards()
+                    }
+                }
             }
-            
-            // Reset for the new card to slide in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            .onChange(of: viewModel.currentCardIndex) { _, _ in
+                // Animate card sliding up and away
                 cardOffset = 0
                 cardOpacity = 1
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    cardOffset = -UIScreen.main.bounds.height
+                    cardOpacity = 0
+                }
+                
+                // Reset for the new card to slide in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    cardOffset = 0
+                    cardOpacity = 1
+                }
             }
         }
     }
