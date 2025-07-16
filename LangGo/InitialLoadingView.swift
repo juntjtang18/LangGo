@@ -36,6 +36,10 @@ struct InitialLoadingView: View {
                 UserDefaults.standard.set(user.username, forKey: "username")
                 UserDefaults.standard.set(user.email, forKey: "email")
                 UserDefaults.standard.set(user.id, forKey: "userId") // Ensure user ID is also saved
+                
+                // Load critical app settings after validation
+                await appEnvironment.reviewSettingsManager.loadSettings(strapiService: appEnvironment.strapiService)
+                
                 authState = .loggedIn
                 logger.info("JWT validated. User \(user.username, privacy: .public) logged in.")
                 

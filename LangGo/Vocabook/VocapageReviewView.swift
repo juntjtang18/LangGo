@@ -1,7 +1,10 @@
 import SwiftUI
 
-struct FlashcardReviewView: View {
+struct VocapageReviewView: View {
     @Environment(\.dismiss) var dismiss
+    
+    // It takes the cards directly, and the viewModel for the submission logic.
+    let cardsToReview: [Flashcard]
     let viewModel: FlashcardViewModel
     
     @State private var currentIndex = 0
@@ -10,16 +13,16 @@ struct FlashcardReviewView: View {
     var body: some View {
         NavigationStack {
             VStack {
-                if viewModel.reviewCards.isEmpty {
+                if cardsToReview.isEmpty {
                     Spacer()
-                    Text("No cards to review.")
+                    Text("No cards to review on this page.")
                         .font(.title)
                         .foregroundColor(.secondary)
                     Spacer()
                 } else {
                     // Progress indicators
                     VStack {
-                        ProgressView(value: Double(currentIndex + 1), total: Double(viewModel.reviewCards.count)) {
+                        ProgressView(value: Double(currentIndex + 1), total: Double(cardsToReview.count)) {
                             Text("Progress")
                         }
                         .progressViewStyle(.linear)
@@ -34,19 +37,13 @@ struct FlashcardReviewView: View {
                     Spacer()
 
                     // The Flippable Card View
-                    if let card = viewModel.reviewCards[safe: currentIndex] {
+                    if let card = cardsToReview[safe: currentIndex] {
                         
                         // Display Register
                         if let register = card.register, !register.isEmpty, register != "Neutral" {
                             HStack {
                                 Text(register)
-                                    .font(.footnote)
-                                    .fontWeight(.semibold)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.gray.opacity(0.2))
-                                    .foregroundColor(.gray)
-                                    .cornerRadius(8)
+                                    .style(.registerTag)
                                 Spacer()
                             }
                             .padding(.horizontal)
@@ -71,30 +68,18 @@ struct FlashcardReviewView: View {
                     HStack(spacing: 20) {
                         Button(action: { markCard(.wrong) }) {
                             Text("Wrong")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.red.opacity(0.8))
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
+                                .style(.wrongButton)
                         }
                         
                         Button(action: { markCard(.correct) }) {
                             Text("Correct")
-                                 .font(.title2)
-                                 .fontWeight(.bold)
-                                 .frame(maxWidth: .infinity)
-                                 .padding()
-                                 .background(Color.green.opacity(0.8))
-                                 .foregroundColor(.white)
-                                 .cornerRadius(12)
+                                .style(.correctButton)
                         }
                     }
                     .padding()
                 }
             }
-            .navigationTitle("Review Session")
+            .navigationTitle("Page Review")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -114,22 +99,20 @@ struct FlashcardReviewView: View {
         formatter.locale = Locale.current
         // Use a localized format string for "X of Y"
         let format = NSLocalizedString("%lld of %lld", comment: "Progress count format (e.g., 1 of 10)")
-        return String(format: format, currentIndex + 1, viewModel.reviewCards.count)
+        return String(format: format, currentIndex + 1, cardsToReview.count)
     }
     
-    // REVISED: This function now calls the new unified method in the view model.
     private func markCard(_ answer: ReviewResult) {
-        guard let currentCard = viewModel.reviewCards[safe: currentIndex] else { return }
+        guard let currentCard = cardsToReview[safe: currentIndex] else { return }
         
-        // This single line now triggers the network call to the server.
+        // Use the viewModel's method to handle the submission logic
         viewModel.markReview(for: currentCard, result: answer)
         
-        // Advance to the next card or end the session
         goToNextCard()
     }
     
     private func goToNextCard() {
-        if currentIndex < viewModel.reviewCards.count - 1 {
+        if currentIndex < cardsToReview.count - 1 {
             // Use a slight delay to allow the user to see the result before the card flips
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 isFlipped = false // Ensure next card starts on the front
@@ -142,7 +125,7 @@ struct FlashcardReviewView: View {
     }
 }
 
-// MARK: - Subviews (No changes needed here)
+// MARK: - Subviews
 
 private struct FlippableCardView: View {
     let frontContent: String

@@ -7,6 +7,7 @@ import KeychainAccess
 @MainActor
 class AppEnvironment: ObservableObject {
     let strapiService: StrapiService
+    let reviewSettingsManager = ReviewSettingsManager()
 
     init(modelContainer: ModelContainer) {
         self.strapiService = StrapiService(modelContext: modelContainer.mainContext)
@@ -53,5 +54,6 @@ struct LangGoApp: App {
         .modelContainer(modelContainer) // Use the container created in the initializer.
         .environmentObject(languageSettings)
         .environmentObject(appEnvironment) // 4. Inject the AppEnvironment into the SwiftUI Environment.
+        .environmentObject(appEnvironment.reviewSettingsManager) // Inject the new manager
     }
 }

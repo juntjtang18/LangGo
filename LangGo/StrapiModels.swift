@@ -36,6 +36,11 @@ struct FlashcardAttributes: Codable {
 }
 
 // MARK: - NEW: ReviewTire Models
+struct StrapiReviewTire: Codable {
+    let id: Int
+    let attributes: ReviewTireAttributes
+}
+
 struct ReviewTire: Codable {
     let data: StrapiData<ReviewTireAttributes>?
 }

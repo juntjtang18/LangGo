@@ -18,10 +18,15 @@ struct VocapageHostView: View {
     let allVocapageIds: [Int]
     @State private var currentPageIndex: Int
 
-    init(allVocapageIds: [Int], selectedVocapageId: Int, modelContext: ModelContext, strapiService: StrapiService) {
+    // New properties to handle global actions
+    let flashcardViewModel: FlashcardViewModel
+    @State private var isShowingReviewView: Bool = false
+
+    init(allVocapageIds: [Int], selectedVocapageId: Int, modelContext: ModelContext, strapiService: StrapiService, flashcardViewModel: FlashcardViewModel) {
         self.allVocapageIds = allVocapageIds
         _currentPageIndex = State(initialValue: allVocapageIds.firstIndex(of: selectedVocapageId) ?? 0)
         _loader = StateObject(wrappedValue: VocapageLoader(modelContext: modelContext, strapiService: strapiService))
+        self.flashcardViewModel = flashcardViewModel
     }
 
     private var currentVocapage: Vocapage? {
@@ -53,7 +58,8 @@ struct VocapageHostView: View {
                 isShowingExamView: $isShowingExamView,
                 sortedFlashcards: sortedFlashcardsForCurrentPage,
                 speechManager: speechManager,
-                onDismiss: { dismiss() }
+                onDismiss: { dismiss() },
+                isShowingReviewView: $isShowingReviewView
             )
         }
         .toolbar(.hidden, for: .tabBar)
@@ -61,14 +67,84 @@ struct VocapageHostView: View {
             speechManager.stopReadingSession()
         }
         .sheet(isPresented: $isShowingExamView) {
-            if let vocapage = currentVocapage {
-                ExamView(flashcards: vocapage.flashcards ?? [], strapiService: loader.strapiService)
+            if let vocapage = currentVocapage, let flashcards = vocapage.flashcards, !flashcards.isEmpty {
+                ExamView(flashcards: flashcards, strapiService: loader.strapiService)
             }
+        }
+        .fullScreenCover(isPresented: $isShowingReviewView) {
+            VocapageReviewView(
+                cardsToReview: sortedFlashcardsForCurrentPage,
+                viewModel: flashcardViewModel
+            )
         }
     }
 }
 
 // MARK: - Extracted Subviews for Simplicity
+
+private struct VocapageActionButton: View {
+    let icon: String
+    let action: () -> Void
+    @Environment(\.theme) var theme: Theme
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(theme.accent)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+private struct VocapageActionButtons: View {
+    let sortedFlashcards: [Flashcard]
+    let showBaseText: Bool
+    @Binding var isShowingExamView: Bool
+    @Binding var isShowingReviewView: Bool
+    @ObservedObject var speechManager: SpeechManager
+    
+    @EnvironmentObject var languageSettings: LanguageSettings
+    @EnvironmentObject var appEnvironment: AppEnvironment
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VocapageActionButton(icon: "square.stack.3d.up.fill") {
+                isShowingReviewView = true
+            }
+
+            VocapageActionButton(icon: speechManager.isSpeaking ? "stop.circle.fill" : "headphones") {
+                if speechManager.isSpeaking {
+                    speechManager.stopReadingSession()
+                } else {
+                    Task {
+                        do {
+                            let settings = try await appEnvironment.strapiService.fetchVBSetting()
+                            if !sortedFlashcards.isEmpty {
+                                speechManager.startReadingSession(
+                                    flashcards: sortedFlashcards,
+                                    showBaseText: showBaseText,
+                                    languageSettings: languageSettings,
+                                    settings: settings.attributes
+                                )
+                            }
+                        } catch {
+                            print("Failed to fetch vocabook settings: \(error)")
+                        }
+                    }
+                }
+            }
+
+            VocapageActionButton(icon: "checkmark.circle.fill") {
+                isShowingExamView = true
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 8)
+    }
+}
 
 private struct VocapagePagingView: View {
     @Binding var currentPageIndex: Int
@@ -106,6 +182,7 @@ private struct VocapageToolbar: ToolbarContent {
     let sortedFlashcards: [Flashcard]
     @ObservedObject var speechManager: SpeechManager
     var onDismiss: () -> Void
+    @Binding var isShowingReviewView: Bool
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
@@ -122,10 +199,11 @@ private struct VocapageToolbar: ToolbarContent {
             }
         }
         ToolbarItem(placement: .bottomBar) {
-            VocapageBottomBarView(
+            VocapageActionButtons(
                 sortedFlashcards: sortedFlashcards,
                 showBaseText: showBaseText,
                 isShowingExamView: $isShowingExamView,
+                isShowingReviewView: $isShowingReviewView,
                 speechManager: speechManager
             )
         }
@@ -259,65 +337,5 @@ private struct VocapageContentListView: View {
                 }
             }
         }
-    }
-}
-
-private struct VocapageBottomBarView: View {
-    let sortedFlashcards: [Flashcard]
-    let showBaseText: Bool
-    @Binding var isShowingExamView: Bool
-    @ObservedObject var speechManager: SpeechManager
-    @EnvironmentObject var languageSettings: LanguageSettings
-    @EnvironmentObject var appEnvironment: AppEnvironment
-
-    var body: some View {
-        HStack {
-            Spacer()
-            
-            Button(action: {
-                if speechManager.isSpeaking {
-                    speechManager.stopReadingSession()
-                } else {
-                    Task {
-                        do {
-                            let settings = try await appEnvironment.strapiService.fetchVBSetting()
-                            if !sortedFlashcards.isEmpty {
-                                speechManager.startReadingSession(
-                                    flashcards: sortedFlashcards,
-                                    showBaseText: showBaseText,
-                                    languageSettings: languageSettings,
-                                    settings: settings.attributes
-                                )
-                            }
-                        } catch {
-                            print("Failed to fetch vocabook settings: \(error)")
-                        }
-                    }
-                }
-            }) {
-                Image(systemName: speechManager.isSpeaking ? "stop.fill" : "play.fill")
-                    .font(.title)
-            }
-            .tint(.blue)
-            .disabled(sortedFlashcards.isEmpty)
-            
-            Spacer()
-            
-            Rectangle()
-                .frame(width: 50, height: 50)
-                .hidden()
-            
-            Spacer()
-            
-            Button(action: { isShowingExamView = true }) {
-                Image(systemName: "graduationcap.fill")
-                    .font(.title)
-            }
-            .tint(.blue)
-            .disabled(sortedFlashcards.isEmpty)
-            
-            Spacer()
-        }
-        .padding()
     }
 }

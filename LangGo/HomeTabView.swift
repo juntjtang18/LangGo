@@ -68,6 +68,7 @@ struct ProgressCircleView: View {
 // MARK: - Vocabulary Notebook Subview
 struct VocabularyNotebookView: View {
     @Bindable var viewModel: VocabookViewModel
+    let flashcardViewModel: FlashcardViewModel
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -84,7 +85,7 @@ struct VocabularyNotebookView: View {
             
             VStack(spacing: 8) {
                 if let vocabook = viewModel.vocabook, !viewModel.isLoadingVocabooks {
-                    VocabookSectionView(vocabook: vocabook, viewModel: viewModel)
+                    VocabookSectionView(vocabook: vocabook, viewModel: viewModel, flashcardViewModel: flashcardViewModel)
                 } else if !viewModel.isLoadingVocabooks {
                     Text("No vocabooks found.")
                         .foregroundColor(.secondary)
@@ -101,6 +102,7 @@ struct VocabularyNotebookView: View {
 struct VocabookSectionView: View {
     let vocabook: Vocabook
     @Bindable var viewModel: VocabookViewModel
+    let flashcardViewModel: FlashcardViewModel
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -126,7 +128,8 @@ struct VocabookSectionView: View {
                     ForEach(sortedPages) { vocapage in
                         VocapageRowView(
                             vocapage: vocapage,
-                            allVocapageIds: sortedPages.map { $0.id }
+                            allVocapageIds: sortedPages.map { $0.id },
+                            flashcardViewModel: flashcardViewModel
                         )
                     }
                 } else {
@@ -150,13 +153,15 @@ struct VocapageRowView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     let vocapage: Vocapage
     let allVocapageIds: [Int]
+    let flashcardViewModel: FlashcardViewModel
 
     var body: some View {
         NavigationLink(destination: VocapageHostView(
             allVocapageIds: allVocapageIds,
             selectedVocapageId: vocapage.id,
             modelContext: modelContext,
-            strapiService: appEnvironment.strapiService
+            strapiService: appEnvironment.strapiService,
+            flashcardViewModel: flashcardViewModel
         )) {
             HStack(spacing: 15) {
                 Text("Page \(vocapage.order)")

@@ -59,6 +59,13 @@ class StrapiService {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else { throw URLError(.badURL) }
         return try await NetworkManager.shared.fetchSingle(from: url)
     }
+    
+    func fetchReviewTireSettings() async throws -> [StrapiReviewTire] {
+        logger.debug("StrapiService: Fetching review tire settings.")
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/review-tires") else { throw URLError(.badURL) }
+        let response: StrapiListResponse<StrapiReviewTire> = try await NetworkManager.shared.fetchDirect(from: url)
+        return response.data ?? []
+    }
 
     /// Fetches a single page of review flashcards.
     @MainActor

@@ -33,7 +33,7 @@ struct LearnView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 25) {
                 ResumeLearningView()
-                VocabularyNotebookView(viewModel: viewModel)
+                //VocabularyNotebookView(viewModel: viewModel)
                 
                 UnitListView(title: "Main Units", units: mainUnits)
                 

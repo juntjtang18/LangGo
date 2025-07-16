@@ -536,6 +536,9 @@
     "No Cards for Quiz" : {
 
     },
+    "No cards to review on this page." : {
+
+    },
     "No cards to review." : {
       "localizations" : {
         "ja" : {
@@ -608,6 +611,9 @@
       }
     },
     "Page %lld" : {
+
+    },
+    "Page Review" : {
 
     },
     "Part of Speech" : {

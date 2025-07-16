@@ -31,7 +31,7 @@ struct VocabookView: View {
             .padding(.horizontal)
 
             // This list view now handles its own scrolling
-            PagesListView(viewModel: vocabookViewModel)
+            PagesListView(viewModel: vocabookViewModel, flashcardViewModel: flashcardViewModel)
         }
         .padding(.top)
         .background(theme.background.ignoresSafeArea())
@@ -170,6 +170,7 @@ private struct VocabookActionButton: View {
 private struct PagesListView: View {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "PagesListView")
     let viewModel: VocabookViewModel
+    let flashcardViewModel: FlashcardViewModel
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
@@ -183,7 +184,7 @@ private struct PagesListView: View {
                     } else if let vocabook = viewModel.vocabook, let pages = vocabook.vocapages, !pages.isEmpty {
                         let sortedPages = pages.sorted(by: { $0.order < $1.order })
                         ForEach(sortedPages) { page in
-                            VocabookPageRow(vocapage: page, allVocapageIds: sortedPages.map { $0.id })
+                            VocabookPageRow(flashcardViewModel: flashcardViewModel, vocapage: page, allVocapageIds: sortedPages.map { $0.id })
                                 .id(page.id) // Ensure each row has an ID
                         }
                     } else {
@@ -215,13 +216,57 @@ private struct PagesListView: View {
     }
 }
 
+@MainActor
 private struct VocabookPageRow: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     @Environment(\.modelContext) private var modelContext
     @Environment(\.theme) var theme: Theme
+    @EnvironmentObject var reviewSettings: ReviewSettingsManager
     
+    let flashcardViewModel: FlashcardViewModel
     let vocapage: Vocapage
     let allVocapageIds: [Int]
+
+    private var weightedProgress: WeightedProgress {
+        guard let cards = vocapage.flashcards, !cards.isEmpty, !reviewSettings.settings.isEmpty else {
+            return WeightedProgress(progress: 0.0, isComplete: false)
+        }
+
+        let promotionBonus = 2.0
+        let masteryStreak = Double(reviewSettings.masteryStreak)
+        let numberOfPromotions = Double(reviewSettings.settings.count - 1)
+        let maxCardScore = masteryStreak + (numberOfPromotions * promotionBonus)
+        
+        guard maxCardScore > 0 else {
+            return WeightedProgress(progress: 0.0, isComplete: false)
+        }
+
+        let totalPossiblePoints = Double(cards.count) * maxCardScore
+        
+        let currentTotalPoints = cards.reduce(0.0) { total, card in
+            // --- THIS IS THE FIX ---
+            // If the card's tier is explicitly "remembered", it gets full points.
+            // This is the primary source of truth for mastery.
+            if card.reviewTire == "remembered" {
+                return total + maxCardScore
+            }
+
+            var cardScore = Double(card.correctStreak)
+            // Add bonus points for each tier achieved
+            for (tierName, tierSetting) in reviewSettings.settings where tierName != "new" {
+                if card.correctStreak >= tierSetting.min_streak {
+                    cardScore += Double(promotionBonus)
+                }
+            }
+            // The score for a single card cannot exceed the maximum possible score.
+            return total + min(cardScore, maxCardScore)
+        }
+        
+        let finalProgress = totalPossiblePoints > 0 ? currentTotalPoints / totalPossiblePoints : 0.0
+        // Ensure that floating point inaccuracies don't prevent completion
+        let isComplete = finalProgress >= 0.999
+        return WeightedProgress(progress: finalProgress, isComplete: isComplete)
+    }
 
     private func getRelativeDate(from date: Date?) -> String {
         guard let date = date else { return "Not reviewed yet" }
@@ -235,7 +280,8 @@ private struct VocabookPageRow: View {
             allVocapageIds: allVocapageIds,
             selectedVocapageId: vocapage.id,
             modelContext: modelContext,
-            strapiService: appEnvironment.strapiService
+            strapiService: appEnvironment.strapiService,
+            flashcardViewModel: flashcardViewModel
         )) {
             HStack(spacing: 15) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -246,12 +292,14 @@ private struct VocabookPageRow: View {
                         .style(.caption)
                 }
                 Spacer()
-                if vocapage.progress >= 1.0 {
+                
+                let progress = weightedProgress
+                if progress.isComplete {
                     Image(systemName: "medal.fill")
                         .font(.largeTitle)
-                        .foregroundColor(theme.accent)
+                        .foregroundColor(theme.progressComplete)
                 } else {
-                    PageProgressCircle(progress: vocapage.progress)
+                    PageProgressCircle(progress: progress.progress)
                         .frame(width: 44, height: 44)
                 }
             }
@@ -278,6 +326,13 @@ private struct PageProgressCircle: View {
         return formatter.string(from: NSNumber(value: progress)) ?? "0%"
     }
 
+    private var progressColor: Color {
+        if progress < 0.25 { return theme.progressLow }
+        if progress < 0.50 { return theme.progressMedium }
+        if progress < 1.0 { return theme.progressHigh }
+        return theme.progressComplete
+    }
+
     var body: some View {
         ZStack {
             Circle()
@@ -285,7 +340,7 @@ private struct PageProgressCircle: View {
             Circle()
                 .trim(from: 0.0, to: progress)
                 .stroke(style: StrokeStyle(lineWidth: 5.0, lineCap: .round))
-                .foregroundColor(theme.accent)
+                .foregroundColor(progressColor) // Use the tier-specific color
                 .rotationEffect(.degrees(-90))
                 .animation(.linear, value: progress)
             Text(progressString)

@@ -2,6 +2,7 @@
 import Foundation
 import SwiftData
 import os
+import SwiftUI
 
 // MARK: - SwiftData Models (Moved from separate files)
 @Model
@@ -15,6 +16,12 @@ final class Vocabook {
         self.id = id
         self.title = title
     }
+}
+
+// A new struct to hold the calculated weighted progress.
+struct WeightedProgress {
+    let progress: Double
+    let isComplete: Bool
 }
 
 @Model
@@ -36,6 +43,13 @@ final class Vocapage {
         guard let cards = flashcards, !cards.isEmpty else { return 0.0 }
         let rememberedCount = cards.filter { $0.isRemembered || $0.correctStreak >= 11 }.count
         return Double(rememberedCount) / Double(cards.count)
+    }
+    
+    // This property is now a placeholder; the real calculation happens in the View.
+    var weightedProgress: WeightedProgress {
+        // The actual calculation requires the settings manager, so we do it in the view.
+        // This just provides a default structure.
+        return WeightedProgress(progress: 0.0, isComplete: false)
     }
 }
 
