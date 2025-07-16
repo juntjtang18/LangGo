@@ -254,6 +254,7 @@ struct UserWordAttributes: Codable {
     let createdAt: String?
     let updatedAt: String?
     let locale: String?
+    let targetLocale: String?
     let examBase: [ExamOption]?
     let examTarget: [ExamOption]?
 
@@ -262,6 +263,7 @@ struct UserWordAttributes: Codable {
         case targetText = "target_text"
         case baseText = "base_text"
         case partOfSpeech = "part_of_speech"
+        case targetLocale = "target_locale"
         case examBase = "exam_base"
         case examTarget = "exam_target"
     }
