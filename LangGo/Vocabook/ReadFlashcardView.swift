@@ -2,16 +2,20 @@ import SwiftUI
 import SwiftData
 
 struct ReadFlashcardView: View {
-    @State private var viewModel: ReadFlashcardViewModel
+    @StateObject private var viewModel: ReadFlashcardViewModel
     @Environment(\.dismiss) var dismiss
-    
-    // Animation state for the card transition
+
     @State private var cardOffset: CGFloat = 0
     @State private var cardOpacity: Double = 1
+    @State private var viewMode: ViewMode = .card
+
+    enum ViewMode {
+        case card
+        case list
+    }
 
     init(modelContext: ModelContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
-        // The viewModel is now initialized with the necessary languageSettings and strapiService.
-        _viewModel = State(initialValue: ReadFlashcardViewModel(modelContext: modelContext, languageSettings: languageSettings, strapiService: strapiService))
+        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel(modelContext: modelContext, languageSettings: languageSettings, strapiService: strapiService))
     }
 
     var body: some View {
@@ -24,53 +28,57 @@ struct ReadFlashcardView: View {
                         .foregroundColor(.secondary)
                 } else {
                     VStack {
-                        // Progress View
-                        ProgressView(value: Double(viewModel.currentCardIndex + 1), total: Double(viewModel.flashcards.count)) {
-                            Text("Card \(viewModel.currentCardIndex + 1) of \(viewModel.flashcards.count)")
-                        }
-                        .padding(.horizontal)
-                        .padding(.bottom, 20)
-
-                        // Card display area
-                        ZStack {
-                            // This creates the "deck" effect by showing the next card slightly behind.
-                            if let nextCard = viewModel.flashcards[safe: viewModel.currentCardIndex + 1] {
-                                CardReadingView(card: nextCard, readingState: .idle)
-                                    .scaleEffect(0.95)
-                                    .offset(y: -20)
-                            } else if !viewModel.flashcards.isEmpty {
-                                // Show the first card behind the last card to complete the loop illusion
-                                 CardReadingView(card: viewModel.flashcards[0], readingState: .idle)
-                                    .scaleEffect(0.95)
-                                    .offset(y: -20)
+                        if viewMode == .card {
+                            // Progress View
+                            ProgressView(value: Double(viewModel.currentCardIndex + 1), total: Double(viewModel.flashcards.count)) {
+                                Text("Card \(viewModel.currentCardIndex + 1) of \(viewModel.flashcards.count)")
                             }
+                            .padding(.horizontal)
+                            .padding(.bottom, 20)
 
-                            if let currentCard = viewModel.flashcards[safe: viewModel.currentCardIndex] {
-                                CardReadingView(card: currentCard, readingState: viewModel.readingState)
-                                    .id(viewModel.currentCardIndex) // Use index to ensure view redraws
-                                    .offset(y: cardOffset)
-                                    .opacity(cardOpacity)
-                                    .gesture(
-                                        DragGesture()
-                                            .onChanged { value in
-                                                if value.translation.height < 0 {
-                                                    cardOffset = value.translation.height
-                                                }
-                                            }
-                                            .onEnded { value in
-                                                if value.translation.height < -100 {
-                                                    // Swipe up to skip card
-                                                    viewModel.skipToNextCard()
-                                                } else {
-                                                    withAnimation(.spring) {
-                                                        cardOffset = 0
+                            // Card display area
+                            ZStack {
+                                // This creates the "deck" effect by showing the next card slightly behind.
+                                if let nextCard = viewModel.flashcards[safe: viewModel.currentCardIndex + 1] {
+                                    CardReadingView(card: nextCard, readingState: .idle)
+                                        .scaleEffect(0.95)
+                                        .offset(y: -20)
+                                } else if !viewModel.flashcards.isEmpty {
+                                    // Show the first card behind the last card to complete the loop illusion
+                                     CardReadingView(card: viewModel.flashcards[0], readingState: .idle)
+                                        .scaleEffect(0.95)
+                                        .offset(y: -20)
+                                }
+
+                                if let currentCard = viewModel.flashcards[safe: viewModel.currentCardIndex] {
+                                    CardReadingView(card: currentCard, readingState: viewModel.readingState)
+                                        .id(viewModel.currentCardIndex) // Use index to ensure view redraws
+                                        .offset(y: cardOffset)
+                                        .opacity(cardOpacity)
+                                        .gesture(
+                                            DragGesture()
+                                                .onChanged { value in
+                                                    if value.translation.height < 0 {
+                                                        cardOffset = value.translation.height
                                                     }
                                                 }
-                                            }
-                                    )
+                                                .onEnded { value in
+                                                    if value.translation.height < -100 {
+                                                        // Swipe up to skip card
+                                                        viewModel.skipToNextCard()
+                                                    } else {
+                                                        withAnimation(.spring) {
+                                                            cardOffset = 0
+                                                        }
+                                                    }
+                                                }
+                                        )
+                                }
                             }
+                            .padding(.horizontal)
+                        } else {
+                            FlashcardListView(flashcards: viewModel.flashcards, currentCardIndex: $viewModel.currentCardIndex)
                         }
-                        .padding(.horizontal)
                         
                         Spacer()
 
@@ -106,6 +114,13 @@ struct ReadFlashcardView: View {
                         dismiss()
                     }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Picker("View Mode", selection: $viewMode) {
+                        Image(systemName: "square.on.square").tag(ViewMode.card)
+                        Image(systemName: "list.bullet").tag(ViewMode.list)
+                    }
+                    .pickerStyle(.segmented)
+                }
             }
             .onAppear {
                 if viewModel.flashcards.isEmpty {
@@ -114,7 +129,8 @@ struct ReadFlashcardView: View {
                     }
                 }
             }
-            .onChange(of: viewModel.currentCardIndex) { _, _ in
+            .onChange(of: viewModel.currentCardIndex) {
+                guard viewMode == .card else { return }
                 // Animate card sliding up and away
                 cardOffset = 0
                 cardOpacity = 1
@@ -132,6 +148,38 @@ struct ReadFlashcardView: View {
         }
     }
 }
+
+private struct FlashcardListView: View {
+    let flashcards: [Flashcard]
+    @Binding var currentCardIndex: Int
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            List(flashcards.indices, id: \.self) { index in
+                let card = flashcards[index]
+                HStack {
+                    Text(card.backContent)
+                        .font(.system(.title3, design: .serif))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Text(card.frontContent)
+                        .font(.system(.body, design: .serif))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .id(index)
+                .listRowBackground(currentCardIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
+            }
+            .listStyle(.plain)
+            .onChange(of: currentCardIndex) {
+                withAnimation {
+                    proxy.scrollTo(currentCardIndex, anchor: .center)
+                }
+            }
+        }
+    }
+}
+
 
 // A dedicated view for displaying the content of a single card during reading.
 private struct CardReadingView: View {

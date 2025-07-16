@@ -4,14 +4,13 @@ import SwiftData
 import AVFoundation
 import os
 
-@Observable
-class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
+class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     // MARK: - Public Properties
-    var flashcards: [Flashcard] = []
-    var currentCardIndex: Int = 0
-    var isReading = false
-    var isLoading = false
-    var readingState: ReadingState = .idle
+    @Published var flashcards: [Flashcard] = []
+    @Published var currentCardIndex: Int = 0
+    @Published var isReading = false
+    @Published var isLoading = false
+    @Published var readingState: ReadingState = .idle
     
     enum ReadingState {
         case idle, readingWord, readingBaseText, paused
@@ -77,7 +76,7 @@ class ReadFlashcardViewModel: NSObject, AVSpeechSynthesizerDelegate {
     }
     
     // MARK: - AVSpeechSynthesizerDelegate
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async { [self] in
             guard isReading else { return }
             
