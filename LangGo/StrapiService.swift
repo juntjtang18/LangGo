@@ -67,9 +67,9 @@ class StrapiService {
         return response.data ?? []
     }
 
-    /// Fetches a single page of review flashcards.
+    /// Fetches a single page of review flashcards from the `/api/review-flashcards` endpoint.
     @MainActor
-    func fetchReviewFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+    private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching review flashcards page \(page), size \(pageSize).")
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else {
             throw URLError(.badURL)
@@ -96,7 +96,7 @@ class StrapiService {
         return (syncedFlashcards, response.meta?.pagination)
     }
     
-    /// Fetches all available review flashcards by handling pagination internally.
+    /// Fetches all available flashcards due for review by handling pagination internally.
     @MainActor
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
         var allCards: [Flashcard] = []
@@ -104,10 +104,10 @@ class StrapiService {
         let pageSize = 100 // Use a larger page size for efficiency
         var hasMorePages = true
 
-        logger.debug("StrapiService: Fetching all pages of review flashcards.")
+        logger.debug("StrapiService: Fetching all pages of review flashcards from /api/review-flashcards.")
 
         while hasMorePages {
-            let (cards, pagination) = try await self.fetchReviewFlashcards(page: currentPage, pageSize: pageSize)
+            let (cards, pagination) = try await self.fetchReviewFlashcardsPage(page: currentPage, pageSize: pageSize)
             
             if !cards.isEmpty {
                 allCards.append(contentsOf: cards)
@@ -117,7 +117,6 @@ class StrapiService {
                 hasMorePages = pag.page < pag.pageCount
                 currentPage += 1
             } else {
-                // If pagination info is missing, assume we are done.
                 hasMorePages = false
             }
         }
@@ -144,7 +143,7 @@ class StrapiService {
     
     @MainActor
     func fetchFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
-        logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize).")
+        logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize) from /api/flashcards/mine.")
         guard let url = URL(string:
             "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate=content,review_tire")
         else {

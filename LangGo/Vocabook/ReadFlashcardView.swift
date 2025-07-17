@@ -8,10 +8,11 @@ struct ReadFlashcardView: View {
 
     @State private var cardOffset: CGFloat = 0
     @State private var cardOpacity: Double = 1
-    @State private var viewMode: ViewMode = .card
-    @State private var showBaseText = true
+    
+    @AppStorage("readViewMode") private var viewMode: ViewMode = .card
+    @AppStorage("readViewShowBaseText") private var showBaseText = true
 
-    enum ViewMode {
+    enum ViewMode: String, CaseIterable {
         case card
         case list
     }
@@ -64,15 +65,13 @@ struct ReadFlashcardView: View {
                 }
             }
             .onAppear {
-                if viewModel.flashcards.isEmpty {
-                    Task {
-                        await viewModel.fetchFlashcards()
-                    }
-                }
+                handleOnAppear()
+            }
+            .onDisappear {
+                saveSettings()
             }
             .onChange(of: viewModel.currentCardIndex) {
                 guard viewMode == .card else { return }
-                // Animate card sliding up and away
                 cardOffset = 0
                 cardOpacity = 1
                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -80,13 +79,40 @@ struct ReadFlashcardView: View {
                     cardOpacity = 0
                 }
                 
-                // Reset for the new card to slide in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     cardOffset = 0
                     cardOpacity = 1
                 }
             }
         }
+    }
+    
+    private func handleOnAppear() {
+        loadSettings()
+        if viewModel.flashcards.isEmpty {
+            Task {
+                await viewModel.fetchReviewFlashcards()
+                let lastIndex = UserDefaults.standard.integer(forKey: "lastReadCardIndex")
+                viewModel.setInitialCardIndex(lastIndex)
+            }
+        }
+    }
+    
+    private func loadSettings() {
+        let savedMode = ViewMode(rawValue: UserDefaults.standard.string(forKey: "readViewMode") ?? "card")
+        self.viewMode = savedMode ?? .card
+
+        if UserDefaults.standard.object(forKey: "readViewShowBaseText") != nil {
+            self.showBaseText = UserDefaults.standard.bool(forKey: "readViewShowBaseText")
+        } else {
+            self.showBaseText = true // Default
+        }
+    }
+
+    private func saveSettings() {
+        UserDefaults.standard.set(viewMode.rawValue, forKey: "readViewMode")
+        UserDefaults.standard.set(showBaseText, forKey: "readViewShowBaseText")
+        UserDefaults.standard.set(viewModel.currentCardIndex, forKey: "lastReadCardIndex")
     }
 }
 
@@ -155,7 +181,6 @@ private struct CardDisplayView: View {
 
     var body: some View {
         ZStack {
-            // Deck effect card (background)
             if let nextCard = viewModel.flashcards[safe: viewModel.currentCardIndex + 1] {
                 CardReadingView(card: nextCard, readingState: .idle, showBaseText: $showBaseText)
                     .scaleEffect(0.95)
@@ -166,7 +191,6 @@ private struct CardDisplayView: View {
                     .offset(y: -20)
             }
 
-            // Main card (foreground)
             if let currentCard = viewModel.flashcards[safe: viewModel.currentCardIndex] {
                 CardReadingView(card: currentCard, readingState: viewModel.readingState, showBaseText: $showBaseText)
                     .id(viewModel.currentCardIndex)

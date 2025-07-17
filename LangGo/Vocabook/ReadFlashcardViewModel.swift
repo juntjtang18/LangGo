@@ -39,15 +39,14 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
 
     // MARK: - Public Methods
     @MainActor
-    func fetchFlashcards() async {
+    func fetchReviewFlashcards() async {
         isLoading = true
         do {
-            // Use the injected StrapiService instance to get all review cards
-            let fetchedCards = try await strapiService.fetchAllReviewFlashcards()
-            self.flashcards = fetchedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
-            logger.info("Successfully loaded \(self.flashcards.count) cards for reading.")
+            self.flashcards = try await strapiService.fetchAllReviewFlashcards()
+            logger.info("Successfully loaded \(self.flashcards.count) cards for review session.")
         } catch {
-            logger.error("Failed to fetch or process flashcards for reading: \(error.localizedDescription)")
+            logger.error("Failed to fetch flashcards for review session: \(error.localizedDescription)")
+            self.flashcards = [] // Ensure flashcards are empty on error
         }
         isLoading = false
     }
@@ -74,7 +73,16 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     @MainActor
     func skipToNextCard() {
         synthesizer.stopSpeaking(at: .immediate)
-        goToNextCard(animate: false) // Go to next card without the speech delay
+        goToNextCard(animate: false)
+    }
+    
+    @MainActor
+    func setInitialCardIndex(_ index: Int) {
+        guard index >= 0 && index < flashcards.count else {
+            self.currentCardIndex = 0
+            return
+        }
+        self.currentCardIndex = index
     }
     
     // MARK: - AVSpeechSynthesizerDelegate
