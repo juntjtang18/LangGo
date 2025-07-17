@@ -4,10 +4,12 @@ import SwiftData
 struct ReadFlashcardView: View {
     @StateObject private var viewModel: ReadFlashcardViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.theme) var theme: Theme
 
     @State private var cardOffset: CGFloat = 0
     @State private var cardOpacity: Double = 1
     @State private var viewMode: ViewMode = .card
+    @State private var showBaseText = true
 
     enum ViewMode {
         case card
@@ -27,86 +29,18 @@ struct ReadFlashcardView: View {
                     Text("No cards available for reading.")
                         .foregroundColor(.secondary)
                 } else {
-                    VStack {
-                        if viewMode == .card {
-                            // Progress View
-                            ProgressView(value: Double(viewModel.currentCardIndex + 1), total: Double(viewModel.flashcards.count)) {
-                                Text("Card \(viewModel.currentCardIndex + 1) of \(viewModel.flashcards.count)")
-                            }
-                            .padding(.horizontal)
-                            .padding(.bottom, 20)
-
-                            // Card display area
-                            ZStack {
-                                // This creates the "deck" effect by showing the next card slightly behind.
-                                if let nextCard = viewModel.flashcards[safe: viewModel.currentCardIndex + 1] {
-                                    CardReadingView(card: nextCard, readingState: .idle)
-                                        .scaleEffect(0.95)
-                                        .offset(y: -20)
-                                } else if !viewModel.flashcards.isEmpty {
-                                    // Show the first card behind the last card to complete the loop illusion
-                                     CardReadingView(card: viewModel.flashcards[0], readingState: .idle)
-                                        .scaleEffect(0.95)
-                                        .offset(y: -20)
-                                }
-
-                                if let currentCard = viewModel.flashcards[safe: viewModel.currentCardIndex] {
-                                    CardReadingView(card: currentCard, readingState: viewModel.readingState)
-                                        .id(viewModel.currentCardIndex) // Use index to ensure view redraws
-                                        .offset(y: cardOffset)
-                                        .opacity(cardOpacity)
-                                        .gesture(
-                                            DragGesture()
-                                                .onChanged { value in
-                                                    if value.translation.height < 0 {
-                                                        cardOffset = value.translation.height
-                                                    }
-                                                }
-                                                .onEnded { value in
-                                                    if value.translation.height < -100 {
-                                                        // Swipe up to skip card
-                                                        viewModel.skipToNextCard()
-                                                    } else {
-                                                        withAnimation(.spring) {
-                                                            cardOffset = 0
-                                                        }
-                                                    }
-                                                }
-                                        )
-                                }
-                            }
-                            .padding(.horizontal)
-                        } else {
-                            FlashcardListView(flashcards: viewModel.flashcards, currentCardIndex: $viewModel.currentCardIndex)
-                        }
-                        
-                        Spacer()
-
-                        // Control Buttons - This logic correctly swaps between Start and Stop.
-                        HStack {
-                            Button(action: {
-                                if viewModel.isReading {
-                                    viewModel.stopReading()
-                                } else {
-                                    viewModel.startReadingSession()
-                                }
-                            }) {
-                                Text(viewModel.isReading ? "Stop" : "Start Reading")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(viewModel.isReading ? Color.gray : Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
-                            }
-                        }
-                        .padding()
-                    }
+                    ReadingSessionView(
+                        viewModel: viewModel,
+                        viewMode: $viewMode,
+                        showBaseText: $showBaseText,
+                        cardOffset: $cardOffset,
+                        cardOpacity: $cardOpacity
+                    )
                 }
             }
             .navigationTitle("Reading Session")
             .navigationBarTitleDisplayMode(.inline)
+            .background(theme.background.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Back") {
@@ -115,11 +49,18 @@ struct ReadFlashcardView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Picker("View Mode", selection: $viewMode) {
-                        Image(systemName: "square.on.square").tag(ViewMode.card)
-                        Image(systemName: "list.bullet").tag(ViewMode.list)
+                    HStack {
+                        Button(action: {
+                            showBaseText.toggle()
+                        }) {
+                            Image(systemName: showBaseText ? "eye.slash.fill" : "eye.fill")
+                        }
+                        Picker("View Mode", selection: $viewMode) {
+                            Image(systemName: "square.on.square").tag(ViewMode.card)
+                            Image(systemName: "list.bullet").tag(ViewMode.list)
+                        }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
                 }
             }
             .onAppear {
@@ -149,62 +90,178 @@ struct ReadFlashcardView: View {
     }
 }
 
+// MARK: - Extracted Subviews
+
+private struct ReadingSessionView: View {
+    @ObservedObject var viewModel: ReadFlashcardViewModel
+    @Binding var viewMode: ReadFlashcardView.ViewMode
+    @Binding var showBaseText: Bool
+    @Binding var cardOffset: CGFloat
+    @Binding var cardOpacity: Double
+    @Environment(\.theme) var theme: Theme
+
+    var body: some View {
+        VStack {
+            if viewMode == .card {
+                ProgressView(value: Double(viewModel.currentCardIndex + 1), total: Double(viewModel.flashcards.count)) {
+                    Text("Card \(viewModel.currentCardIndex + 1) of \(viewModel.flashcards.count)")
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 20)
+
+                CardDisplayView(
+                    viewModel: viewModel,
+                    showBaseText: $showBaseText,
+                    cardOffset: $cardOffset,
+                    cardOpacity: $cardOpacity
+                )
+            } else {
+                FlashcardListView(
+                    flashcards: viewModel.flashcards,
+                    currentCardIndex: $viewModel.currentCardIndex,
+                    showBaseText: $showBaseText
+                )
+            }
+            
+            Spacer()
+
+            Button(action: {
+                if viewModel.isReading {
+                    viewModel.stopReading()
+                } else {
+                    viewModel.startReadingSession(showBaseTextBinding: $showBaseText)
+                }
+            }) {
+                Text(viewModel.isReading ? "Stop" : "Start Reading")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(viewModel.isReading ? theme.secondary : theme.primary)
+                    .foregroundColor(theme.text)
+                    .cornerRadius(12)
+            }
+            .padding()
+        }
+    }
+}
+
+
+private struct CardDisplayView: View {
+    @ObservedObject var viewModel: ReadFlashcardViewModel
+    @Binding var showBaseText: Bool
+    @Binding var cardOffset: CGFloat
+    @Binding var cardOpacity: Double
+
+    var body: some View {
+        ZStack {
+            // Deck effect card (background)
+            if let nextCard = viewModel.flashcards[safe: viewModel.currentCardIndex + 1] {
+                CardReadingView(card: nextCard, readingState: .idle, showBaseText: $showBaseText)
+                    .scaleEffect(0.95)
+                    .offset(y: -20)
+            } else if !viewModel.flashcards.isEmpty {
+                CardReadingView(card: viewModel.flashcards[0], readingState: .idle, showBaseText: $showBaseText)
+                    .scaleEffect(0.95)
+                    .offset(y: -20)
+            }
+
+            // Main card (foreground)
+            if let currentCard = viewModel.flashcards[safe: viewModel.currentCardIndex] {
+                CardReadingView(card: currentCard, readingState: viewModel.readingState, showBaseText: $showBaseText)
+                    .id(viewModel.currentCardIndex)
+                    .offset(y: cardOffset)
+                    .opacity(cardOpacity)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                if value.translation.height < 0 {
+                                    cardOffset = value.translation.height
+                                }
+                            }
+                            .onEnded { value in
+                                if value.translation.height < -100 {
+                                    viewModel.skipToNextCard()
+                                } else {
+                                    withAnimation(.spring) {
+                                        cardOffset = 0
+                                    }
+                                }
+                            }
+                    )
+            }
+        }
+        .padding(.horizontal)
+    }
+}
+
+
 private struct FlashcardListView: View {
     let flashcards: [Flashcard]
     @Binding var currentCardIndex: Int
+    @Binding var showBaseText: Bool
+    @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        ScrollViewReader { proxy in
-            List(flashcards.indices, id: \.self) { index in
-                let card = flashcards[index]
-                HStack {
-                    Text(card.backContent)
-                        .font(.system(.title3, design: .serif))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    Text(card.frontContent)
-                        .font(.system(.body, design: .serif))
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                List(flashcards.indices, id: \.self) { index in
+                    let card = flashcards[index]
+                    HStack(spacing: 8) {
+                        TierIconView(tier: card.reviewTire)
+                        
+                        Text(card.backContent)
+                            .font(.body)
+                            .frame(width: geometry.size.width * 0.5, alignment: .leading)
+                        
+                        if showBaseText {
+                            Text(card.frontContent)
+                                .font(.subheadline)
+                                .foregroundColor(theme.text.opacity(0.7))
+                                .frame(width: geometry.size.width * 0.3, alignment: .leading)
+                        }
+                    }
+                    .id(index)
+                    .listRowBackground(currentCardIndex == index ? theme.accent.opacity(0.3) : Color.clear)
+                    .listRowSeparator(.hidden)
                 }
-                .id(index)
-                .listRowBackground(currentCardIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
-            }
-            .listStyle(.plain)
-            .onChange(of: currentCardIndex) {
-                withAnimation {
-                    proxy.scrollTo(currentCardIndex, anchor: .center)
+                .listStyle(.plain)
+                .onChange(of: currentCardIndex) { _, newIndex in
+                    withAnimation {
+                        proxy.scrollTo(newIndex, anchor: .center)
+                    }
                 }
             }
         }
     }
 }
 
-
-// A dedicated view for displaying the content of a single card during reading.
 private struct CardReadingView: View {
     let card: Flashcard
     let readingState: ReadFlashcardViewModel.ReadingState
+    @Binding var showBaseText: Bool
+    @Environment(\.theme) var theme: Theme
 
     var body: some View {
         VStack(spacing: 20) {
             
-            // English Word (Back Content)
             Text(card.backContent)
-                .font(.system(size: 48, weight: .bold))
-                .foregroundColor(readingState == .readingWord ? .blue : .primary)
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .foregroundColor(readingState == .readingWord ? theme.accent : theme.text)
                 .scaleEffect(readingState == .readingWord ? 1.05 : 1.0)
 
-            // Chinese Translation (Front Content)
-            Text(card.frontContent)
-                .font(.system(size: 32))
-                .foregroundColor(readingState == .readingBaseText ? .blue : .secondary)
-                .scaleEffect(readingState == .readingBaseText ? 1.05 : 1.0)
+            if showBaseText {
+                Text(card.frontContent)
+                    .font(.title2)
+                    .foregroundColor(readingState == .readingBaseText ? theme.accent : theme.text.opacity(0.7))
+                    .scaleEffect(readingState == .readingBaseText ? 1.05 : 1.0)
+            }
         }
         .multilineTextAlignment(.center)
         .padding(30)
         .frame(maxWidth: .infinity, minHeight: 350)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .background(theme.surface)
         .cornerRadius(20)
         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
         .animation(.spring(), value: readingState)

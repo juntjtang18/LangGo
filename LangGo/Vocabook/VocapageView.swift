@@ -255,39 +255,6 @@ struct VocapageView: View {
     }
 }
 
-// A new view to display an icon based on the review tier.
-private struct TierIconView: View {
-    let tier: String?
-
-    var body: some View {
-        Group {
-            switch tier {
-            case "new":
-                Image(systemName: "sparkle")
-                    .foregroundColor(.cyan)
-            case "warmup":
-                Image(systemName: "flame.fill")
-                    .foregroundColor(.orange)
-            case "weekly":
-                Image(systemName: "calendar")
-                    .foregroundColor(.blue)
-            case "monthly":
-                Image(systemName: "calendar.circle.fill")
-                    .foregroundColor(.purple)
-            case "remembered":
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundColor(.green)
-            default:
-                // Provides a transparent placeholder to maintain alignment
-                Image(systemName: "circle")
-                    .opacity(0)
-            }
-        }
-        .font(.subheadline)
-        .frame(width: 20, alignment: .center) // Ensures consistent width for all icons
-    }
-}
-
 private struct VocapageContentListView: View {
     let sortedFlashcards: [Flashcard]
     let showBaseText: Bool

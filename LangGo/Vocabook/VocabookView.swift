@@ -150,7 +150,7 @@ private struct VocabookActionButton: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.title)
+                    .font(.title2)
                     .foregroundColor(theme.accent)
                 Text(title)
                     .font(.caption)
@@ -158,7 +158,7 @@ private struct VocabookActionButton: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, minHeight: 60)
+            .frame(maxWidth: .infinity, minHeight: 50)
             .padding(4)
             .background(theme.secondary.opacity(0.1))
             .cornerRadius(12)

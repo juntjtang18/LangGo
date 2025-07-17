@@ -1,4 +1,3 @@
-// LangGo/ReadFlashcardViewModel.swift
 import SwiftUI
 import SwiftData
 import AVFoundation
@@ -20,8 +19,9 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     private let synthesizer = AVSpeechSynthesizer()
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ReadFlashcardViewModel")
     private var modelContext: ModelContext
-    private var languageSettings: LanguageSettings // To get the correct language code
+    private var languageSettings: LanguageSettings
     private let strapiService: StrapiService
+    private var showBaseTextBinding: Binding<Bool>?
     
     private enum ReadingStep {
         case firstWord, secondWord, baseText, finished
@@ -53,11 +53,12 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     }
 
     @MainActor
-    func startReadingSession() {
+    func startReadingSession(showBaseTextBinding: Binding<Bool>) {
         guard !flashcards.isEmpty else {
             logger.warning("No flashcards to read.")
             return
         }
+        self.showBaseTextBinding = showBaseTextBinding
         isReading = true
         currentStep = .firstWord
         readCurrentCard()
@@ -67,6 +68,7 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
         isReading = false
         synthesizer.stopSpeaking(at: .immediate)
         readingState = .idle
+        showBaseTextBinding = nil
     }
 
     @MainActor
@@ -87,8 +89,13 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
                 currentStep = .secondWord
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.readCurrentCard() }
             case .secondWord:
-                currentStep = .baseText
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.readCurrentCard() }
+                if self.showBaseTextBinding?.wrappedValue ?? true {
+                    currentStep = .baseText
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.readCurrentCard() }
+                } else {
+                    currentStep = .finished
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.goToNextCard() }
+                }
             case .baseText:
                 currentStep = .finished
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.goToNextCard() }
@@ -111,14 +118,12 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
 
         switch currentStep {
         case .firstWord, .secondWord:
-            // This is the English 'word' from Strapi, which is backContent locally
             textToSpeak = card.backContent
             languageCode = "en-US"
             readingState = .readingWord
         case .baseText:
-            // This is the Chinese 'base_text' from Strapi, which is frontContent locally
             textToSpeak = card.frontContent
-            languageCode = self.languageSettings.selectedLanguageCode // FIX: Use dynamic language code
+            languageCode = self.languageSettings.selectedLanguageCode
             readingState = .readingBaseText
         case .finished:
             return
@@ -135,17 +140,12 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     
     @MainActor
     private func goToNextCard(animate: Bool = true) {
-        // FIX: Looping logic
         if currentCardIndex >= flashcards.count - 1 {
-            // Reached the end, loop back to the beginning
             currentCardIndex = 0
         } else {
-            // Go to the next card
             currentCardIndex += 1
         }
         
-        // If we are animating as part of normal speech flow, add a delay.
-        // If we are skipping, no delay is needed.
         if animate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.currentStep = .firstWord

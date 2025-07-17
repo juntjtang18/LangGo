@@ -9,7 +9,8 @@ protocol Theme {
     var accent: Color { get }
     var background: Color { get }
     var text: Color { get }
-    
+    var surface: Color { get } // ADDED: For card backgrounds
+
     // Tier-specific colors
     var tierRemembered: Color { get }
     var tierMonthly: Color { get }
@@ -41,7 +42,8 @@ struct AppTheme: Theme {
     var accent: Color { color(for: "Accent") }
     var background: Color { color(for: "Background") }
     var text: Color { color(for: "Text") }
-    
+    var surface: Color { Color(UIColor.secondarySystemGroupedBackground) } // ADDED: Opaque card color
+
     // 4. Tier colors are now defined here.
     // In a real app, these could also be moved to the asset catalog.
     var tierRemembered: Color { .green }
