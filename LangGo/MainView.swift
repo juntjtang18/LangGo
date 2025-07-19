@@ -1,19 +1,21 @@
 import SwiftUI
 import KeychainAccess
+import SwiftData
 
 // MARK: - Main Container View
 
 struct MainView: View {
     @Binding var authState: AuthState
-    
+    @EnvironmentObject var appEnvironment: AppEnvironment
+
     // State to control the active tab
     @State private var selectedTab = 0
-    
+
     @State private var isSideMenuShowing = false
     @State private var isShowingProfileSheet = false
     @State private var isShowingSettingSheet = false
     @State private var isShowingVocabookSettingSheet = false
-    
+
     init(authState: Binding<AuthState>) {
         _authState = authState
         
@@ -40,8 +42,8 @@ struct MainView: View {
                     .tabItem { Label("Vocabulary Book", systemImage: "square.stack.3d.up.fill") }
                     .tag(1)
 
-                ReadFlashcardTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Read Flashcards", systemImage: "speaker.wave.2.fill") }
+                ConversationTabView(isSideMenuShowing: $isSideMenuShowing, appEnvironment: appEnvironment)
+                    .tabItem { Label("AI Conversation", systemImage: "message.fill") }
                     .tag(2)
                 
                 StoriesTabView(isSideMenuShowing: $isSideMenuShowing)
@@ -130,4 +132,5 @@ struct MenuToolbar: ToolbarContent {
     // You will need to provide a mock LanguageSettings object for the preview to work.
     MainView(authState: .constant(.loggedIn))
         .environmentObject(LanguageSettings())
+        .environmentObject(AppEnvironment(modelContainer: try! ModelContainer(for: Flashcard.self, Vocabook.self, Vocapage.self)))
 }

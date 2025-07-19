@@ -7,10 +7,12 @@ import KeychainAccess
 @MainActor
 class AppEnvironment: ObservableObject {
     let strapiService: StrapiService
+    let conversationService: ConversationService
     let reviewSettingsManager = ReviewSettingsManager()
 
     init(modelContainer: ModelContainer) {
         self.strapiService = StrapiService(modelContext: modelContainer.mainContext)
+        self.conversationService = ConversationService()
     }
 }
 

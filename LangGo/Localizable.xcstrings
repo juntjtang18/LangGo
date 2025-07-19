@@ -40,6 +40,12 @@
     "Adding..." : {
 
     },
+    "AI Conversation" : {
+
+    },
+    "AI Conversation Partner" : {
+
+    },
     "AI Translation" : {
 
     },
@@ -1119,6 +1125,9 @@
       }
     },
     "Translation (%@)" : {
+
+    },
+    "Type a message..." : {
 
     },
     "Unit 1 Introductions" : {
