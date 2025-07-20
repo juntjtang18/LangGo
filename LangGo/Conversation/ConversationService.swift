@@ -17,10 +17,10 @@ class ConversationService {
         return try await NetworkManager.shared.fetchDirect(from: url)
     }
 
-    func getNextPrompt(history: [ConversationMessage], topic: String?) async throws -> NextPromptResponse {
+    func getNextPrompt(history: [ConversationMessage], topic: String?, sessionId: String) async throws -> NextPromptResponse {
         logger.debug("ConversationService: Getting next conversation prompt.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/v1/conversation/nextprompt") else { throw URLError(.badURL) }
-        let payload = NextPromptRequest(history: history, topic_title: topic)
+        let payload = NextPromptRequest(history: history, topic_title: topic, sessionId: sessionId)
         return try await NetworkManager.shared.post(to: url, body: payload)
     }
 }

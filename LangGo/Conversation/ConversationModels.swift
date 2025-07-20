@@ -19,13 +19,16 @@ struct ConversationMessage: Codable, Identifiable {
 struct NextPromptRequest: Codable {
     let history: [ConversationMessage]
     let topic_title: String?
+    let sessionId: String
 }
 
 struct StartConversationResponse: Codable {
     let next_prompt: String
     let suggested_topic: String?
+    let sessionId: String
 }
 
 struct NextPromptResponse: Codable {
     let next_prompt: String
+    let sessionId: String
 }

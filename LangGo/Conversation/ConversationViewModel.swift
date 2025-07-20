@@ -14,6 +14,7 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     private let speechManager = SpeechSynthesizerManager()
     private let speechRecognizer = SpeechRecognizer()
     private var currentTopic: String?
+    private var sessionId: String?
     
     private let audioSession = AVAudioSession.sharedInstance()
 
@@ -57,6 +58,7 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         Task {
             do {
                 let response = try await conversationService.startConversation()
+                self.sessionId = response.sessionId
                 let assistantMessage = response.next_prompt
                 messages.append(ConversationMessage(role: "assistant", content: assistantMessage))
                 self.currentTopic = response.suggested_topic
@@ -70,7 +72,7 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     }
 
     func sendMessage() {
-        guard !newMessageText.isEmpty, !isSendingMessage else { return }
+        guard let sessionId = sessionId, !newMessageText.isEmpty, !isSendingMessage else { return }
 
         let userMessageContent = newMessageText
         let userMessage = ConversationMessage(role: "user", content: userMessageContent)
@@ -82,7 +84,7 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         Task {
             do {
                 let history = self.messages
-                let response = try await conversationService.getNextPrompt(history: history, topic: currentTopic)
+                let response = try await conversationService.getNextPrompt(history: history, topic: currentTopic, sessionId: sessionId)
                 let assistantMessage = response.next_prompt
                 messages.append(ConversationMessage(role: "assistant", content: assistantMessage))
                 
