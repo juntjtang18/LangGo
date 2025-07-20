@@ -7,8 +7,10 @@ class SpeechSynthesizerManager {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "SpeechSynthesizerManager")
 
     // This method allows the ViewModel to receive speech lifecycle events.
-    func setDelegate(_ delegate: AVSpeechSynthesizerDelegate?) {
-        synthesizer.delegate = delegate
+    weak var delegate: AVSpeechSynthesizerDelegate? {
+        didSet {
+            synthesizer.delegate = delegate
+        }
     }
 
     func speak(text: String, language: String = "en-US") {

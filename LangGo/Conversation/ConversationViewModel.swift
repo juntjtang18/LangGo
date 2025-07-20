@@ -9,6 +9,7 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     @Published var isSendingMessage = false
     @Published var errorMessage: String?
     @Published var isListening = false
+    @Published var isMouthAnimating = false
     
     private let conversationService: ConversationService
     private let speechManager = SpeechSynthesizerManager()
@@ -22,7 +23,7 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         self.conversationService = conversationService
         super.init() // Required for NSObject subclasses
         
-        self.speechManager.setDelegate(self)
+        self.speechManager.delegate = self
         
         speechRecognizer.requestPermissions()
         speechRecognizer.$transcript.assign(to: &$newMessageText)
@@ -123,6 +124,7 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     
     func stopSpeaking() {
         speechManager.stop()
+        isMouthAnimating = false
     }
     
     func cleanupAudioOnDisappear() {
@@ -137,8 +139,26 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     
     // MARK: - AVSpeechSynthesizerDelegate
     
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
+        Task { @MainActor in
+            // Open the mouth for each word
+            isMouthAnimating = true
+            
+            // Schedule the mouth to close after a short duration
+            // This creates the rhythmic open/close effect
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                // Check if we are still supposed to be animating before closing
+                if self.isMouthAnimating {
+                    self.isMouthAnimating = false
+                }
+            }
+        }
+    }
+    
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
+            // Ensure mouth is closed and audio session is ready for recording
+            self.isMouthAnimating = false
             self.prepareSessionForRecording()
         }
     }
