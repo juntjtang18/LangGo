@@ -1,14 +1,7 @@
-//
-//  ConversationView.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/7/19.
-//
-
+// LangGo/Conversation/ConversationView.swift
 import SwiftUI
 
 struct ConversationView: View {
-    // The view now observes a ViewModel created by its parent.
     @ObservedObject var viewModel: ConversationViewModel
     @Environment(\.theme) var theme: Theme
 
@@ -25,7 +18,6 @@ struct ConversationView: View {
                     .padding()
                 }
                 .onChange(of: viewModel.messages.count) {
-                    // Make sure scrolling happens on the main thread with animation
                     if let lastMessage = viewModel.messages.last {
                         withAnimation {
                             proxy.scrollTo(lastMessage.id, anchor: .bottom)
@@ -34,34 +26,44 @@ struct ConversationView: View {
                 }
             }
 
-
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
                     .padding()
             }
 
-            HStack {
-                TextField("Type a message...", text: $viewModel.newMessageText)
+            HStack(spacing: 12) {
+                TextField("Type or hold to speak...", text: $viewModel.newMessageText)
                     .textFieldStyle(ThemedTextFieldStyle())
-                    .padding(.leading)
-                    .disabled(viewModel.isSendingMessage)
+                    .disabled(viewModel.isSendingMessage || viewModel.isListening)
 
                 if viewModel.isSendingMessage {
                     ProgressView()
-                        .padding(.trailing)
                 } else {
-                    Button(action: {
-                        viewModel.sendMessage()
-                    }) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(theme.accent)
-                    }
-                    .padding(.trailing)
-                    .disabled(viewModel.newMessageText.isEmpty)
+                    Image(systemName: viewModel.isListening ? "mic.fill" : "mic.slash")
+                        .font(.title)
+                        .padding()
+                        .background(viewModel.isListening ? Color.red.opacity(0.8) : Color.accentColor)
+                        .foregroundColor(.white)
+                        .clipShape(Circle())
+                        .scaleEffect(viewModel.isListening ? 1.1 : 1.0)
+                        .animation(.spring(), value: viewModel.isListening)
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { _ in
+                                    if !viewModel.isListening {
+                                        viewModel.startListening()
+                                    }
+                                }
+                                .onEnded { _ in
+                                    if viewModel.isListening {
+                                        viewModel.stopListening()
+                                    }
+                                }
+                        )
                 }
             }
+            .padding(.horizontal)
             .padding(.bottom)
         }
         .background(theme.background.ignoresSafeArea())
@@ -69,8 +71,12 @@ struct ConversationView: View {
         .task {
             viewModel.startConversation()
         }
+        .onDisappear {
+            viewModel.cleanupAudioOnDisappear()
+        }
     }
 }
+
 
 struct MessageView: View {
     let message: ConversationMessage
