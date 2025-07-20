@@ -22,7 +22,6 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         self.conversationService = conversationService
         super.init() // Required for NSObject subclasses
         
-        // Set the ViewModel as the delegate to receive speech events.
         self.speechManager.setDelegate(self)
         
         speechRecognizer.requestPermissions()
@@ -41,10 +40,11 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         }
     }
     
+    // UPDATED: This method now also sets the session active.
     private func prepareSessionForRecording() {
          do {
             try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
-            // The recognizer will call setActive(true)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             errorMessage = "Failed to prepare session for recording: \(error.localizedDescription)"
         }
@@ -100,11 +100,19 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         }
     }
 
+    // UPDATED: This function now orchestrates the audio session handoff.
     func startListening() {
+        // 1. Immediately stop any ongoing speech.
         speechManager.stop()
-        // No need to prepare the session here, the recognizer does it.
+    
+        // 2. Explicitly prepare the audio session for recording.
+        // This is the crucial step that prevents the crash.
+        prepareSessionForRecording()
+    
+        // 3. Start the recognizer, which now assumes the session is ready.
         speechRecognizer.start()
     }
+
 
     func stopListening() {
         speechRecognizer.stop()
@@ -123,7 +131,6 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         do {
             try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
-            // Don't show an error, just log it.
             print("Failed to deactivate audio session on disappear: \(error.localizedDescription)")
         }
     }
@@ -131,9 +138,6 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     // MARK: - AVSpeechSynthesizerDelegate
     
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        // This is the key fix. When speech finishes, we don't deactivate the session.
-        // We immediately prepare it for the user to start recording.
-        // This must be dispatched back to the main thread.
         Task { @MainActor in
             self.prepareSessionForRecording()
         }

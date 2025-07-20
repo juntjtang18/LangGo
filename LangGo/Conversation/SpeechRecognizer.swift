@@ -45,6 +45,7 @@ class SpeechRecognizer: ObservableObject {
         }
     }
 
+    // UPDATED: This method no longer manages the AVAudioSession.
     func start() {
         guard let recognizer = recognizer, recognizer.isAvailable else {
             self.error = "Speech recognizer is not available for the current locale."
@@ -61,10 +62,8 @@ class SpeechRecognizer: ObservableObject {
 
         let inputNode = audioEngine.inputNode
         
-        // Use a standard format if the hardware format is invalid
         var recordingFormat = inputNode.outputFormat(forBus: 0)
         if recordingFormat.sampleRate == 0 || recordingFormat.channelCount == 0 {
-            // Fallback to a standard format: 44.1 kHz, mono
             recordingFormat = AVAudioFormat(
                 commonFormat: .pcmFormatFloat32,
                 sampleRate: 44100,
@@ -73,7 +72,6 @@ class SpeechRecognizer: ObservableObject {
             )!
         }
 
-        // Verify the format is valid
         guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
             self.error = "Invalid audio format: sample rate or channel count is zero."
             return
@@ -85,12 +83,8 @@ class SpeechRecognizer: ObservableObject {
             }
 
             audioEngine.prepare()
-
-            // The recognizer will manage its own session category for recording.
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-
+            
+            // The audio session is now managed by the ViewModel. We just start the engine.
             try audioEngine.start()
             isListening = true
 

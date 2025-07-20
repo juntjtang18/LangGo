@@ -1,4 +1,3 @@
-// LangGo/Conversation/ConversationView.swift
 import SwiftUI
 
 struct ConversationView: View {
@@ -11,7 +10,7 @@ struct ConversationView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(viewModel.messages) { message in
-                            MessageView(message: message, theme: theme)
+                            MessageView(message: message)
                                 .id(message.id)
                         }
                     }
@@ -28,26 +27,16 @@ struct ConversationView: View {
 
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
-                    .foregroundColor(.red)
-                    .padding()
+                    .style(.errorText)
             }
 
-            HStack(spacing: 12) {
-                TextField("Type or hold to speak...", text: $viewModel.newMessageText)
-                    .textFieldStyle(ThemedTextFieldStyle())
-                    .disabled(viewModel.isSendingMessage || viewModel.isListening)
-
+            HStack(spacing: 15) {
                 if viewModel.isSendingMessage {
                     ProgressView()
+                        .frame(width: 108, height: 108)
                 } else {
-                    Image(systemName: viewModel.isListening ? "mic.fill" : "mic.slash")
-                        .font(.title)
-                        .padding()
-                        .background(viewModel.isListening ? Color.red.opacity(0.8) : Color.accentColor)
-                        .foregroundColor(.white)
-                        .clipShape(Circle())
-                        .scaleEffect(viewModel.isListening ? 1.1 : 1.0)
-                        .animation(.spring(), value: viewModel.isListening)
+                    Image(systemName: viewModel.isListening ? "mic.fill" : "mic.slash.fill")
+                        .conversationStyle(.micButton(isListening: viewModel.isListening))
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { _ in
@@ -62,6 +51,10 @@ struct ConversationView: View {
                                 }
                         )
                 }
+
+                TextField("Type or hold to speak...", text: $viewModel.newMessageText)
+                    .textFieldStyle(ThemedTextFieldStyle())
+                    .disabled(viewModel.isSendingMessage || viewModel.isListening)
             }
             .padding(.horizontal)
             .padding(.bottom)
@@ -80,23 +73,16 @@ struct ConversationView: View {
 
 struct MessageView: View {
     let message: ConversationMessage
-    let theme: Theme
 
     var body: some View {
         HStack {
             if message.role == "user" {
                 Spacer()
                 Text(message.content)
-                    .padding()
-                    .background(theme.primary.opacity(0.8))
-                    .foregroundColor(theme.text)
-                    .cornerRadius(12)
+                    .conversationStyle(.messageBubble(isUser: true))
             } else {
                 Text(message.content)
-                    .padding()
-                    .background(theme.secondary.opacity(0.8))
-                    .foregroundColor(theme.text)
-                    .cornerRadius(12)
+                    .conversationStyle(.messageBubble(isUser: false))
                 Spacer()
             }
         }
