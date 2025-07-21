@@ -74,6 +74,8 @@ class StoryService {
         }
 
         urlComponents.queryItems = [
+            URLQueryItem(name: "populate[difficulty_level]", value: "*"),
+            URLQueryItem(name: "populate[illustrations][populate]", value: "media"),
             URLQueryItem(name: "pagination[page]", value: "1"),
             URLQueryItem(name: "pagination[pageSize]", value: "6")
         ]

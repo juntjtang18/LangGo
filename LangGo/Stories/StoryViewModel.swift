@@ -6,6 +6,7 @@ class StoryViewModel: ObservableObject {
     @Published var stories: [Story] = []
     @Published var recommendedStories: [Story] = []
     @Published var difficultyLevels: [DifficultyLevel] = []
+    @Published var selectedStory: Story?
     
     @Published var isLoading: Bool = false
     @Published var isFetchingMore: Bool = false
@@ -86,6 +87,22 @@ class StoryViewModel: ObservableObject {
         
         isFetchingMore = false
     }
+
+    func fetchStoryDetails(id: Int) async {
+        // Only set loading to true if we don't have the story yet.
+        if selectedStory?.id != id {
+            selectedStory = nil // Clear previous story
+            isLoading = true
+        }
+        errorMessage = nil
+        defer { isLoading = false }
+        
+        do {
+            selectedStory = try await storyService.fetchStory(id: id)
+        } catch {
+            errorMessage = "Failed to load story details: \(error.localizedDescription)"
+        }
+    }
     
     func toggleLike(for story: Story) async {
         do {
@@ -102,6 +119,9 @@ class StoryViewModel: ObservableObject {
         }
         if let index = recommendedStories.firstIndex(where: { $0.id == storyId }) {
             recommendedStories[index].attributes.like_count = newLikeCount
+        }
+        if selectedStory?.id == storyId {
+            selectedStory?.attributes.like_count = newLikeCount
         }
     }
 }

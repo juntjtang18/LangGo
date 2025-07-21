@@ -19,8 +19,7 @@ struct StoryListView: View {
                 Spacer()
             } else if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
-                    .foregroundColor(.red)
-                    .padding()
+                    .style(.errorText)
             } else {
                 List {
                     Section {
@@ -32,7 +31,7 @@ struct StoryListView: View {
 
                     Section {
                         ForEach(viewModel.stories) { story in
-                             NavigationLink(destination: StoryReadingView(story: story, viewModel: viewModel)) {
+                             NavigationLink(destination: StoryReadingView(storyId: story.id, viewModel: viewModel)) {
                                 StoryRowView(story: story)
                                     .task {
                                         await viewModel.loadMoreStoriesIfNeeded(currentItem: story)
@@ -105,7 +104,7 @@ private struct RecommendedStoriesView: View {
                 HStack(spacing: 16) {
                     ForEach(stories) { story in
                         // This NavigationLink now compiles correctly
-                        NavigationLink(destination: StoryReadingView(story: story, viewModel: viewModel)) {
+                        NavigationLink(destination: StoryReadingView(storyId: story.id, viewModel: viewModel)) {
                              StoryCardView(story: story)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -123,39 +122,77 @@ private struct StoryCardView: View {
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            AsyncImage(url: story.attributes.coverImageURL) { image in
-                image.resizable()
-            } placeholder: {
-                ZStack {
-                    Rectangle().fill(theme.secondary.opacity(0.2))
-                    Image(systemName: "book.closed")
-                        .font(.largeTitle)
-                        .foregroundColor(theme.text.opacity(0.5))
+        VStack(spacing: 0) {
+            // Top part: Image with gradient and title
+            ZStack(alignment: .bottomLeading) {
+                AsyncImage(url: story.attributes.coverImageURL) { image in
+                    image.resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    ZStack {
+                        Rectangle().fill(theme.secondary.opacity(0.2))
+                        Image(systemName: "book.closed")
+                            .font(.largeTitle)
+                            .foregroundColor(theme.text.opacity(0.5))
+                    }
                 }
-            }
-            .aspectRatio(1, contentMode: .fill)
-            .frame(width: 150, height: 150)
-            .clipped()
-            .cornerRadius(12)
-            .overlay(alignment: .topTrailing) {
-                 Image(systemName: "heart")
-                    .padding(8)
-                    .foregroundColor(theme.text)
+                .frame(height: 210) // Approx 3/5 of total height
+                .clipped()
+
+                // Gradient overlay for text readability
+                LinearGradient(
+                    gradient: Gradient(colors: [.clear, .black.opacity(0.8)]),
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+
+                // Text content on the image
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("OUR FAVOURITES")
+                        .storyStyle(.cardSubtitle)
+                    
+                    Text(story.attributes.title)
+                        .storyStyle(.cardTitle)
+                }
+                .padding()
             }
 
-            Text(story.attributes.title)
-                .font(.headline)
-                .lineLimit(2)
-                .foregroundColor(theme.text)
-            
-            Text(story.attributes.difficultyName)
-                .font(.caption)
-                .foregroundColor(.secondary)
+            // Bottom part: Details and action button
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Author: \(story.attributes.author)")
+                    .storyStyle(.cardAuthor)
+                
+                Text("Brief: \(story.attributes.brief ?? "No brief available.")")
+                    .storyStyle(.cardBrief)
+                
+                Spacer()
+                
+                HStack {
+                    Spacer()
+                    // Styled view that looks like a button
+                    HStack {
+                        Image(systemName: "play.fill")
+                        Text("Read")
+                    }
+                    .storyStyle(.readButton)
+                }
+            }
+            .padding()
+            .frame(height: 140) // Approx 2/5 of total height
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [theme.primary, theme.accent]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
         }
-        .frame(width: 150)
+        .frame(width: 250, height: 350)
+        .cornerRadius(20)
+        .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
     }
 }
+
 
 private struct StoryRowView: View {
     let story: Story

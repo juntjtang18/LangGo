@@ -49,6 +49,9 @@
     "AI Translation" : {
 
     },
+    "Author: %@" : {
+
+    },
     "Back" : {
       "localizations" : {
         "ja" : {
@@ -76,6 +79,9 @@
           }
         }
       }
+    },
+    "Brief: %@" : {
+
     },
     "by %@" : {
 
@@ -480,6 +486,9 @@
     "Loading stories..." : {
 
     },
+    "Loading Story..." : {
+
+    },
     "Login" : {
       "localizations" : {
         "ja" : {
@@ -622,6 +631,9 @@
         }
       }
     },
+    "OUR FAVOURITES" : {
+
+    },
     "Page %lld" : {
 
     },
@@ -745,6 +757,9 @@
           }
         }
       }
+    },
+    "Read" : {
+
     },
     "Read Flashcards" : {
 
