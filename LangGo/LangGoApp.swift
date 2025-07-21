@@ -9,10 +9,12 @@ class AppEnvironment: ObservableObject {
     let strapiService: StrapiService
     let conversationService: ConversationService
     let reviewSettingsManager = ReviewSettingsManager()
+    let storyService: StoryService // Added the new service
 
     init(modelContainer: ModelContainer) {
         self.strapiService = StrapiService(modelContext: modelContainer.mainContext)
         self.conversationService = ConversationService()
+        self.storyService = StoryService() // Initialized the new service
     }
 }
 

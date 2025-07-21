@@ -77,6 +77,9 @@
         }
       }
     },
+    "by %@" : {
+
+    },
     "Card %lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -474,6 +477,9 @@
     "Loading cards..." : {
 
     },
+    "Loading stories..." : {
+
+    },
     "Login" : {
       "localizations" : {
         "ja" : {
@@ -747,6 +753,9 @@
 
     },
     "Recently, you learned" : {
+
+    },
+    "Recommended" : {
 
     },
     "REFRESH mode" : {
@@ -1023,6 +1032,7 @@
       }
     },
     "Stories View" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -1049,6 +1059,9 @@
           }
         }
       }
+    },
+    "Story content not available." : {
+
     },
     "Swap" : {
 

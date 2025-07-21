@@ -46,8 +46,8 @@ struct MainView: View {
                     .tabItem { Label("AI Conversation", systemImage: "message.fill") }
                     .tag(2)
                 
-                StoriesTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Stories", systemImage: "book.fill") }
+                StoriesTabView(isSideMenuShowing: $isSideMenuShowing, appEnvironment: appEnvironment)
+                     .tabItem { Label("Stories", systemImage: "book.fill") }
                     .tag(3)
 
                 TranslationTabView(isSideMenuShowing: $isSideMenuShowing)
@@ -96,10 +96,6 @@ struct MainView: View {
 
 // AITabView has been removed as requested.
 
-struct StoriesTabView: View {
-    @Binding var isSideMenuShowing: Bool
-    var body: some View { NavigationStack { Text("Stories View").navigationTitle("Stories").toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) } } }
-}
 
 /*
 struct TranslationTabView: View {

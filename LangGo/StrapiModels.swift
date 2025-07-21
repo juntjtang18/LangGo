@@ -415,3 +415,4 @@ struct TranslateWordResponse: Decodable {
         case translatedText = "translation"
     }
 }
+
