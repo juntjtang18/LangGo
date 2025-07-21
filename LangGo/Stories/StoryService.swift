@@ -83,4 +83,15 @@ class StoryService {
         let response: StrapiListResponse<Story> = try await NetworkManager.shared.fetchDirect(from: url)
         return response.data ?? []
     }
+    /// Toggles the 'like' status for a given story.
+    func likeStory(id: Int) async throws -> StoryLikeResponse {
+        logger.debug("StoryService: Toggling like for story ID \(id).")
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/stories/\(id)/like") else {
+            throw URLError(.badURL)
+        }
+        // A POST request is used to trigger the like action on the backend.
+        // An empty dictionary is sent as the body as no payload is required.
+        let emptyBody: [String: String] = [:]
+        return try await NetworkManager.shared.post(to: url, body: emptyBody)
+    }
 }

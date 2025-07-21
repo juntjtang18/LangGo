@@ -1,4 +1,3 @@
-// LangGo/Stories/StoryViewModel.swift
 import Foundation
 import SwiftUI
 
@@ -41,7 +40,6 @@ class StoryViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // Fetch non-paginated data first
             async let levelsTask = storyService.fetchDifficultyLevels()
             async let recommendedTask = storyService.fetchRecommendedStories()
             let (fetchedLevels, fetchedRecommended) = try await (levelsTask, recommendedTask)
@@ -52,7 +50,6 @@ class StoryViewModel: ObservableObject {
             self.recommendedStories = fetchedRecommended
             self.difficultyLevels = allLevels
             
-            // Now load the first page of stories
             await loadMoreStoriesIfNeeded(currentItem: nil)
 
         } catch {
@@ -63,12 +60,10 @@ class StoryViewModel: ObservableObject {
     }
     
     func loadMoreStoriesIfNeeded(currentItem item: Story?) async {
-        // Ensure we only proceed if we are at the end of the current list
         if let item = item, item.id != stories.last?.id {
             return
         }
 
-        // Check if we are already fetching or if we've reached the last page
         guard !isFetchingMore, (totalPages == nil || currentPage <= totalPages!) else {
             return
         }
@@ -76,7 +71,6 @@ class StoryViewModel: ObservableObject {
         isFetchingMore = true
         
         do {
-            // In a real app, you would add filter parameters here based on selectedDifficultyID
             let (fetchedStories, pagination) = try await storyService.fetchStories(page: currentPage)
             
             if let pagination = pagination {
@@ -91,5 +85,23 @@ class StoryViewModel: ObservableObject {
         }
         
         isFetchingMore = false
+    }
+    
+    func toggleLike(for story: Story) async {
+        do {
+            let response = try await storyService.likeStory(id: story.id)
+            updateStoryLikeCount(storyId: story.id, newLikeCount: response.data.like_count)
+        } catch {
+            errorMessage = "Failed to update like status: \(error.localizedDescription)"
+        }
+    }
+
+    private func updateStoryLikeCount(storyId: Int, newLikeCount: Int?) {
+        if let index = stories.firstIndex(where: { $0.id == storyId }) {
+            stories[index].attributes.like_count = newLikeCount
+        }
+        if let index = recommendedStories.firstIndex(where: { $0.id == storyId }) {
+            recommendedStories[index].attributes.like_count = newLikeCount
+        }
     }
 }

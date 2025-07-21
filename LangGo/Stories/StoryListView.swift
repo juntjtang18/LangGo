@@ -24,14 +24,15 @@ struct StoryListView: View {
             } else {
                 List {
                     Section {
-                         RecommendedStoriesView(stories: viewModel.recommendedStories)
+                         // MODIFIED: Pass the viewModel back to the subview
+                         RecommendedStoriesView(stories: viewModel.recommendedStories, viewModel: viewModel)
                     }
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
 
                     Section {
                         ForEach(viewModel.stories) { story in
-                             NavigationLink(destination: StoryReadingView(story: story)) {
+                             NavigationLink(destination: StoryReadingView(story: story, viewModel: viewModel)) {
                                 StoryRowView(story: story)
                                     .task {
                                         await viewModel.loadMoreStoriesIfNeeded(currentItem: story)
@@ -92,6 +93,8 @@ private struct DifficultyFilterView: View {
 
 private struct RecommendedStoriesView: View {
     let stories: [Story]
+    // MODIFIED: The viewModel is now correctly passed in again
+    @ObservedObject var viewModel: StoryViewModel
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -101,7 +104,8 @@ private struct RecommendedStoriesView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(stories) { story in
-                        NavigationLink(destination: StoryReadingView(story: story)) {
+                        // This NavigationLink now compiles correctly
+                        NavigationLink(destination: StoryReadingView(story: story, viewModel: viewModel)) {
                              StoryCardView(story: story)
                         }
                         .buttonStyle(PlainButtonStyle())
