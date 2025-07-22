@@ -23,15 +23,6 @@ struct StoryListView: View {
 
     @State private var storyToPresent: Story?
 
-    // Computed property for the dynamic section title
-    private var storiesSectionTitle: String {
-        if let selectedId = viewModel.selectedDifficultyID,
-           let level = viewModel.difficultyLevels.first(where: { $0.id == selectedId }) {
-            return level.attributes.name
-        }
-        return "All Stories"
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             DifficultyFilterView(
@@ -49,43 +40,7 @@ struct StoryListView: View {
                 Text(errorMessage)
                     .style(.errorText)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 20) {
-                        // Section for Recommended Stories
-                        Section(header: StorySectionHeader(title: "Recommended")) {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 16) {
-                                    ForEach(viewModel.recommendedStories) { story in
-                                        Button(action: { storyToPresent = story }) {
-                                            RecommendedStoryCardView(story: story)
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
-
-                        // Section for All Other Stories
-                        Section(header: StorySectionHeader(title: storiesSectionTitle)) {
-                            ForEach(viewModel.storyRows) { row in
-                                StoryRowView(row: row, onSelectStory: { story in
-                                    storyToPresent = story
-                                })
-                                .task {
-                                    if row.id == viewModel.storyRows.last?.id {
-                                        await viewModel.loadMoreStoriesIfNeeded(currentItem: row.stories.last)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        if viewModel.isFetchingMore {
-                            ProgressView().padding()
-                        }
-                    }
-                    .padding()
-                }
+                StoryListScrollView(viewModel: viewModel, storyToPresent: $storyToPresent)
             }
         }
         .background(theme.background.ignoresSafeArea())
@@ -100,7 +55,66 @@ struct StoryListView: View {
     }
 }
 
+
 // MARK: - Subviews
+private struct StoryListScrollView: View {
+    @ObservedObject var viewModel: StoryViewModel
+    @Binding var storyToPresent: Story?
+
+    private var storiesSectionTitle: String {
+        if let selectedId = viewModel.selectedDifficultyID,
+           let level = viewModel.difficultyLevels.first(where: { $0.id == selectedId }) {
+            let name = level.attributes.name
+            if name == "All" {
+                return "All Stories"
+            } else {
+                return "\(name) Stories"
+            }
+        }
+        return "All Stories"
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 20) {
+                // Section for Recommended Stories
+                Section(header: StorySectionHeader(title: "Recommended")) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 16) {
+                            ForEach(viewModel.recommendedStories) { story in
+                                Button(action: { storyToPresent = story }) {
+                                    RecommendedStoryCardView(story: story)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+
+                // Section for All Other Stories
+                Section(header: StorySectionHeader(title: storiesSectionTitle)) {
+                    ForEach(viewModel.storyRows) { row in
+                        StoryRowView(row: row, onSelectStory: { story in
+                            storyToPresent = story
+                        })
+                        .task {
+                            if row.id == viewModel.storyRows.last?.id {
+                                await viewModel.loadMoreStoriesIfNeeded(currentItem: row.stories.last)
+                            }
+                        }
+                    }
+                }
+                
+                if viewModel.isFetchingMore {
+                    ProgressView().padding()
+                }
+            }
+            .padding()
+        }
+    }
+}
+
 
 private struct StorySectionHeader: View {
     let title: String
