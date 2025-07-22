@@ -1,97 +1,121 @@
 // LangGo/HomeView.swift
 import SwiftUI
-import AVKit // Use the AVKit framework for video playback
+import AVKit
 
-// An enum to differentiate image sources for practice cards.
 private enum PracticeImage {
     case asset(String)
     case system(String)
 }
 
-// An enum to differentiate the video source.
 private enum VideoSource {
-    case asset(String) // For video name in Assets.xcassets
-    case remote(URL)   // For a remote video URL
+    case asset(String)
+    case remote(URL)
 }
 
-
-// Data model for the horizontally-scrolling practice cards.
 private struct PracticeAction: Identifiable {
     let id = UUID()
     let image: PracticeImage
     let title: String
     let tabIndex: Int
-    let videoSource: VideoSource? // The video to be played
+    let videoSource: VideoSource?
 }
 
-/// The main view for the "LangGo" home screen, redesigned to match the mockup.
 struct HomeView: View {
     @Environment(\.theme) var theme
     @Binding var selectedTab: Int
-    @State private var username: String = "Vivian" // Default value, loaded from UserDefaults
+    @State private var username: String = "Vivian"
+    @AppStorage("homeViewVideoMuted") private var isGloballyMuted: Bool = false
+    
+    @StateObject private var playerManager = VideoPlayerManager()
+    // 1. Add a state to explicitly track if this view is active.
+    @State private var isViewActive: Bool = true
 
-    /// Data for the practice cards. Actions navigate to the correct tabs.
-    private var practiceActions: [PracticeAction] {
-        [
-            PracticeAction(
-                image: .asset("module-vocabulary"),
-                title: "Build up my vocabulary",
-                tabIndex: 1,
-                videoSource: .asset("Introducing the Smart Vocabulary Notebook") // Set to your asset name
-            ),
-            PracticeAction(
-                image: .system("message.fill"),
-                title: "Talk to your AI Partner",
-                tabIndex: 2,
-                videoSource: nil
-            ),
-            PracticeAction(
-                image: .system("book.fill"),
-                title: "Read Stories",
-                tabIndex: 3,
-                videoSource: nil
-            ),
-            PracticeAction(
-                image: .system("captions.bubble.fill"),
-                title: "Smart Translate",
-                tabIndex: 4,
-                videoSource: nil
-            )
-        ]
-    }
+    private let practiceActions: [PracticeAction] = [
+        PracticeAction(
+            image: .asset("module-vocabulary"),
+            title: "Build up my vocabulary",
+            tabIndex: 1,
+            videoSource: .asset("Introducing the Smart Vocabulary Notebook")
+        ),
+        PracticeAction(
+            image: .system("message.fill"),
+            title: "Talk to your AI Partner",
+            tabIndex: 2,
+            videoSource: nil
+        ),
+        PracticeAction(
+            image: .system("book.fill"),
+            title: "Read Stories",
+            tabIndex: 3,
+            videoSource: nil
+        ),
+        PracticeAction(
+            image: .system("captions.bubble.fill"),
+            title: "Smart Translate",
+            tabIndex: 4,
+            videoSource: nil
+        )
+    ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // 1. Greeting Header
-                Text("Hi, \(username)")
-                    .homeStyle(.greetingTitle)
+        GeometryReader { screenGeometry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("Hi, \(username)")
+                        .homeStyle(.greetingTitle)
 
-                // 2. Limited Offer Banner
-                OfferBannerView()
-                
-                // 3. "Ready to Go" Section with Practice Cards
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("LangGo, Ready to GO?")
-                        .homeStyle(.sectionHeader)
+                    OfferBannerView()
                     
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(practiceActions) { action in
-                                PracticeCardView(action: action, selectedTab: $selectedTab)
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("LangGo, Ready to GO?")
+                                .homeStyle(.sectionHeader)
+                            Spacer()
+                            Button(action: {
+                                isGloballyMuted.toggle()
+                                playerManager.updateMuteState(isMuted: isGloballyMuted)
+                            }) {
+                                Image(systemName: isGloballyMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                    .font(.title2)
+                                    .foregroundColor(theme.text)
+                            }
+                        }
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 16) {
+                                ForEach(practiceActions) { action in
+                                    PracticeCardView(
+                                        action: action,
+                                        selectedTab: $selectedTab,
+                                        isMuted: isGloballyMuted,
+                                        playerManager: playerManager,
+                                        screenFrame: screenGeometry.frame(in: .global),
+                                        isViewActive: isViewActive // 2. Pass the active state to the card.
+                                    )
+                                }
                             }
                         }
                     }
+                    
+                    ExploreLessonsView()
                 }
-                
-                // 4. Explore Lessons Section
-                ExploreLessonsView()
+                .padding()
             }
-            .padding()
         }
         .background(theme.background.ignoresSafeArea())
         .onAppear {
             self.username = UserDefaults.standard.string(forKey: "username") ?? "Vivian"
+            self.isViewActive = (selectedTab == 0)
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            // 3. Update the active state when the tab changes.
+            isViewActive = (newTab == 0)
+        }
+        .onChange(of: isViewActive) { _, active in
+            // 4. When the view becomes inactive, forcefully stop all playback.
+            if !active {
+                playerManager.stopAllPlayback()
+            }
         }
     }
 }
@@ -99,6 +123,7 @@ struct HomeView: View {
 // MARK: - Reusable Components for HomeView
 
 private struct OfferBannerView: View {
+    // ... (This view remains unchanged)
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
@@ -124,65 +149,48 @@ private struct OfferBannerView: View {
 private struct PracticeCardView: View {
     let action: PracticeAction
     @Binding var selectedTab: Int
+    let isMuted: Bool
+    @ObservedObject var playerManager: VideoPlayerManager
+    let screenFrame: CGRect
+    let isViewActive: Bool // Receives the active state.
     @Environment(\.theme) var theme: Theme
     
-    @State private var player: AVQueuePlayer?
-    @State private var playerLooper: AVPlayerLooper?
-    @State private var isMuted: Bool = false // Start with audio ON by default
+    @State private var timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // ZStack allows layering the custom mute button over the video.
-            ZStack {
-                // Layer 1: The Video Player
-                if let player = player {
-                    VideoPlayer(player: player)
-                        .allowsHitTesting(false) // Prevents the default controls from appearing.
-                } else {
-                    // Fallback Image
-                    switch action.image {
-                    case .asset(let name):
-                        Image(name).resizable().scaledToFit()
-                    case .system(let name):
-                        Image(systemName: name).font(.system(size: 70)).foregroundColor(theme.text.opacity(0.5))
+        GeometryReader { cardGeometry in
+            VStack(alignment: .leading, spacing: 20) {
+                Group {
+                    if let player = playerManager.player, playerManager.currentlyPlayingID == action.id {
+                        VideoPlayer(player: player)
+                            .allowsHitTesting(false)
+                    } else {
+                        switch action.image {
+                        case .asset(let name):
+                            Image(name).resizable().scaledToFit()
+                        case .system(let name):
+                            Image(systemName: name).font(.system(size: 70)).foregroundColor(theme.text.opacity(0.5))
+                        }
                     }
+                }
+                .frame(height: 180)
+                .frame(maxWidth: .infinity)
+                .background(playerManager.currentlyPlayingID == action.id ? .black : theme.secondary.opacity(0.2))
+                .cornerRadius(12)
+                .onReceive(timer) { _ in
+                    checkVisibility(cardFrame: cardGeometry.frame(in: .global))
                 }
                 
-                // Layer 2: The Mute/Unmute Button and Tap Area
-                VStack {
+                HStack {
+                    Text(action.title)
+                        .homeStyle(.practiceCardTitle)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
-                    HStack {
-                        Spacer()
-                        // This button provides a clear visual indicator of the sound state.
-                        Button(action: toggleMute) {
-                            Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                .font(.caption)
-                                .foregroundColor(.white)
-                                .padding(8)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(Circle())
-                        }
-                        .padding(8)
+                    Button(action: { selectedTab = action.tabIndex }) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.system(size: 44))
+                            .foregroundColor(.red)
                     }
-                }
-            }
-            .frame(height: 180)
-            .frame(maxWidth: .infinity)
-            .background(player == nil ? theme.secondary.opacity(0.2) : .black)
-            .cornerRadius(12)
-            .onTapGesture(perform: toggleMute) // Make the whole video area tappable.
-            .onAppear(perform: setupAndPlayVideo)
-            .onDisappear { player?.pause() }
-            
-            HStack {
-                Text(action.title)
-                    .homeStyle(.practiceCardTitle)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                Button(action: { selectedTab = action.tabIndex }) {
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 44))
-                        .foregroundColor(.red)
                 }
             }
         }
@@ -190,33 +198,25 @@ private struct PracticeCardView: View {
         .frame(width: UIScreen.main.bounds.width * 0.85)
     }
 
-    /// Toggles the mute state of the video player.
-    private func toggleMute() {
-        isMuted.toggle()
-        player?.isMuted = isMuted
-    }
-
-    /// Initializes the player, sets the initial mute state, and starts playback.
-    private func setupAndPlayVideo() {
-        guard let videoSource = action.videoSource, player == nil else { return }
-        guard let url = getVideoURL(from: videoSource) else { return }
+    private func checkVisibility(cardFrame: CGRect) {
+        let isFullyVisible = screenFrame.minX <= cardFrame.minX && cardFrame.maxX <= screenFrame.maxX
         
-        let playerItem = AVPlayerItem(url: url)
-        let queuePlayer = AVQueuePlayer(playerItem: playerItem)
-        self.playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: playerItem)
-        
-        // Use the state variable to set the initial audio state.
-        queuePlayer.isMuted = self.isMuted
-        
-        self.player = queuePlayer
-        self.player?.play()
+        // 5. The card will only attempt to play its video if the entire HomeView is active.
+        if isFullyVisible && isViewActive {
+            if let videoSource = action.videoSource, let url = getVideoURL(from: videoSource) {
+                playerManager.play(url: url, for: action.id, isMuted: isMuted)
+            }
+        } else {
+            playerManager.pause(for: action.id)
+        }
     }
 
     private func getVideoURL(from source: VideoSource) -> URL? {
+        // ... (This function remains unchanged)
         switch source {
         case .asset(let assetName):
             guard let dataAsset = NSDataAsset(name: assetName) else {
-                print("Video asset '\(assetName)' not found in Asset Catalog.")
+                print("Video asset '\(assetName)' not found.")
                 return nil
             }
             let fileManager = FileManager.default
@@ -239,6 +239,7 @@ private struct PracticeCardView: View {
 
 
 private struct ExploreLessonsView: View {
+    // ... (This view remains unchanged)
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
