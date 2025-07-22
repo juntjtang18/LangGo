@@ -4,14 +4,15 @@ struct TranslationPopover: View {
     let originalWord: String
     let translation: String
     let isLoading: Bool
+    let fontSize: Double // MODIFIED: Changed to Double
     
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // The original word is now larger
             Text(originalWord)
-                .font(.body) // Enlarged font
+                // Cast to CGFloat when creating the font
+                .font(.system(size: CGFloat(fontSize)))
                 .fontWeight(.bold)
                 .foregroundColor(theme.background.opacity(0.8))
             
@@ -23,9 +24,9 @@ struct TranslationPopover: View {
             } else {
                 Text(translation)
                     .font(.headline)
-                    .foregroundColor(theme.background) // Use theme color
+                    .foregroundColor(theme.background)
             }
         }
-        .storyStyle(.translationBubble) // Apply the new custom style
+        .storyStyle(.translationBubble)
     }
 }

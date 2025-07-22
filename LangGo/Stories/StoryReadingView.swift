@@ -4,13 +4,15 @@ import UIKit
 struct StoryReadingView: View {
     @ObservedObject var viewModel: StoryViewModel
     let story: Story
-
+    
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.theme) var theme: Theme
-
-    // State for the popover's content and position
+    
     @State private var selectedWord: String = ""
     @State private var showTranslationPopover: Bool = false
     @State private var wordFrame: CGRect = .zero
+
+    @AppStorage("storyFontSize") private var fontSize: Double = 17.0
 
     private var storyContent: [(paragraph: String, imageURL: URL?)] {
         guard let storyText = story.attributes.text else { return [] }
@@ -63,7 +65,7 @@ struct StoryReadingView: View {
                         ForEach(storyContent.indices, id: \.self) { index in
                             let content = storyContent[index]
 
-                            SelectableTextView(text: content.paragraph) { word, frame in
+                            SelectableTextView(text: content.paragraph, fontSize: fontSize) { word, frame in
                                 self.selectedWord = word
                                 self.wordFrame = frame
                                 self.showTranslationPopover = true
@@ -100,7 +102,8 @@ struct StoryReadingView: View {
                         TranslationPopover(
                             originalWord: selectedWord,
                             translation: viewModel.translationResult ?? "",
-                            isLoading: viewModel.isTranslating
+                            isLoading: viewModel.isTranslating,
+                            fontSize: fontSize
                         )
                         .modifier(PopoverPositioner(wordFrame: wordFrame))
                         .transition(.scale.combined(with: .opacity))
@@ -113,17 +116,48 @@ struct StoryReadingView: View {
         .background(theme.background.ignoresSafeArea())
         .navigationTitle(story.attributes.title)
         .navigationBarTitleDisplayMode(.inline)
+        // This line hides the automatic back button, fixing the double-chevron issue
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            // This is now the only back button that will be displayed
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
+                    }
+                }
+            }
+            
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     isLiked.toggle()
-                    Task {
-                        await viewModel.toggleLike(for: story)
-                    }
+                    Task { await viewModel.toggleLike(for: story) }
                 }) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .foregroundColor(isLiked ? .red : nil)
                 }
+            }
+            
+            ToolbarItem(placement: .bottomBar) {
+                HStack {
+                    Button(action: {
+                        if fontSize > 12 { fontSize -= 1 }
+                    }) {
+                        Image(systemName: "minus")
+                    }
+                    
+                    Spacer()
+                    Text("Font Size").font(.caption)
+                    Spacer()
+                    
+                    Button(action: {
+                        if fontSize < 28 { fontSize += 1 }
+                    }) {
+                        Image(systemName: "plus")
+                    }
+                }
+                .font(.headline)
             }
         }
         .onChange(of: viewModel.selectedStory) { _, newStory in
@@ -137,22 +171,22 @@ struct StoryReadingView: View {
     }
 }
 
-// --- THIS IS THE CORRECTED, WRAPPING TEXT VIEW ---
+
 struct SelectableTextView: View {
     let text: String
+    let fontSize: Double
     let onSelectWord: (String, CGRect) -> Void
 
-    @State private var height: CGFloat = .zero // State to hold the dynamic height
+    @State private var height: CGFloat = .zero
 
     var body: some View {
-        // The inner view now communicates its height back up to this frame modifier
-        InternalSelectableTextView(text: text, onSelectWord: onSelectWord, dynamicHeight: $height)
+        InternalSelectableTextView(text: text, fontSize: fontSize, onSelectWord: onSelectWord, dynamicHeight: $height)
             .frame(height: height)
     }
 
-    // Inner struct that wraps UITextView
     struct InternalSelectableTextView: UIViewRepresentable {
         let text: String
+        let fontSize: Double
         let onSelectWord: (String, CGRect) -> Void
         @Binding var dynamicHeight: CGFloat
 
@@ -177,7 +211,7 @@ struct SelectableTextView: View {
             let attributedString = NSMutableAttributedString(string: text)
             let fullRange = NSRange(location: 0, length: attributedString.length)
             
-            attributedString.addAttribute(.font, value: UIFont.systemFont(ofSize: 17), range: fullRange)
+            attributedString.addAttribute(.font, value: UIFont.systemFont(ofSize: CGFloat(fontSize)), range: fullRange)
             attributedString.addAttribute(.foregroundColor, value: UIColor.label, range: fullRange)
             
             let paragraphStyle = NSMutableParagraphStyle()
@@ -195,7 +229,6 @@ struct SelectableTextView: View {
             uiView.linkTextAttributes = [:]
             context.coordinator.parent = self
             
-            // This is the key part: calculate the size and update the binding
             DispatchQueue.main.async {
                 dynamicHeight = uiView.sizeThatFits(CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)).height
             }
@@ -242,7 +275,6 @@ struct SelectableTextView: View {
 }
 
 
-// Positioning logic remains the same
 struct PopoverPositioner: ViewModifier {
     let wordFrame: CGRect
     

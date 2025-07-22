@@ -1,4 +1,3 @@
-// LangGo/StoryService.swift
 import Foundation
 import os
 
@@ -9,19 +8,29 @@ class StoryService {
     // MARK: - Story Service
 
     /// Fetches a paginated list of stories from the server.
-    func fetchStories(page: Int, pageSize: Int = 10) async throws -> ([Story], StrapiPagination?) {
-        logger.debug("StoryService: Fetching stories page \(page).")
+    // MODIFIED: Function signature updated to accept an optional difficultyID
+    func fetchStories(page: Int, pageSize: Int = 10, difficultyID: Int? = nil) async throws -> ([Story], StrapiPagination?) {
+        logger.debug("StoryService: Fetching stories page \(page) with difficultyID: \(String(describing: difficultyID)).")
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/stories") else {
             throw URLError(.badURL)
         }
 
-        urlComponents.queryItems = [
+        // Start with the base query items
+        var queryItems = [
             URLQueryItem(name: "populate[difficulty_level]", value: "*"),
             URLQueryItem(name: "populate[illustrations][populate]", value: "media"),
             URLQueryItem(name: "sort", value: "order:asc"),
             URLQueryItem(name: "pagination[page]", value: "\(page)"),
             URLQueryItem(name: "pagination[pageSize]", value: "\(pageSize)")
         ]
+        
+        // Add the filter if a specific difficulty is selected (and it's not "All")
+        if let id = difficultyID, id != 0 {
+            let filterItem = URLQueryItem(name: "filters[difficulty_level][id][$eq]", value: "\(id)")
+            queryItems.append(filterItem)
+        }
+        
+        urlComponents.queryItems = queryItems
         
         guard let url = urlComponents.url else { throw URLError(.badURL) }
         
@@ -57,6 +66,7 @@ class StoryService {
         let response: StrapiListResponse<DifficultyLevel> = try await NetworkManager.shared.fetchDirect(from: url)
         return response.data ?? []
     }
+    
     /// Fetches a list of recommended stories from the server.
     func fetchRecommendedStories() async throws -> [Story] {
         logger.debug("StoryService: Fetching recommended stories.")
@@ -76,14 +86,13 @@ class StoryService {
         let response: StrapiListResponse<Story> = try await NetworkManager.shared.fetchDirect(from: url)
         return response.data ?? []
     }
+    
     /// Toggles the 'like' status for a given story.
     func likeStory(id: Int) async throws -> StoryLikeResponse {
         logger.debug("StoryService: Toggling like for story ID \(id).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/stories/\(id)/like") else {
             throw URLError(.badURL)
         }
-        // A POST request is used to trigger the like action on the backend.
-        // An empty dictionary is sent as the body as no payload is required.
         let emptyBody: [String: String] = [:]
         return try await NetworkManager.shared.post(to: url, body: emptyBody)
     }

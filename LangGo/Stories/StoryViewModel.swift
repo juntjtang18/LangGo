@@ -12,7 +12,6 @@ class StoryViewModel: ObservableObject {
     @Published var isFetchingMore: Bool = false
     @Published var errorMessage: String?
 
-    // Translation-related properties
     @Published var translationResult: String?
     @Published var isTranslating: Bool = false
     
@@ -35,13 +34,14 @@ class StoryViewModel: ObservableObject {
     }
     
     func initialLoad() async {
-        guard recommendedStories.isEmpty else { return }
+        guard stories.isEmpty else { return } // Prevent re-loading if already populated
         isLoading = true
         errorMessage = nil
         
         do {
             async let levelsTask = storyService.fetchDifficultyLevels()
             async let recommendedTask = storyService.fetchRecommendedStories()
+            
             let (fetchedLevels, fetchedRecommended) = try await (levelsTask, recommendedTask)
             
             var allLevels = [DifficultyLevel(id: 0, attributes: .init(name: "All", level: 0, code: "ALL", description: "All stories", locale: "en"))]
@@ -71,7 +71,11 @@ class StoryViewModel: ObservableObject {
         isFetchingMore = true
         
         do {
-            let (fetchedStories, pagination) = try await storyService.fetchStories(page: currentPage)
+            // MODIFIED: Pass the selectedDifficultyID to the service call
+            let (fetchedStories, pagination) = try await storyService.fetchStories(
+                page: currentPage,
+                difficultyID: selectedDifficultyID
+            )
             
             if let pagination = pagination {
                 self.totalPages = pagination.pageCount
