@@ -23,6 +23,15 @@ struct StoryListView: View {
 
     @State private var storyToPresent: Story?
 
+    // Computed property for the dynamic section title
+    private var storiesSectionTitle: String {
+        if let selectedId = viewModel.selectedDifficultyID,
+           let level = viewModel.difficultyLevels.first(where: { $0.id == selectedId }) {
+            return level.attributes.name
+        }
+        return "All Stories"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             DifficultyFilterView(
@@ -43,16 +52,22 @@ struct StoryListView: View {
                 ScrollView {
                     LazyVStack(spacing: 20) {
                         // Section for Recommended Stories
-                        Section(header: headerView(title: "Recommended")) {
-                            ForEach(viewModel.recommendedStoryRows) { row in
-                                StoryRowView(row: row, onSelectStory: { story in
-                                    storyToPresent = story
-                                })
+                        Section(header: StorySectionHeader(title: "Recommended")) {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 16) {
+                                    ForEach(viewModel.recommendedStories) { story in
+                                        Button(action: { storyToPresent = story }) {
+                                            RecommendedStoryCardView(story: story)
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
+                                }
+                                .padding(.horizontal)
                             }
                         }
 
                         // Section for All Other Stories
-                        Section(header: headerView(title: "All Stories")) {
+                        Section(header: StorySectionHeader(title: storiesSectionTitle)) {
                             ForEach(viewModel.storyRows) { row in
                                 StoryRowView(row: row, onSelectStory: { story in
                                     storyToPresent = story
@@ -83,8 +98,14 @@ struct StoryListView: View {
             }
         }
     }
-    
-    private func headerView(title: String) -> some View {
+}
+
+// MARK: - Subviews
+
+private struct StorySectionHeader: View {
+    let title: String
+
+    var body: some View {
         Text(title)
             .font(.title2).bold()
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -92,7 +113,74 @@ struct StoryListView: View {
     }
 }
 
-// MARK: - Subviews
+struct RecommendedStoryCardView: View {
+    let story: Story
+    @Environment(\.theme) var theme: Theme
+    
+    private let gradientPairs: [[Color]] = [
+        [Color(hex: "#6a11cb"), Color(hex: "#2575fc")],
+        [Color(hex: "#f857a6"), Color(hex: "#ff5858")],
+        [Color(hex: "#11998e"), Color(hex: "#38ef7d")],
+        [Color(hex: "#00c6ff"), Color(hex: "#0072ff")],
+        [Color(hex: "#fc4a1a"), Color(hex: "#f7b733")],
+        [Color(hex: "#4776E6"), Color(hex: "#8E54E9")]
+    ]
+    
+    private var cardGradient: LinearGradient {
+        let colors = gradientPairs[story.id % gradientPairs.count]
+        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            imageSection(height: 120)
+            textSection(height: 130, briefLineLimit: 1)
+        }
+        .frame(width: 250)
+        .cornerRadius(20)
+        .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+    }
+    
+    private func imageSection(height: CGFloat) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            AsyncImage(url: story.attributes.coverImageURL) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                ZStack {
+                    Rectangle().fill(theme.secondary.opacity(0.2))
+                    Image(systemName: "book.closed").font(.largeTitle).foregroundColor(theme.text.opacity(0.5))
+                }
+            }
+            .frame(height: height)
+            .clipped()
+
+            LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.8)]), startPoint: .center, endPoint: .bottom)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(story.attributes.difficultyName.uppercased()).storyStyle(.cardSubtitle)
+                Text(story.attributes.title).storyStyle(.cardTitle)
+            }.padding()
+        }
+    }
+    
+    private func textSection(height: CGFloat, briefLineLimit: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
+            Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(briefLineLimit)
+            Spacer(minLength: 0)
+            HStack {
+                Spacer()
+                HStack {
+                    Image(systemName: "play.fill"); Text("Read")
+                }.storyStyle(.readButton)
+            }
+        }
+        .padding()
+        .frame(height: height)
+        .background(cardGradient)
+    }
+}
+
 
 struct StoryRowView: View {
     let row: StoryRow
