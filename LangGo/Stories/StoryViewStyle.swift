@@ -7,6 +7,8 @@ enum StoryViewStyle {
     case cardAuthor
     case cardBrief
     case readButton
+    case justifiedBody // ADDED: New style for justified text
+    case translationBubble // ADD THIS
 }
 
 /// A view modifier that applies story-specific styles based on the current theme.
@@ -52,7 +54,25 @@ struct StoryStyleModifier: ViewModifier {
                 .background(Color.white)
                 .foregroundColor(.black)
                 .clipShape(Capsule())
+        case .justifiedBody: // ADDED: Definition for the new style
+            content
+                .font(.body)
+                .lineSpacing(5)
+                //.multilineTextAlignment(.justified)
+        case .translationBubble: // ADD THIS
+            content
+                .padding()
+                .background(theme.accent.opacity(0.95))
+                .foregroundColor(theme.background)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(theme.secondary, lineWidth: 1.5)
+                )
+                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
         }
+        
+        
     }
 }
 

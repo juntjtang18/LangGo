@@ -109,14 +109,19 @@ class NetworkManager {
         
         if let body = body {
             request.httpBody = try encoder.encode(body)
-            if let jsonString = String(data: request.httpBody ?? Data(), encoding: .utf8) {
-                logger.debug("Request body for \(url): \(jsonString)")
-            }
         }
+
+        // --- NEW REQUEST LOG ---
+        logger.debug("➡️ \(method) \(url.absoluteString)")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         
+        // --- NEW RESPONSE LOG ---
+        let responseBodyString = String(data: data, encoding: .utf8) ?? "[No response body]"
+        let logBody = responseBodyString.count > 1000 ? "\(responseBodyString.prefix(1000))... (truncated)" : responseBodyString
+        logger.debug("⬅️ \(httpResponse.statusCode) from \(method) \(url.absoluteString) with body: \(logBody)")
+
         guard (200...299).contains(httpResponse.statusCode) else {
             let errorBody = String(data: data, encoding: .utf8) ?? "No response body"
             logger.error("HTTP Error: \(method) request to \(url) failed with status code \(httpResponse.statusCode). Body: \(errorBody)")
@@ -138,9 +143,6 @@ class NetworkManager {
         }
 
         do {
-            if let jsonString = String(data: data, encoding: .utf8) {
-                logger.debug("Received JSON response for \(url):\n\(jsonString)")
-            }
             return try decoder.decode(ResponseBody.self, from: data)
         } catch {
             logger.error("Decoding Error: Failed to decode \(ResponseBody.self). Error: \(error.localizedDescription)")
@@ -149,6 +151,7 @@ class NetworkManager {
             throw error
         }
     }
+    
     
     // Overload for requests without a body (GET, DELETE without specific body)
     private func performRequest<ResponseBody: Decodable>(url: URL, method: String) async throws -> ResponseBody {

@@ -1,11 +1,3 @@
-//
-//  StoryService.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/7/20.
-//
-
-
 // LangGo/StoryService.swift
 import Foundation
 import os
@@ -46,8 +38,7 @@ class StoryService {
         }
 
         urlComponents.queryItems = [
-            URLQueryItem(name: "populate[difficulty_level]", value: "*"),
-            URLQueryItem(name: "populate[illustrations][populate]", value: "media")
+            URLQueryItem(name: "populate", value: "*")
         ]
         
         guard let url = urlComponents.url else { throw URLError(.badURL) }

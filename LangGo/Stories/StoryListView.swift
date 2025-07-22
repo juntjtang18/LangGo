@@ -21,33 +21,27 @@ struct StoryListView: View {
                 Text(errorMessage)
                     .style(.errorText)
             } else {
+                // The RecommendedStoriesView is now a separate component above the List.
+                RecommendedStoriesView(stories: viewModel.recommendedStories, viewModel: viewModel)
+                    .padding(.leading) // Add padding to align with list content
+
+                // The List now only contains the vertical, scrollable stories.
                 List {
-                    Section {
-                         // MODIFIED: Pass the viewModel back to the subview
-                         RecommendedStoriesView(stories: viewModel.recommendedStories, viewModel: viewModel)
+                    ForEach(viewModel.stories) { story in
+                         NavigationLink(destination: StoryReadingView(story: story, viewModel: viewModel)) {
+                            StoryRowView(story: story)
+                                .task {
+                                    await viewModel.loadMoreStoriesIfNeeded(currentItem: story)
+                                }
+                         }
                     }
-                    .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
 
-                    Section {
-                        ForEach(viewModel.stories) { story in
-                             NavigationLink(destination: StoryReadingView(storyId: story.id, viewModel: viewModel)) {
-                                StoryRowView(story: story)
-                                    .task {
-                                        await viewModel.loadMoreStoriesIfNeeded(currentItem: story)
-                                    }
-                             }
-                        }
-                    }
-                    .listRowSeparator(.hidden)
-                    
                     if viewModel.isFetchingMore {
-                        Section {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                Spacer()
-                            }
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
                         }
                         .listRowSeparator(.hidden)
                     }
@@ -103,8 +97,8 @@ private struct RecommendedStoriesView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(stories) { story in
-                        // This NavigationLink now compiles correctly
-                        NavigationLink(destination: StoryReadingView(storyId: story.id, viewModel: viewModel)) {
+                        // This NavigationLink now correctly passes the full story object.
+                        NavigationLink(destination: StoryReadingView(story: story, viewModel: viewModel)) {
                              StoryCardView(story: story)
                         }
                         .buttonStyle(PlainButtonStyle())

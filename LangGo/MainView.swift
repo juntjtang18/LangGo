@@ -7,6 +7,7 @@ import SwiftData
 struct MainView: View {
     @Binding var authState: AuthState
     @EnvironmentObject var appEnvironment: AppEnvironment
+    @EnvironmentObject var languageSettings: LanguageSettings // ADD THIS
 
     // State to control the active tab
     @State private var selectedTab = 0
@@ -46,7 +47,8 @@ struct MainView: View {
                     .tabItem { Label("AI Conversation", systemImage: "message.fill") }
                     .tag(2)
                 
-                StoriesTabView(isSideMenuShowing: $isSideMenuShowing, appEnvironment: appEnvironment)
+                // --- THIS LINE IS NOW CORRECT ---
+                StoriesTabView(isSideMenuShowing: $isSideMenuShowing, appEnvironment: appEnvironment, languageSettings: languageSettings)
                      .tabItem { Label("Stories", systemImage: "book.fill") }
                     .tag(3)
 

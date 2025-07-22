@@ -11,6 +11,10 @@ class StoryViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var isFetchingMore: Bool = false
     @Published var errorMessage: String?
+
+    // Translation-related properties
+    @Published var translationResult: String?
+    @Published var isTranslating: Bool = false
     
     @Published var selectedDifficultyID: Int? = 0 {
         didSet {
@@ -21,20 +25,15 @@ class StoryViewModel: ObservableObject {
     private var currentPage = 1
     private var totalPages: Int?
     private let storyService: StoryService
+    private let strapiService: StrapiService
+    private let languageSettings: LanguageSettings
 
-    init(storyService: StoryService) {
+    init(storyService: StoryService, strapiService: StrapiService, languageSettings: LanguageSettings) {
         self.storyService = storyService
+        self.strapiService = strapiService
+        self.languageSettings = languageSettings
     }
     
-    private func resetAndLoadStories() {
-        stories.removeAll()
-        currentPage = 1
-        totalPages = nil
-        Task {
-            await loadMoreStoriesIfNeeded(currentItem: nil)
-        }
-    }
-
     func initialLoad() async {
         guard recommendedStories.isEmpty else { return }
         isLoading = true
@@ -89,9 +88,14 @@ class StoryViewModel: ObservableObject {
     }
 
     func fetchStoryDetails(id: Int) async {
-        // Only set loading to true if we don't have the story yet.
+        if let story = recommendedStories.first(where: { $0.id == id }) ?? stories.first(where: { $0.id == id }) {
+            self.selectedStory = story
+            print("✅ Story found in memory. No network call needed.")
+            return
+        }
+
         if selectedStory?.id != id {
-            selectedStory = nil // Clear previous story
+            selectedStory = nil
             isLoading = true
         }
         errorMessage = nil
@@ -104,6 +108,34 @@ class StoryViewModel: ObservableObject {
         }
     }
     
+    func translate(word: String) async {
+        isTranslating = true
+        translationResult = ""
+        
+        do {
+            let learningLanguage = Config.learningTargetLanguageCode
+            let baseLanguage = languageSettings.selectedLanguageCode
+            
+            guard learningLanguage != baseLanguage else {
+                translationResult = word
+                isTranslating = false
+                return
+            }
+
+            let response = try await strapiService.translateWord(
+                word: word,
+                source: learningLanguage,
+                target: baseLanguage
+            )
+            translationResult = response.translatedText
+        } catch {
+            translationResult = "Translation failed."
+            errorMessage = error.localizedDescription
+        }
+        
+        isTranslating = false
+    }
+
     func toggleLike(for story: Story) async {
         do {
             let response = try await storyService.likeStory(id: story.id)
@@ -122,6 +154,15 @@ class StoryViewModel: ObservableObject {
         }
         if selectedStory?.id == storyId {
             selectedStory?.attributes.like_count = newLikeCount
+        }
+    }
+
+    private func resetAndLoadStories() {
+        stories.removeAll()
+        currentPage = 1
+        totalPages = nil
+        Task {
+            await loadMoreStoriesIfNeeded(currentItem: nil)
         }
     }
 }
