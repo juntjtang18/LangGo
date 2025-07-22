@@ -49,9 +49,6 @@
     "AI Translation" : {
 
     },
-    "Author: %@" : {
-
-    },
     "Back" : {
       "localizations" : {
         "ja" : {
@@ -79,9 +76,6 @@
           }
         }
       }
-    },
-    "Brief: %@" : {
-
     },
     "by %@" : {
 
@@ -631,9 +625,6 @@
         }
       }
     },
-    "OUR FAVOURITES" : {
-
-    },
     "Page %lld" : {
 
     },
@@ -768,9 +759,6 @@
 
     },
     "Recently, you learned" : {
-
-    },
-    "Recommended" : {
 
     },
     "REFRESH mode" : {

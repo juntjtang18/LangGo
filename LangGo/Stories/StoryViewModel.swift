@@ -5,6 +5,11 @@ import SwiftUI
 class StoryViewModel: ObservableObject {
     @Published var stories: [Story] = []
     @Published var recommendedStories: [Story] = []
+    
+    // These now drive the UI
+    @Published var storyRows: [StoryRow] = []
+    @Published var recommendedStoryRows: [StoryRow] = []
+
     @Published var difficultyLevels: [DifficultyLevel] = []
     @Published var selectedStory: Story?
     
@@ -17,7 +22,9 @@ class StoryViewModel: ObservableObject {
     
     @Published var selectedDifficultyID: Int? = 0 {
         didSet {
-            resetAndLoadStories()
+            if oldValue != selectedDifficultyID {
+                resetAndLoadStories()
+            }
         }
     }
     
@@ -34,7 +41,7 @@ class StoryViewModel: ObservableObject {
     }
     
     func initialLoad() async {
-        guard stories.isEmpty else { return } // Prevent re-loading if already populated
+        guard stories.isEmpty else { return }
         isLoading = true
         errorMessage = nil
         
@@ -47,9 +54,10 @@ class StoryViewModel: ObservableObject {
             var allLevels = [DifficultyLevel(id: 0, attributes: .init(name: "All", level: 0, code: "ALL", description: "All stories", locale: "en"))]
             allLevels.append(contentsOf: fetchedLevels.sorted { $0.attributes.level < $1.attributes.level })
             
-            self.recommendedStories = fetchedRecommended
+            self.recommendedStories = Array(fetchedRecommended.prefix(5))
             self.difficultyLevels = allLevels
             
+            self.recommendedStoryRows = generateLayout(for: self.recommendedStories)
             await loadMoreStoriesIfNeeded(currentItem: nil)
 
         } catch {
@@ -71,17 +79,12 @@ class StoryViewModel: ObservableObject {
         isFetchingMore = true
         
         do {
-            // MODIFIED: Pass the selectedDifficultyID to the service call
-            let (fetchedStories, pagination) = try await storyService.fetchStories(
-                page: currentPage,
-                difficultyID: selectedDifficultyID
-            )
+            let (fetchedStories, pagination) = try await storyService.fetchStories(page: currentPage, difficultyID: selectedDifficultyID)
             
-            if let pagination = pagination {
-                self.totalPages = pagination.pageCount
-            }
+            if let pagination = pagination { self.totalPages = pagination.pageCount }
             
-            stories.append(contentsOf: fetchedStories)
+            self.stories.append(contentsOf: fetchedStories)
+            self.storyRows = generateLayout(for: self.stories)
             currentPage += 1
 
         } catch {
@@ -91,10 +94,46 @@ class StoryViewModel: ObservableObject {
         isFetchingMore = false
     }
 
+    private func resetAndLoadStories() {
+        stories.removeAll()
+        storyRows.removeAll()
+        currentPage = 1
+        totalPages = nil
+        Task {
+            await loadMoreStoriesIfNeeded(currentItem: nil)
+        }
+    }
+    
+    // --- THIS IS THE NEW, DETERMINISTIC LAYOUT LOGIC ---
+    private func generateLayout(for stories: [Story]) -> [StoryRow] {
+        var rows: [StoryRow] = []
+        var index = 0
+
+        while index < stories.count {
+            let story = stories[index]
+            
+            // Determine the style based on the story's ID. This is always the same.
+            let styleId = story.id % 4
+            
+            // Rule: If the ID is divisible by 4 and there's another story available,
+            // create a paired half-width row.
+            if styleId == 0 && index + 1 < stories.count {
+                let pair = [story, stories[index + 1]]
+                rows.append(StoryRow(stories: pair, style: .half))
+                index += 2 // Advance the index by 2
+            } else {
+                // Otherwise, use a full or landscape card for a single-story row.
+                let style: CardStyle = (styleId == 2) ? .landscape : .full
+                rows.append(StoryRow(stories: [story], style: style))
+                index += 1 // Advance the index by 1
+            }
+        }
+        return rows
+    }
+    
     func fetchStoryDetails(id: Int) async {
         if let story = recommendedStories.first(where: { $0.id == id }) ?? stories.first(where: { $0.id == id }) {
             self.selectedStory = story
-            print("✅ Story found in memory. No network call needed.")
             return
         }
 
@@ -158,15 +197,6 @@ class StoryViewModel: ObservableObject {
         }
         if selectedStory?.id == storyId {
             selectedStory?.attributes.like_count = newLikeCount
-        }
-    }
-
-    private func resetAndLoadStories() {
-        stories.removeAll()
-        currentPage = 1
-        totalPages = nil
-        Task {
-            await loadMoreStoriesIfNeeded(currentItem: nil)
         }
     }
 }
