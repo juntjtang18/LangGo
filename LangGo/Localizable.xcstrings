@@ -236,9 +236,6 @@
         }
       }
     },
-    "Daily recommendations" : {
-
-    },
     "Data Options" : {
       "localizations" : {
         "ja" : {
@@ -375,7 +372,7 @@
     "Exam" : {
 
     },
-    "Explore by Course" : {
+    "Explore lessons on specific topics" : {
 
     },
     "Flashcard" : {
@@ -409,10 +406,16 @@
     "Font Size" : {
 
     },
+    "Hi, %@" : {
+
+    },
     "Home" : {
 
     },
     "Input Text (%@)" : {
+
+    },
+    "LangGo, Ready to GO?" : {
 
     },
     "Language" : {
@@ -470,6 +473,9 @@
           }
         }
       }
+    },
+    "Limited Offer" : {
+
     },
     "Loading cards..." : {
 
@@ -577,12 +583,6 @@
       }
     },
     "No exam questions available." : {
-
-    },
-    "No pages in this vocabook." : {
-
-    },
-    "No vocabooks found." : {
 
     },
     "No vocabulary pages found. Start learning to create them!" : {
@@ -901,6 +901,9 @@
         }
       }
     },
+    "Show Topics" : {
+
+    },
     "Sign Up" : {
       "localizations" : {
         "ja" : {
@@ -1125,6 +1128,9 @@
     "Translation (%@)" : {
 
     },
+    "Try LangGo free for 7 days!\nEnds 25 July 2025 at 08:05" : {
+
+    },
     "Type or hold to speak..." : {
 
     },
@@ -1246,13 +1252,7 @@
     "Vocabulary Book" : {
 
     },
-    "Vocabulary Notebook" : {
-
-    },
     "Vocabulary Notebook Settings" : {
-
-    },
-    "Welcome back!" : {
 
     },
     "Welcome to LangGo" : {
@@ -1282,9 +1282,6 @@
           }
         }
       }
-    },
-    "What would you like to practice today?" : {
-
     },
     "Word saved successfully!" : {
 

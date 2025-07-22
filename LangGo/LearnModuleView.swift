@@ -142,3 +142,24 @@ struct UnitRowView: View {
         )
     }
 }
+
+struct ProgressCircleView: View {
+    var progress: Double
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(lineWidth: 5.0)
+                .opacity(0.3)
+                .foregroundColor(Color.gray)
+            
+            Circle()
+                .trim(from: 0.0, to: min(progress, 1.0))
+                .stroke(style: StrokeStyle(lineWidth: 5.0, lineCap: .round, lineJoin: .round))
+                .foregroundColor(progress > 0 ? .green : .clear)
+                .rotationEffect(Angle(degrees: 270.0))
+                .animation(.linear, value: progress)
+        }
+        .frame(width: 30, height: 30)
+    }
+}
