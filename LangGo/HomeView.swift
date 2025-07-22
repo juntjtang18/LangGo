@@ -1,39 +1,51 @@
 // LangGo/HomeView.swift
 import SwiftUI
 
-/// A model representing a single learning module in the horizontal carousel.
-struct LearningModule: Identifiable {
+// --- NEW DATA MODEL for the main grid ---
+struct ActionItem: Identifiable {
     let id = UUID()
+    let iconName: String
     let title: String
     let description: String
-    let imageName: String
+    let buttonText: String
+    let action: () -> Void
 }
 
-/// The main view for the "LangGo Academy" tab.
+/// The main view for the "LangGo" home screen, redesigned to match the mockup.
 struct HomeView: View {
     @Environment(\.theme) var theme
     
-    // The view models are passed in from the parent `LearnTabView`.
+    // The view models are passed in from the parent `HomeTabView`.
     let flashcardViewModel: FlashcardViewModel
     let vocabookViewModel: VocabookViewModel
     
     // Binding to control the app's main tab view
     @Binding var selectedTab: Int
 
-    // Sample data for the modules. This would eventually come from a view model.
-    private let modules: [LearningModule] = [
-        .init(title: "Vocabulary", description: "Add new words, start reviewing, and track your progress", imageName: "module-vocabulary"),
-        .init(title: "Dental English", description: "Master specialized terminology for dental professionals.", imageName: "module-dental"),
-        .init(title: "Business English", description: "Enhance your professional communication skills.", imageName: "module-placeholder")
-    ]
+    // Data for the main action grid. Actions are defined here to navigate to the correct tabs.
+    private var actionItems: [ActionItem] {
+        [
+            .init(iconName: "book.pages", title: "Vocabulary Notebook", description: "Manage your words, revise and improve.", buttonText: "Go to Notebook", action: { selectedTab = 1 }),
+            .init(iconName: "play.rectangle", title: "Interactive Lessons", description: "Engage with LangGo interactive learning.", buttonText: "Start Learning", action: { /* Placeholder action for future implementation */ }),
+            .init(iconName: "book", title: "Stories", description: "Read stories, improve language naturally.", buttonText: "Browse Stories", action: { selectedTab = 3 }),
+            .init(iconName: "text.bubble.left.and.text.bubble.right", title: "Smart Translation", description: "Instant translations to support speaking.", buttonText: "Start Chatting", action: { selectedTab = 2 })
+        ]
+    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 32) {
-                HeaderView()
-                GreetingAndStatsView()
-                ResumeButton()
-                ModulesCarouselView(modules: modules, selectedTab: $selectedTab)
+            VStack(alignment: .leading, spacing: 28) {
+                // 1. Welcome Header
+                WelcomeHeaderView()
+                
+                // 2. Main 2x2 Action Grid
+                MainActionGridView(items: actionItems)
+                
+                // 3. Explore by Course Section
+                ExploreByCourseView()
+                
+                // 4. Daily Recommendations Section
+                DailyRecommendationsView()
             }
             .padding()
         }
@@ -41,153 +53,155 @@ struct HomeView: View {
     }
 }
 
-// MARK: - View Components
+// MARK: - New View Components
 
-private struct HeaderView: View {
+private struct WelcomeHeaderView: View {
+    @Environment(\.theme) var theme: Theme
     var body: some View {
-        VStack(alignment: .leading) {
-            Text("LangGo Academy")
-                .style(.title)
-            Text("Your personal language learning campus.")
-                .style(.caption)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Welcome back!")
+                .font(.largeTitle).bold()
+                .foregroundColor(theme.text)
+            Text("What would you like to practice today?")
+                .font(.headline)
+                .foregroundColor(.secondary)
         }
     }
 }
 
-private struct CircledNumberView: View {
-    let number: String
-    @Environment(\.theme) var theme: Theme
-    
+private struct MainActionGridView: View {
+    let items: [ActionItem]
+    let columns = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
+
+    // Define a set of futuristic, fantasy-style gradients for the cards.
+    private let gradients: [LinearGradient] = [
+        LinearGradient(gradient: Gradient(colors: [Color(hex: "#4facfe"), Color(hex: "#00f2fe")]), startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(gradient: Gradient(colors: [Color(hex: "#a18cd1"), Color(hex: "#fbc2eb")]), startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(gradient: Gradient(colors: [Color(hex: "#fa709a"), Color(hex: "#fee140")]), startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(gradient: Gradient(colors: [Color(hex: "#43e97b"), Color(hex: "#38f9d7")]), startPoint: .topLeading, endPoint: .bottomTrailing)
+    ]
+
     var body: some View {
-        Text(number)
-            .bold()
-            .font(.caption)
-            .padding(5)
-            .background(theme.primary.opacity(0.2))
-            .clipShape(Circle())
-            .foregroundColor(theme.text)
+        LazyVGrid(columns: columns, spacing: 16) {
+            // Use enumerated to get an index for assigning a unique gradient to each card.
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                ActionCardView(item: item, gradient: gradients[index % gradients.count])
+            }
+        }
     }
 }
 
-private struct GreetingAndStatsView: View {
-    @Environment(\.theme) var theme
-    @State private var username: String = ""
+private struct ActionCardView: View {
+    let item: ActionItem
+    let gradient: LinearGradient // Accept a gradient to use as the background.
+    @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Hi, \(username)! ")
-                .font(.headline)
-                .foregroundColor(theme.text)
-            
-            VStack(alignment: .leading) {
-                HStack(spacing: 4) {
-                    Text("Recently, you learned")
-                    CircledNumberView(number: "5")
-                    Text("lessons, reviewed")
-                    CircledNumberView(number: "123")
-                }
-                HStack(spacing: 4) {
-                    Text("words and remembered ")
-                    CircledNumberView(number: "56")
-                    Text("words. ")
-                }
-                HStack(spacing: 4) {
-                    Text("You beat ")
-                    CircledNumberView(number: "54350")
-                    Text("people")
-                }
-                HStack(spacing: 4) {
-                    Text("Great Job! Ready to continue?")
+        // The entire card is now a button, which is a common pattern in the App Store.
+        Button(action: item.action) {
+            VStack(alignment: .leading, spacing: 12) {
+                Image(systemName: item.iconName)
+                    .font(.title)
+                    .foregroundColor(theme.background) // Use theme background color for high contrast
+                    //.shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
+
+
+                Spacer()
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(.headline)
+                        .foregroundColor(.white) // Use theme background color
+                        .bold()
+                        // --- THIS IS THE CHANGE ---
+                        // A shadow makes the text more readable against the gradient.
+                        .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
+
+                    Text(item.description)
+                        .font(.caption)
+                        .foregroundColor(theme.background.opacity(0.8)) // Use theme background color
+                        .lineLimit(2)
+                        // This prevents the text from altering the card's height.
+                        .fixedSize(horizontal: false, vertical: true)
+                        // A shadow makes the text more readable against the gradient.
+                        .shadow(color: .black.opacity(0.25), radius: 2, x: 0, y: 1)
                 }
             }
-            .font(.subheadline)
-            .foregroundColor(theme.text.opacity(0.8))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
         }
-        .onAppear {
-            self.username = UserDefaults.standard.string(forKey: "username") ?? "User"
-        }
+        .frame(height: 170) // Ensures all cards have the exact same height.
+        .background(gradient) // Apply the transcendent gradient background.
+        .cornerRadius(20) // Use a larger corner radius for a modern, App Store-like feel.
+        .shadow(color: .black.opacity(0.2), radius: 8, y: 4) // Add a subtle shadow for depth.
     }
 }
 
 
-private struct ResumeButton: View {
+private struct ExploreByCourseView: View {
+    @Environment(\.theme) var theme: Theme
+    let courses = ["Basic English", "IELTS English", "Business English"]
+    
     var body: some View {
-        Button(action: { /* Add resume action */ }) {
-            Text("Resume Learning")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Explore by Course")
+                .font(.title2).bold()
+                .foregroundColor(theme.text)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    ForEach(courses, id: \.self) { courseName in
+                        Button(action: { /* Placeholder */ }) {
+                            Text(courseName)
+                                .font(.subheadline).bold()
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .foregroundColor(theme.text)
+                                .background(theme.secondary.opacity(0.15))
+                                .cornerRadius(8)
+                        }
+                    }
+                }
+            }
         }
-        .buttonStyle(PrimaryButtonStyle())
     }
 }
 
-private struct ModulesCarouselView: View {
-    let modules: [LearningModule]
-    @Binding var selectedTab: Int
+private struct DailyRecommendationsView: View {
+    @Environment(\.theme) var theme: Theme
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Your Modules")
-                .style(.title)
-                .padding(.bottom, -8)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(modules) { module in
-                        let action: () -> Void = {
-                            if module.title == "Vocabulary" {
-                                // This action changes the binding, switching the tab
-                                selectedTab = 1
-                            }
-                            // Other module actions can be defined here
-                        }
-                        ModuleCardView(module: module, action: action)
-                    }
-                }
-                .padding(.vertical)
+            Text("Daily recommendations")
+                .font(.title2).bold()
+                .foregroundColor(theme.text)
+            
+            VStack(alignment: .leading, spacing: 12) {
+                RecommendationRow(text: "Today's Vocabulary Review")
+                RecommendationRow(text: "Recommended Story: A Blackjack Bargainer")
+                RecommendationRow(text: "Conversation Topic: Common Courtesy Phrases")
             }
+            .padding()
+            .background(theme.surface.opacity(0.4))
+            .cornerRadius(12)
         }
     }
 }
 
-private struct ModuleCardView: View {
-    let module: LearningModule
-    let action: () -> Void
+private struct RecommendationRow: View {
     @Environment(\.theme) var theme: Theme
-
+    let text: String
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(module.imageName)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(height: 120)
-                .frame(maxWidth: .infinity)
-                .clipped()
-            
-            Text(module.description)
-                .font(.caption)
-                .foregroundColor(theme.text.opacity(0.8))
-                .frame(height: 50, alignment: .top)
-
-            Spacer()
-            
-            // The Start button is restored and calls the provided action
-            Button(action: action) {
-                Text("Start")
-                    .font(.headline)
-                    .foregroundColor(theme.accent)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 8)
-                    .overlay(
-                        Capsule().stroke(theme.accent, lineWidth: 1.5)
-                    )
+        Button(action: { /* Placeholder for navigation */ }) {
+            HStack {
+                Text(text)
+                    .font(.subheadline)
+                    .foregroundColor(theme.text)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.secondary)
             }
         }
-        .padding()
-        .frame(width: 200, height: 260)
-        .background(theme.secondary.opacity(0.1))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(theme.secondary.opacity(0.3), lineWidth: 1)
-        )
     }
 }

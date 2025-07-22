@@ -236,6 +236,9 @@
         }
       }
     },
+    "Daily recommendations" : {
+
+    },
     "Data Options" : {
       "localizations" : {
         "ja" : {
@@ -372,6 +375,9 @@
     "Exam" : {
 
     },
+    "Explore by Course" : {
+
+    },
     "Flashcard" : {
       "localizations" : {
         "ja" : {
@@ -403,19 +409,10 @@
     "Font Size" : {
 
     },
-    "Great Job! Ready to continue?" : {
-
-    },
-    "Hi, %@! " : {
-
-    },
     "Home" : {
 
     },
     "Input Text (%@)" : {
-
-    },
-    "LangGo Academy" : {
 
     },
     "Language" : {
@@ -473,9 +470,6 @@
           }
         }
       }
-    },
-    "lessons, reviewed" : {
-
     },
     "Loading cards..." : {
 
@@ -662,9 +656,6 @@
         }
       }
     },
-    "people" : {
-
-    },
     "Profile" : {
       "localizations" : {
         "ja" : {
@@ -756,9 +747,6 @@
 
     },
     "Reading Session" : {
-
-    },
-    "Recently, you learned" : {
 
     },
     "REFRESH mode" : {
@@ -968,9 +956,6 @@
           }
         }
       }
-    },
-    "Start" : {
-
     },
     "Start Reading" : {
 
@@ -1267,6 +1252,9 @@
     "Vocabulary Notebook Settings" : {
 
     },
+    "Welcome back!" : {
+
+    },
     "Welcome to LangGo" : {
       "localizations" : {
         "ja" : {
@@ -1295,13 +1283,10 @@
         }
       }
     },
+    "What would you like to practice today?" : {
+
+    },
     "Word saved successfully!" : {
-
-    },
-    "words and remembered " : {
-
-    },
-    "words. " : {
 
     },
     "Wrong" : {
@@ -1331,15 +1316,6 @@
           }
         }
       }
-    },
-    "You beat " : {
-
-    },
-    "Your Modules" : {
-
-    },
-    "Your personal language learning campus." : {
-
     }
   },
   "version" : "1.0"
