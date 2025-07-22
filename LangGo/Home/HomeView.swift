@@ -126,49 +126,59 @@ private struct PracticeCardView: View {
     @Binding var selectedTab: Int
     @Environment(\.theme) var theme: Theme
     
-    // A state variable to hold the temporary URL of the local video file.
-    @State private var localVideoURL: URL?
+    @State private var player: AVQueuePlayer?
+    @State private var playerLooper: AVPlayerLooper?
+    @State private var isMuted: Bool = false // Start with audio ON by default
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Main visual element for the card
-            Group {
-                // If a video URL is available, use the VideoPlayer
-                if let url = localVideoURL {
-                    VideoPlayer(player: AVPlayer(url: url))
+            // ZStack allows layering the custom mute button over the video.
+            ZStack {
+                // Layer 1: The Video Player
+                if let player = player {
+                    VideoPlayer(player: player)
+                        .allowsHitTesting(false) // Prevents the default controls from appearing.
                 } else {
-                    // Otherwise, fall back to the image
+                    // Fallback Image
                     switch action.image {
                     case .asset(let name):
-                        Image(name)
-                            .resizable()
-                            .scaledToFit()
+                        Image(name).resizable().scaledToFit()
                     case .system(let name):
-                        Image(systemName: name)
-                            .font(.system(size: 70))
-                            .foregroundColor(theme.text.opacity(0.5))
+                        Image(systemName: name).font(.system(size: 70)).foregroundColor(theme.text.opacity(0.5))
+                    }
+                }
+                
+                // Layer 2: The Mute/Unmute Button and Tap Area
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        // This button provides a clear visual indicator of the sound state.
+                        Button(action: toggleMute) {
+                            Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .padding(8)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(Circle())
+                        }
+                        .padding(8)
                     }
                 }
             }
             .frame(height: 180)
             .frame(maxWidth: .infinity)
-            // Show a background only if it's an image
-            .background(localVideoURL == nil ? theme.secondary.opacity(0.2) : .clear)
+            .background(player == nil ? theme.secondary.opacity(0.2) : .black)
             .cornerRadius(12)
-            .onAppear {
-                // When the view appears, prepare the local video from the asset name
-                if case let .asset(videoName)? = action.videoSource {
-                    prepareLocalVideo(named: videoName)
-                }
-            }
+            .onTapGesture(perform: toggleMute) // Make the whole video area tappable.
+            .onAppear(perform: setupAndPlayVideo)
+            .onDisappear { player?.pause() }
             
             HStack {
                 Text(action.title)
                     .homeStyle(.practiceCardTitle)
                     .fixedSize(horizontal: false, vertical: true)
-                
                 Spacer()
-                
                 Button(action: { selectedTab = action.tabIndex }) {
                     Image(systemName: "arrow.right.circle.fill")
                         .font(.system(size: 44))
@@ -177,29 +187,52 @@ private struct PracticeCardView: View {
             }
         }
         .homeStyle(.practiceCard)
-        .frame(width: UIScreen.main.bounds.width * 0.85) // Set width to 85% of screen width
+        .frame(width: UIScreen.main.bounds.width * 0.85)
     }
 
-    /// This function loads video data from your app's assets and writes it to a
-    /// temporary file that the VideoPlayer can use.
-    private func prepareLocalVideo(named assetName: String) {
-        // Find the asset in your app's bundle
-        guard let dataAsset = NSDataAsset(name: assetName) else {
-            print("Video asset '\(assetName)' not found in Asset Catalog.")
-            return
-        }
+    /// Toggles the mute state of the video player.
+    private func toggleMute() {
+        isMuted.toggle()
+        player?.isMuted = isMuted
+    }
+
+    /// Initializes the player, sets the initial mute state, and starts playback.
+    private func setupAndPlayVideo() {
+        guard let videoSource = action.videoSource, player == nil else { return }
+        guard let url = getVideoURL(from: videoSource) else { return }
         
-        // Create a temporary URL in the device's cache directory
-        let fileManager = FileManager.default
-        let cacheDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let tempURL = cacheDirectory.appendingPathComponent("\(UUID().uuidString).mp4")
+        let playerItem = AVPlayerItem(url: url)
+        let queuePlayer = AVQueuePlayer(playerItem: playerItem)
+        self.playerLooper = AVPlayerLooper(player: queuePlayer, templateItem: playerItem)
         
-        // Write the video data to the temporary URL
-        do {
-            try dataAsset.data.write(to: tempURL)
-            self.localVideoURL = tempURL // Set the state variable to trigger the VideoPlayer
-        } catch {
-            print("Error writing video to temporary file: \(error)")
+        // Use the state variable to set the initial audio state.
+        queuePlayer.isMuted = self.isMuted
+        
+        self.player = queuePlayer
+        self.player?.play()
+    }
+
+    private func getVideoURL(from source: VideoSource) -> URL? {
+        switch source {
+        case .asset(let assetName):
+            guard let dataAsset = NSDataAsset(name: assetName) else {
+                print("Video asset '\(assetName)' not found in Asset Catalog.")
+                return nil
+            }
+            let fileManager = FileManager.default
+            let cacheDirectory = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            let tempURL = cacheDirectory.appendingPathComponent("\(assetName).mp4")
+            if !fileManager.fileExists(atPath: tempURL.path) {
+                do {
+                    try dataAsset.data.write(to: tempURL)
+                } catch {
+                    print("Error writing video to temporary file: \(error)")
+                    return nil
+                }
+            }
+            return tempURL
+        case .remote(let url):
+            return url
         }
     }
 }
