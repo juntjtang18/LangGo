@@ -36,19 +36,22 @@ struct HomeView: View {
         PracticeAction(
             id: "ai_partner_video",
             image: .system("message.fill"),
-            title: "Talk to your AI Partner",
+            // CHANGED: Title updated as requested.
+            title: "Talk to my Conversation Partner",
             tabIndex: 2,
             videoAssetName: "LangGo App_ Talk to Your Learning Partner Feature"
         ),
         PracticeAction(
             id: "read_stories",
             image: .system("book.fill"),
-            title: "Read Stories",
+            // CHANGED: Title updated as requested.
+            title: "Reading/Listening Stories",
             tabIndex: 3,
             videoAssetName: "LangGo_ Learn English Through Stories"
         )
     ]
 
+    // The body and main logic of HomeView remain the same.
     var body: some View {
         GeometryReader { screenGeometry in
             ScrollView {
@@ -60,7 +63,7 @@ struct HomeView: View {
                     
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
-                            Text("LangGo, Ready to GO?")
+                            Text("LangGo to Pro, Ready to GO?")
                                 .homeStyle(.sectionHeader)
                             Spacer()
                             Button(action: {
@@ -157,7 +160,7 @@ struct HomeView: View {
     }
 }
 
-// Data Models and other sub-views are here for context but unchanged.
+// Data Models and other helper views remain unchanged.
 
 private enum PracticeImage {
     case asset(String)
@@ -194,21 +197,22 @@ private struct OfferBannerView: View {
 
 private struct PracticeCardView: View {
     let action: PracticeAction
-    let videoURL: URL? // The card now receives its URL directly.
+    let videoURL: URL?
     @Binding var selectedTab: Int
     @ObservedObject var playerManager: VideoPlayerManager
     @Environment(\.theme) var theme: Theme
     
-    // ADDED: Each card now holds a stable reference to its own player.
     @State private var player: AVQueuePlayer?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // THE CRITICAL FIX: The ZStack now *always* contains the VideoPlayer if one exists for this card.
-            // We control visibility with .opacity() instead of adding/removing the view from the hierarchy.
             ZStack {
-                // Placeholder is always in the background.
-                if playerManager.currentlyPlayingID != action.id {
+                // CHANGED: The logic for showing the VideoPlayer is now more specific.
+                // It will only show if it's the currently playing video AND it hasn't finished.
+                let shouldShowVideo = playerManager.currentlyPlayingID == action.id && !playerManager.finishedVideoIDs.contains(action.id)
+
+                // The placeholder/thumbnail now shows if the video is NOT playing OR if it has finished.
+                if !shouldShowVideo {
                     switch action.image {
                     case .asset(let name):
                         Image(name).resizable().scaledToFit().padding()
@@ -217,12 +221,10 @@ private struct PracticeCardView: View {
                     }
                 }
                 
-                // The VideoPlayer is created once and remains in the view hierarchy.
                 if let player = player {
                     VideoPlayer(player: player)
                         .allowsHitTesting(false)
-                        // Its visibility is now controlled by opacity, which is much safer.
-                        .opacity(playerManager.currentlyPlayingID == action.id ? 1 : 0)
+                        .opacity(shouldShowVideo ? 1 : 0) // Controls visibility
                 }
             }
             .frame(height: 180)
@@ -253,7 +255,6 @@ private struct PracticeCardView: View {
         .homeStyle(.practiceCard)
         .frame(width: UIScreen.main.bounds.width * 0.85)
         .onAppear {
-            // When the card appears, it asks the manager for its dedicated player.
             if let videoURL = videoURL {
                 self.player = playerManager.player(for: action.id, with: videoURL)
             }
