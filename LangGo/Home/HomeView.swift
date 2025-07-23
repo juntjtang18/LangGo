@@ -1,25 +1,22 @@
-// LangGo/HomeView.swift
 import SwiftUI
 import AVKit
 
-private enum PracticeImage {
-    case asset(String)
-    case system(String)
+// MARK: - PreferenceKey for Tracking Card Visibility
+private struct CardVisibilityInfo: Equatable {
+    let id: UUID
+    let frame: CGRect
 }
 
-private enum VideoSource {
-    case asset(String)
-    case remote(URL)
+private struct VisibleCardPreferenceKey: PreferenceKey {
+    typealias Value = [CardVisibilityInfo]
+    static var defaultValue: Value = []
+
+    static func reduce(value: inout Value, nextValue: () -> Value) {
+        value.append(contentsOf: nextValue())
+    }
 }
 
-private struct PracticeAction: Identifiable {
-    let id = UUID()
-    let image: PracticeImage
-    let title: String
-    let tabIndex: Int
-    let videoSource: VideoSource?
-}
-
+// MARK: - Home View
 struct HomeView: View {
     @Environment(\.theme) var theme
     @Binding var selectedTab: Int
@@ -27,7 +24,6 @@ struct HomeView: View {
     @AppStorage("homeViewVideoMuted") private var isGloballyMuted: Bool = false
     
     @StateObject private var playerManager = VideoPlayerManager()
-    // 1. Add a state to explicitly track if this view is active.
     @State private var isViewActive: Bool = true
 
     private let practiceActions: [PracticeAction] = [
@@ -41,7 +37,7 @@ struct HomeView: View {
             image: .system("message.fill"),
             title: "Talk to your AI Partner",
             tabIndex: 2,
-            videoSource: nil
+            videoSource: .asset("LangGo App_ Talk to Your Learning Partner Feature")
         ),
         PracticeAction(
             image: .system("book.fill"),
@@ -87,12 +83,15 @@ struct HomeView: View {
                                     PracticeCardView(
                                         action: action,
                                         selectedTab: $selectedTab,
-                                        isMuted: isGloballyMuted,
-                                        playerManager: playerManager,
-                                        screenFrame: screenGeometry.frame(in: .global),
-                                        isViewActive: isViewActive // 2. Pass the active state to the card.
+                                        playerManager: playerManager
                                     )
                                 }
+                            }
+                        }
+                        .onPreferenceChange(VisibleCardPreferenceKey.self) { cardInfos in
+                            // Use a slight delay to avoid frantic playback during fast scrolls
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                processVisibleCards(cardInfos, screenFrame: screenGeometry.frame(in: .global))
                             }
                         }
                     }
@@ -108,111 +107,47 @@ struct HomeView: View {
             self.isViewActive = (selectedTab == 0)
         }
         .onChange(of: selectedTab) { _, newTab in
-            // 3. Update the active state when the tab changes.
             isViewActive = (newTab == 0)
         }
         .onChange(of: isViewActive) { _, active in
-            // 4. When the view becomes inactive, forcefully stop all playback.
             if !active {
                 playerManager.stopAllPlayback()
             }
         }
     }
-}
 
-// MARK: - Reusable Components for HomeView
-
-private struct OfferBannerView: View {
-    // ... (This view remains unchanged)
-    @Environment(\.theme) var theme: Theme
-
-    var body: some View {
-        Button(action: { /* TODO: Implement offer action */ }) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading) {
-                    Text("Limited Offer")
-                        .homeStyle(.offerTitle)
-                    Text("Try LangGo free for 7 days!\nEnds 25 July 2025 at 08:05")
-                        .homeStyle(.offerSubtitle)
-                }
-                Spacer()
-                Image(systemName: "arrow.right")
-                    .font(.title2.bold())
-                    .foregroundColor(theme.text)
-            }
-            .homeStyle(.offerBanner)
+    private func processVisibleCards(_ infos: [CardVisibilityInfo], screenFrame: CGRect) {
+        let videoCards = infos.filter { info in
+            practiceActions.first { $0.id == info.id }?.videoSource != nil
         }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-private struct PracticeCardView: View {
-    let action: PracticeAction
-    @Binding var selectedTab: Int
-    let isMuted: Bool
-    @ObservedObject var playerManager: VideoPlayerManager
-    let screenFrame: CGRect
-    let isViewActive: Bool // Receives the active state.
-    @Environment(\.theme) var theme: Theme
-    
-    @State private var timer = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        GeometryReader { cardGeometry in
-            VStack(alignment: .leading, spacing: 20) {
-                Group {
-                    if let player = playerManager.player, playerManager.currentlyPlayingID == action.id {
-                        VideoPlayer(player: player)
-                            .allowsHitTesting(false)
-                    } else {
-                        switch action.image {
-                        case .asset(let name):
-                            Image(name).resizable().scaledToFit()
-                        case .system(let name):
-                            Image(systemName: name).font(.system(size: 70)).foregroundColor(theme.text.opacity(0.5))
-                        }
-                    }
-                }
-                .frame(height: 180)
-                .frame(maxWidth: .infinity)
-                .background(playerManager.currentlyPlayingID == action.id ? .black : theme.secondary.opacity(0.2))
-                .cornerRadius(12)
-                .onReceive(timer) { _ in
-                    checkVisibility(cardFrame: cardGeometry.frame(in: .global))
-                }
-                
-                HStack {
-                    Text(action.title)
-                        .homeStyle(.practiceCardTitle)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button(action: { selectedTab = action.tabIndex }) {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .font(.system(size: 44))
-                            .foregroundColor(.red)
-                    }
-                }
-            }
-        }
-        .homeStyle(.practiceCard)
-        .frame(width: UIScreen.main.bounds.width * 0.85)
-    }
-
-    private func checkVisibility(cardFrame: CGRect) {
-        let isFullyVisible = screenFrame.minX <= cardFrame.minX && cardFrame.maxX <= screenFrame.maxX
         
-        // 5. The card will only attempt to play its video if the entire HomeView is active.
-        if isFullyVisible && isViewActive {
-            if let videoSource = action.videoSource, let url = getVideoURL(from: videoSource) {
-                playerManager.play(url: url, for: action.id, isMuted: isMuted)
+        // Find the card that is most centered on the screen
+        var bestCandidate: (id: UUID, distance: CGFloat)? = nil
+        
+        for info in videoCards {
+            let cardMidX = info.frame.midX
+            let screenMidX = screenFrame.midX
+            let distance = abs(cardMidX - screenMidX)
+            
+            // Ensure the card is at least partially on screen
+            if info.frame.maxX > screenFrame.minX && info.frame.minX < screenFrame.maxX {
+                if bestCandidate == nil || distance < bestCandidate!.distance {
+                    bestCandidate = (info.id, distance)
+                }
             }
-        } else {
-            playerManager.pause(for: action.id)
+        }
+        
+        // Play the video for the best candidate if the view is active
+        if let bestCandidateID = bestCandidate?.id, isViewActive {
+            if let actionToPlay = practiceActions.first(where: { $0.id == bestCandidateID }),
+               let videoSource = actionToPlay.videoSource,
+               let url = getVideoURL(from: videoSource) {
+                playerManager.play(url: url, for: bestCandidateID, isMuted: isGloballyMuted)
+            }
         }
     }
 
     private func getVideoURL(from source: VideoSource) -> URL? {
-        // ... (This function remains unchanged)
         switch source {
         case .asset(let assetName):
             guard let dataAsset = NSDataAsset(name: assetName) else {
@@ -238,8 +173,97 @@ private struct PracticeCardView: View {
 }
 
 
+// MARK: - Reusable Components
+private enum PracticeImage {
+    case asset(String)
+    case system(String)
+}
+
+private enum VideoSource {
+    case asset(String)
+    case remote(URL)
+}
+
+private struct PracticeAction: Identifiable {
+    let id = UUID()
+    let image: PracticeImage
+    let title: String
+    let tabIndex: Int
+    let videoSource: VideoSource?
+}
+
+private struct OfferBannerView: View {
+    @Environment(\.theme) var theme: Theme
+
+    var body: some View {
+        Button(action: { /* TODO: Implement offer action */ }) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading) {
+                    Text("Limited Offer")
+                        .homeStyle(.offerTitle)
+                    Text("Try LangGo free for 7 days!\nEnds 25 July 2025 at 08:05")
+                        .homeStyle(.offerSubtitle)
+                }
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.title2.bold())
+                    .foregroundColor(theme.text)
+            }
+            .homeStyle(.offerBanner)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+private struct PracticeCardView: View {
+    let action: PracticeAction
+    @Binding var selectedTab: Int
+    @ObservedObject var playerManager: VideoPlayerManager
+    @Environment(\.theme) var theme: Theme
+    
+    var body: some View {
+        GeometryReader { cardGeometry in
+            VStack(alignment: .leading, spacing: 20) {
+                Group {
+                    if let player = playerManager.player, playerManager.currentlyPlayingID == action.id {
+                        VideoPlayer(player: player)
+                            .allowsHitTesting(false)
+                    } else {
+                        switch action.image {
+                        case .asset(let name):
+                            Image(name).resizable().scaledToFit()
+                        case .system(let name):
+                            Image(systemName: name).font(.system(size: 70)).foregroundColor(theme.text.opacity(0.5))
+                        }
+                    }
+                }
+                .frame(height: 180)
+                .frame(maxWidth: .infinity)
+                .background(playerManager.currentlyPlayingID == action.id ? .black : theme.secondary.opacity(0.2))
+                .cornerRadius(12)
+                
+                HStack {
+                    Text(action.title)
+                        .homeStyle(.practiceCardTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button(action: { selectedTab = action.tabIndex }) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.system(size: 44))
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            // Report the card's frame to the parent view
+            .preference(key: VisibleCardPreferenceKey.self, value: [CardVisibilityInfo(id: action.id, frame: cardGeometry.frame(in: .global))])
+        }
+        .homeStyle(.practiceCard)
+        .frame(width: UIScreen.main.bounds.width * 0.85)
+    }
+}
+
+
 private struct ExploreLessonsView: View {
-    // ... (This view remains unchanged)
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
