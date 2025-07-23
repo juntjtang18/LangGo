@@ -45,7 +45,7 @@ struct HomeView: View {
             image: .system("book.fill"),
             title: "Read Stories",
             tabIndex: 3,
-            videoAssetName: nil
+            videoAssetName: "LangGo_ Learn English Through Stories"
         )
     ]
 
