@@ -1,16 +1,13 @@
 import SwiftUI
 import AVKit
 
-// ADDED: A PreferenceKey to communicate card visibility from child views to the ScrollView.
 private struct VisibleCardPreferenceKey: PreferenceKey {
     struct CardInfo: Equatable {
         let id: String
         let frame: CGRect
     }
-
     typealias Value = [CardInfo]
     static var defaultValue: Value = []
-
     static func reduce(value: inout Value, nextValue: () -> Value) {
         value.append(contentsOf: nextValue())
     }
@@ -18,21 +15,17 @@ private struct VisibleCardPreferenceKey: PreferenceKey {
 
 struct HomeView: View {
     @Environment(\.theme) var theme: Theme
-    // ADDED: The view now receives the selectedTab binding.
     @Binding var selectedTab: Int
     @State private var username: String = "Vivian"
     @AppStorage("homeViewVideoMuted") private var isVideoMuted: Bool = true
     
-    // CHANGED: The manager is now a @StateObject as it's owned by this view.
     @StateObject private var playerManager = VideoPlayerManager()
     
-    // ADDED: A computed property to determine if this tab is active.
     private var isViewActive: Bool {
         selectedTab == 0
     }
 
     private let practiceActions: [PracticeAction] = [
-        // CHANGED: Added a unique 'id' string to each action for state tracking.
         PracticeAction(
             id: "vocab_video",
             image: .asset("module-vocabulary"),
@@ -70,10 +63,11 @@ struct HomeView: View {
                             Text("LangGo, Ready to GO?")
                                 .homeStyle(.sectionHeader)
                             Spacer()
-                            // CHANGED: The mute button now directly updates the player manager.
                             Button(action: {
                                 isVideoMuted.toggle()
-                                playerManager.currentPlayer?.isMuted = isVideoMuted
+                                if let currentlyPlayingID = playerManager.currentlyPlayingID {
+                                    playerManager.playVideo(for: currentlyPlayingID, isMuted: isVideoMuted)
+                                }
                             }) {
                                 Image(systemName: isVideoMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                                     .font(.title2)
@@ -86,6 +80,7 @@ struct HomeView: View {
                                 ForEach(practiceActions) { action in
                                     PracticeCardView(
                                         action: action,
+                                        videoURL: getVideoURL(fromAsset: action.videoAssetName),
                                         selectedTab: $selectedTab,
                                         playerManager: playerManager
                                     )
@@ -93,7 +88,6 @@ struct HomeView: View {
                             }
                             .padding(.horizontal)
                         }
-                        // ADDED: These modifiers listen for the visible cards and process them.
                         .coordinateSpace(name: "scroll")
                         .onPreferenceChange(VisibleCardPreferenceKey.self) { cardInfos in
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -111,7 +105,6 @@ struct HomeView: View {
         .onAppear {
             self.username = UserDefaults.standard.string(forKey: "username") ?? "Vivian"
         }
-        // ADDED: This observer pauses all videos when the user switches to a different tab.
         .onChange(of: isViewActive) { _, active in
             if !active {
                 playerManager.stopAllPlayback()
@@ -119,35 +112,32 @@ struct HomeView: View {
         }
     }
 
-    // ADDED: This new function contains all the logic for deciding which video to play or pause.
     private func processVisibleCards(_ infos: [VisibleCardPreferenceKey.CardInfo], in screenFrame: CGRect) {
         guard isViewActive else { return }
 
-        let visibleVideoCards = infos.filter { info in
-            practiceActions.first { $0.id == info.id }?.videoAssetName != nil && screenFrame.intersects(info.frame)
-        }
-        
-        let bestCandidate = visibleVideoCards.min(by: {
-            abs($0.frame.midX - screenFrame.midX) < abs($1.frame.midX - screenFrame.midX)
-        })
-        
-        if let cardToPlay = bestCandidate {
-            if let action = practiceActions.first(where: { $0.id == cardToPlay.id }),
-               let assetName = action.videoAssetName,
-               let url = getVideoURL(fromAsset: assetName) {
-                playerManager.playVideo(for: cardToPlay.id, with: url, isMuted: isVideoMuted)
-            }
+        let primaryCandidate = infos
+            .filter { screenFrame.intersects($0.frame) }
+            .min(by: { abs($0.frame.midX - screenFrame.midX) < abs($1.frame.midX - screenFrame.midX) })
+
+        let primaryAction = primaryCandidate.flatMap { candidate in
+            practiceActions.first { $0.id == candidate.id }
         }
 
-        for info in visibleVideoCards {
-            if info.id != bestCandidate?.id {
-                playerManager.pauseVideo(for: info.id)
+        if let action = primaryAction, action.videoAssetName != nil {
+            playerManager.playVideo(for: action.id, isMuted: isVideoMuted)
+        } else {
+            playerManager.stopAllPlayback()
+        }
+
+        for action in practiceActions where action.videoAssetName != nil {
+            if action.id != primaryAction?.id {
+                playerManager.pauseVideo(for: action.id)
             }
         }
     }
 
-    // This helper function is unchanged, but used by the new logic.
-    private func getVideoURL(fromAsset assetName: String) -> URL? {
+    private func getVideoURL(fromAsset assetName: String?) -> URL? {
+        guard let assetName = assetName, !assetName.isEmpty else { return nil }
         guard let dataAsset = NSDataAsset(name: assetName) else {
             print("Video asset '\(assetName)' not found.")
             return nil
@@ -167,14 +157,14 @@ struct HomeView: View {
     }
 }
 
-// This struct is unchanged.
+// Data Models and other sub-views are here for context but unchanged.
+
 private enum PracticeImage {
     case asset(String)
     case system(String)
 }
 
 private struct PracticeAction: Identifiable {
-    // CHANGED: The 'id' is now a String to be more explicit and is required.
     let id: String
     let image: PracticeImage
     let title: String
@@ -182,10 +172,8 @@ private struct PracticeAction: Identifiable {
     let videoAssetName: String?
 }
 
-// This view is unchanged.
 private struct OfferBannerView: View {
     @Environment(\.theme) var theme: Theme
-
     var body: some View {
         Button(action: { /* Offer action */ }) {
             HStack(spacing: 12) {
@@ -196,9 +184,7 @@ private struct OfferBannerView: View {
                         .homeStyle(.offerSubtitle)
                 }
                 Spacer()
-                Image(systemName: "arrow.right")
-                    .font(.title2.bold())
-                    .foregroundColor(theme.text)
+                Image(systemName: "arrow.right").font(.title2.bold()).foregroundColor(theme.text)
             }
             .homeStyle(.offerBanner)
         }
@@ -208,35 +194,41 @@ private struct OfferBannerView: View {
 
 private struct PracticeCardView: View {
     let action: PracticeAction
+    let videoURL: URL? // The card now receives its URL directly.
     @Binding var selectedTab: Int
     @ObservedObject var playerManager: VideoPlayerManager
     @Environment(\.theme) var theme: Theme
     
+    // ADDED: Each card now holds a stable reference to its own player.
+    @State private var player: AVQueuePlayer?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Group {
-                // CHANGED: Logic now checks the currentlyPlayingID from the manager.
-                if let player = playerManager.currentPlayer, playerManager.currentlyPlayingID == action.id {
+            // THE CRITICAL FIX: The ZStack now *always* contains the VideoPlayer if one exists for this card.
+            // We control visibility with .opacity() instead of adding/removing the view from the hierarchy.
+            ZStack {
+                // Placeholder is always in the background.
+                if playerManager.currentlyPlayingID != action.id {
+                    switch action.image {
+                    case .asset(let name):
+                        Image(name).resizable().scaledToFit().padding()
+                    case .system(let name):
+                        Image(systemName: name).font(.system(size: 70)).foregroundColor(theme.text.opacity(0.5))
+                    }
+                }
+                
+                // The VideoPlayer is created once and remains in the view hierarchy.
+                if let player = player {
                     VideoPlayer(player: player)
                         .allowsHitTesting(false)
-                        .transition(.opacity.animation(.default))
-                } else {
-                    ZStack {
-                        Rectangle().fill(theme.secondary.opacity(0.2))
-                        switch action.image {
-                        case .asset(let name):
-                            Image(name).resizable().scaledToFit().padding()
-                        case .system(let name):
-                            Image(systemName: name).font(.system(size: 70)).foregroundColor(theme.text.opacity(0.5))
-                        }
-                    }
+                        // Its visibility is now controlled by opacity, which is much safer.
+                        .opacity(playerManager.currentlyPlayingID == action.id ? 1 : 0)
                 }
             }
             .frame(height: 180)
             .frame(maxWidth: .infinity)
-            .background(playerManager.currentlyPlayingID == action.id ? .black : Color.clear)
+            .background(theme.secondary.opacity(0.2))
             .cornerRadius(12)
-            // ADDED: This background modifier is the key to reporting the card's position up to the parent.
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(
@@ -260,18 +252,21 @@ private struct PracticeCardView: View {
         }
         .homeStyle(.practiceCard)
         .frame(width: UIScreen.main.bounds.width * 0.85)
+        .onAppear {
+            // When the card appears, it asks the manager for its dedicated player.
+            if let videoURL = videoURL {
+                self.player = playerManager.player(for: action.id, with: videoURL)
+            }
+        }
     }
 }
 
-// This view is unchanged.
 private struct ExploreLessonsView: View {
     @Environment(\.theme) var theme: Theme
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Explore lessons on specific topics")
                 .homeStyle(.exploreTitle)
-                
             Button(action: { /* Navigation action */ }) {
                 HStack {
                     Text("Show Topics")
