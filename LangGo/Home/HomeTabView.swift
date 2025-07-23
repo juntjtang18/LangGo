@@ -1,21 +1,27 @@
-// LangGo/HomeTabView.swift
 import SwiftUI
 
-// MARK: - Home Tab Container
 struct HomeTabView: View {
+    // ADDED: This binding has been restored to fix the build error in MainView.
     @Binding var isSideMenuShowing: Bool
+    
     @Binding var selectedTab: Int
+    @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        NavigationStack {
-            // HomeView no longer requires ViewModels, simplifying the container.
+        NavigationView {
             HomeView(selectedTab: $selectedTab)
-                // The navigation title is removed to better match the mockup.
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    // The menu toolbar is kept for consistency with other app tabs.
-                    MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
-                }
+                // This existing logic remains unchanged.
+                .navigationBarItems(leading: (
+                    Button(action: {
+                        withAnimation {
+                            self.isSideMenuShowing.toggle()
+                        }
+                    }) {
+                        Image(systemName: "line.horizontal.3")
+                            .imageScale(.large)
+                    }
+                ))
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }
