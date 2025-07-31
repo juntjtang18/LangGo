@@ -1,10 +1,10 @@
+// LangGo/Vocabook/FlashcardView.swift
 import SwiftUI
-import SwiftData
 
 struct FlashcardTabView: View {
     @Binding var isSideMenuShowing: Bool
     
-    @Environment(\.modelContext) private var modelContext
+    // REMOVED: @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var appEnvironment: AppEnvironment
     
     @State private var viewModel: FlashcardViewModel?
@@ -43,7 +43,8 @@ struct FlashcardTabView: View {
                 ProgressView()
                     .onAppear {
                         if viewModel == nil {
-                            viewModel = FlashcardViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                            // MODIFIED: viewModel is now initialized without modelContext.
+                            viewModel = FlashcardViewModel(strapiService: appEnvironment.strapiService)
                         }
                     }
             }
@@ -52,7 +53,8 @@ struct FlashcardTabView: View {
 }
 
 private struct FlashcardProgressCircleView: View {
-    let viewModel: FlashcardViewModel
+    // This view takes an ObservedObject now, which is best practice for subviews.
+    @ObservedObject var viewModel: FlashcardViewModel
 
     private var progress: Double {
         guard viewModel.totalCardCount > 0 else { return 0 }
@@ -89,7 +91,7 @@ private struct FlashcardProgressCircleView: View {
 }
 
 private struct ActionButtonsView: View {
-    let viewModel: FlashcardViewModel
+    @ObservedObject var viewModel: FlashcardViewModel
     @Binding var isReviewing: Bool
     @Binding var isAddingNewWord: Bool
     
@@ -121,7 +123,7 @@ private struct ActionButtonsView: View {
 }
 
 private struct StatisticsView: View {
-    let viewModel: FlashcardViewModel
+    @ObservedObject var viewModel: FlashcardViewModel
     
     var body: some View {
         VStack(alignment: .leading) {

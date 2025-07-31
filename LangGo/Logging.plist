@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>DefaultLevel</key>
+	<string>info</string>
+	<key>Levels</key>
+	<dict>
+		<key>NetworkManager</key>
+		<string>debug</string>
+		<key>StrapiService</key>
+		<string>debug</string>
+		<key>ProfileViewModel</key>
+		<string>info</string>
+		<key>StoreManager</key>
+		<string>debug</string>
+		<key>SessionManager</key>
+		<string>info</string>
+	</dict>
+</dict>
+</plist>

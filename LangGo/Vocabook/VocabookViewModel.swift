@@ -1,76 +1,59 @@
-// LangGo/VocabookViewModel.swift
+// LangGo/Vocabook/VocabookViewModel.swift
+
 import Foundation
-import SwiftData
 import os
 import SwiftUI
 
-// MARK: - SwiftData Models (Moved from separate files)
-@Model
-final class Vocabook {
-    @Attribute(.unique) var id: Int
-    var title: String
-    @Relationship(deleteRule: .cascade, inverse: \Vocapage.vocabook)
-    var vocapages: [Vocapage]?
+// MARK: - In-Memory Data Models
 
-    init(id: Int, title: String) {
-        self.id = id
-        self.title = title
-    }
-}
-
-// A new struct to hold the calculated weighted progress.
+// A struct to hold the calculated weighted progress.
 struct WeightedProgress {
     let progress: Double
     let isComplete: Bool
 }
 
-@Model
-final class Vocapage {
-    @Attribute(.unique) var id: Int
+// MODIFIED: Vocabook is now a simple struct for in-memory use.
+struct Vocabook: Identifiable {
+    let id: Int
+    var title: String
+    var vocapages: [Vocapage]?
+}
+
+// MODIFIED: Vocapage is now a simple struct for in-memory use.
+struct Vocapage: Identifiable {
+    let id: Int
     var title: String
     var order: Int
-    @Relationship(deleteRule: .nullify)
-    var flashcards: [Flashcard]?
-    var vocabook: Vocabook?
+    var flashcards: [Flashcard]? // This will be loaded on demand.
 
-    init(id: Int, title: String, order: Int) {
-        self.id = id
-        self.title = title
-        self.order = order
-    }
-
+    // The progress calculation is now a placeholder, as flashcards are loaded separately.
     var progress: Double {
-        guard let cards = flashcards, !cards.isEmpty else { return 0.0 }
-        let rememberedCount = cards.filter { $0.isRemembered || $0.correctStreak >= 11 }.count
-        return Double(rememberedCount) / Double(cards.count)
+        return 0.0
     }
     
-    // This property is now a placeholder; the real calculation happens in the View.
     var weightedProgress: WeightedProgress {
-        // The actual calculation requires the settings manager, so we do it in the view.
-        // This just provides a default structure.
         return WeightedProgress(progress: 0.0, isComplete: false)
     }
 }
 
-
 // MARK: - VocabookViewModel
-@Observable
-class VocabookViewModel {
-    private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
-    private let modelContext: ModelContext
-    private let strapiService: StrapiService
-    var loadCycle: Int = 0
 
-    var vocabook: Vocabook?
-    var isLoadingVocabooks = false
-    var expandedVocabooks: Set<Int> = []
+// MODIFIED: Converted to ObservableObject for iOS 16 compatibility.
+class VocabookViewModel: ObservableObject {
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
+    private let strapiService: StrapiService
+
+    // MODIFIED: Properties that update the UI are now @Published.
+    @Published var vocabook: Vocabook?
+    @Published var isLoadingVocabooks = false
+    @Published var expandedVocabooks: Set<Int> = []
+    @Published var loadCycle: Int = 0
     
-    var totalFlashcards: Int = 0
-    var totalPages: Int = 1
+    @Published var totalFlashcards: Int = 0
+    @Published var totalPages: Int = 1
     
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        self.modelContext = modelContext
+    // MODIFIED: Initializer no longer requires a ModelContext.
+    init(strapiService: StrapiService) {
         self.strapiService = strapiService
     }
     
@@ -80,58 +63,41 @@ class VocabookViewModel {
         defer { isLoadingVocabooks = false }
 
         do {
-            // 1. Fetch settings and pagination info in one call
+            // 1. Fetch settings and pagination info from the server.
             let vb = try await strapiService.fetchVBSetting()
             let pageSize = vb.attributes.wordsPerPage
+            // We only need the pagination from this call, not the flashcards themselves.
             let (_, pagination) = try await strapiService.fetchFlashcards(page: 1, pageSize: pageSize)
 
             guard let pag = pagination else {
                 totalFlashcards = 0
                 totalPages = 1
+                // Create an empty vocabook if there's no data.
+                self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
                 return
             }
-            totalFlashcards = pag.total
-            totalPages = pag.pageCount
-
-            // 2. Find or create the main Vocabook
-            let bookId = 1
-            var fetchDescriptor = FetchDescriptor<Vocabook>(predicate: #Predicate { $0.id == bookId })
-            fetchDescriptor.fetchLimit = 1
             
-            let book: Vocabook
-            if let existingBook = try modelContext.fetch(fetchDescriptor).first {
-                book = existingBook
-            } else {
-                book = Vocabook(id: bookId, title: "All Flashcards")
-                modelContext.insert(book)
-            }
+            self.totalFlashcards = pag.total
+            self.totalPages = pag.pageCount
 
-            // 3. Sync Vocapages
-            let existingPages = book.vocapages ?? []
-            let existingPageIds = Set(existingPages.map { $0.id })
-            let pageNumbersToKeep = Set(1...totalPages)
-
-            // Delete stale pages that are no longer valid
-            let pagesToDelete = existingPages.filter { !pageNumbersToKeep.contains($0.id) }
-            for page in pagesToDelete {
-                modelContext.delete(page)
-            }
-
-            // Add new pages that don't exist yet
-            let newPageNumbers = pageNumbersToKeep.subtracting(existingPageIds)
-            for pageNum in newPageNumbers {
+            // 2. Create Vocapage structs in memory based on the total page count.
+            var pages: [Vocapage] = []
+            for pageNum in 1...totalPages {
                 let newPage = Vocapage(id: pageNum, title: "Page \(pageNum)", order: pageNum)
-                newPage.vocabook = book
-                modelContext.insert(newPage)
+                pages.append(newPage)
             }
             
-            // 4. Save changes and update the view model's vocabook property
-            try modelContext.save()
+            // 3. Create the main Vocabook struct with the generated pages.
+            let book = Vocabook(id: 1, title: "All Flashcards", vocapages: pages)
+            
+            // 4. Update the view model's state.
             self.vocabook = book
             self.loadCycle += 1
 
         } catch {
             logger.error("loadVocabookPages failed: \(error.localizedDescription)")
+            // In case of an error, ensure the UI shows an empty state.
+            self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
         }
     }
     

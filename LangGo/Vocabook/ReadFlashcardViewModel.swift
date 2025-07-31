@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import AVFoundation
 import os
 
@@ -18,7 +17,7 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     // MARK: - Private Properties
     private let synthesizer = AVSpeechSynthesizer()
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ReadFlashcardViewModel")
-    private var modelContext: ModelContext
+    // REMOVED: The modelContext property is no longer needed.
     private var languageSettings: LanguageSettings
     private let strapiService: StrapiService
     private var showBaseTextBinding: Binding<Bool>?
@@ -29,8 +28,8 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     private var currentStep: ReadingStep = .firstWord
 
     // MARK: - Initialization
-    init(modelContext: ModelContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
-        self.modelContext = modelContext
+    // MODIFIED: The initializer no longer requires a ModelContext.
+    init(languageSettings: LanguageSettings, strapiService: StrapiService) {
         self.languageSettings = languageSettings
         self.strapiService = strapiService
         super.init()
@@ -127,7 +126,7 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
         switch currentStep {
         case .firstWord, .secondWord:
             textToSpeak = card.backContent
-            languageCode = "en-US"
+            languageCode = "en-US" // This should likely come from a config or language settings
             readingState = .readingWord
         case .baseText:
             textToSpeak = card.frontContent

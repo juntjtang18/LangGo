@@ -23,8 +23,16 @@ struct ConversationView: View {
                         }
                         .padding()
                     }
-                    .onChange(of: viewModel.messages.count) {
+                    // MODIFIED: Replaced iOS 17 'onChange' with a version compatible with iOS 16
+                    .onAppear {
+                        // Handles the initial scroll to the bottom when the view first appears
                         if let lastMessage = viewModel.messages.last {
+                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: viewModel.messages) { newMessages in
+                        // Scrolls to the bottom whenever a new message is added to the array
+                        if let lastMessage = newMessages.last {
                             withAnimation {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }

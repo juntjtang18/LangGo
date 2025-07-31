@@ -6,7 +6,7 @@
 //
 import Foundation
 
-struct ConversationMessage: Codable, Identifiable {
+struct ConversationMessage: Codable, Identifiable, Equatable {
     let id = UUID()
     let role: String // "user" or "assistant"
     let content: String

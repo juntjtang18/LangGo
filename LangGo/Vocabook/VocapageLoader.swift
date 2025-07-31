@@ -1,13 +1,11 @@
 import SwiftUI
-import SwiftData
 import os
 
 // MARK: - Vocapage Loader
-// This ObservableObject class handles all data loading and caching for the Vocapage feature.
+// This ObservableObject class now handles loading and caching Vocapage data from the network.
 @MainActor
 class VocapageLoader: ObservableObject {
-    var modelContext: ModelContext
-    let strapiService: StrapiService
+    private let strapiService: StrapiService
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageLoader")
 
     // State properties to hold the data and loading status for each page
@@ -15,35 +13,34 @@ class VocapageLoader: ObservableObject {
     @Published var loadingStatus: [Int: Bool] = [:]
     @Published var errorMessages: [Int: String] = [:]
 
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        self.modelContext = modelContext
+    // MODIFIED: The initializer no longer requires a ModelContext.
+    init(strapiService: StrapiService) {
         self.strapiService = strapiService
     }
 
     func loadPage(withId vocapageId: Int) async {
-        // Don't re-load if already loading or loaded
-        if loadingStatus[vocapageId] == true || vocapages[vocapageId] != nil {
+        // Don't re-load if already loading or if the page's flashcards are already loaded.
+        if loadingStatus[vocapageId] == true || (vocapages[vocapageId]?.flashcards != nil) {
             return
         }
-        logger.debug("VocapageLoder::loadPage(\(vocapageId))")
+        
+        logger.debug("VocapageLoader::loadPage(\(vocapageId))")
         loadingStatus[vocapageId] = true
         errorMessages[vocapageId] = nil
 
         do {
-            // 1. Fetch the Vocapage object from SwiftData
-            let fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == vocapageId })
-            guard let page = (try modelContext.fetch(fetchDescriptor)).first else {
-                throw NSError(domain: "VocapageLoader", code: 404, userInfo: [NSLocalizedDescriptionKey: "Could not find vocapage with ID \(vocapageId)."])
-            }
-
-            // 2. Fetch the flashcards for this page from the server
+            // 1. Fetch the settings to determine the page size.
             let vbSetting = try await strapiService.fetchVBSetting()
             let pageSize = vbSetting.attributes.wordsPerPage
-            let (syncedFlashcards, _) = try await strapiService.fetchFlashcards(page: page.order, pageSize: pageSize)
             
-            // 3. Link flashcards to the vocapage object and save
-            page.flashcards = syncedFlashcards
-            try modelContext.save()
+            // 2. Fetch the flashcards for the specific page number from the server.
+            let (fetchedFlashcards, _) = try await strapiService.fetchFlashcards(page: vocapageId, pageSize: pageSize)
+            
+            // 3. Create a new Vocapage object containing the fetched flashcards.
+            var page = Vocapage(id: vocapageId, title: "Page \(vocapageId)", order: vocapageId)
+            page.flashcards = fetchedFlashcards
+            
+            // 4. Store the fully loaded page in our local cache.
             vocapages[vocapageId] = page
 
         } catch {

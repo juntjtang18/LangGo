@@ -1,13 +1,11 @@
-// LangGo/MyVocabookView.swift
 import SwiftUI
 import os
 
 struct VocabookView: View {
-    let flashcardViewModel: FlashcardViewModel
-    let vocabookViewModel: VocabookViewModel
+    @ObservedObject var flashcardViewModel: FlashcardViewModel
+    @ObservedObject var vocabookViewModel: VocabookViewModel
     
     @EnvironmentObject var appEnvironment: AppEnvironment
-    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var languageSettings: LanguageSettings
     @Environment(\.theme) var theme: Theme
 
@@ -18,7 +16,6 @@ struct VocabookView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            // This top part is now fixed and does not scroll
             OverallProgressView(viewModel: flashcardViewModel)
                 .padding(.horizontal)
 
@@ -30,7 +27,6 @@ struct VocabookView: View {
             )
             .padding(.horizontal)
 
-            // This list view now handles its own scrolling
             PagesListView(viewModel: vocabookViewModel, flashcardViewModel: flashcardViewModel)
         }
         .padding(.top)
@@ -42,7 +38,7 @@ struct VocabookView: View {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isListening) {
-             ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings, strapiService: appEnvironment.strapiService)
+             ReadFlashcardView(languageSettings: languageSettings, strapiService: appEnvironment.strapiService)
         }
         .sheet(isPresented: $isQuizzing) {
             if !flashcardViewModel.reviewCards.isEmpty {
@@ -69,7 +65,7 @@ struct VocabookView: View {
 // MARK: - Components
 
 private struct OverallProgressView: View {
-    let viewModel: FlashcardViewModel
+    @ObservedObject var viewModel: FlashcardViewModel
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
@@ -83,7 +79,7 @@ private struct OverallProgressView: View {
                 StatRow(label: "In Progress", value: "\(viewModel.inProgressCount)")
                 StatRow(label: "New Words", value: "\(viewModel.newCardCount)")
             }
-            .style(.body)
+            .font(.body)
         }
         .padding()
         .background(theme.secondary.opacity(0.1))
@@ -92,7 +88,7 @@ private struct OverallProgressView: View {
 }
 
 private struct VocabookProgressCircleView: View {
-    let viewModel: FlashcardViewModel
+    @ObservedObject var viewModel: FlashcardViewModel
     @Environment(\.theme) var theme: Theme
 
     private var progress: Double {
@@ -169,12 +165,11 @@ private struct VocabookActionButton: View {
 
 private struct PagesListView: View {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "PagesListView")
-    let viewModel: VocabookViewModel
-    let flashcardViewModel: FlashcardViewModel
+    @ObservedObject var viewModel: VocabookViewModel
+    @ObservedObject var flashcardViewModel: FlashcardViewModel
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        // The ScrollViewReader provides the 'proxy' to its content.
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -185,11 +180,11 @@ private struct PagesListView: View {
                         let sortedPages = pages.sorted(by: { $0.order < $1.order })
                         ForEach(sortedPages) { page in
                             VocabookPageRow(flashcardViewModel: flashcardViewModel, vocapage: page, allVocapageIds: sortedPages.map { $0.id })
-                                .id(page.id) // Ensure each row has an ID
+                                .id(page.id)
                         }
                     } else {
                         Text("No vocabulary pages found. Start learning to create them!")
-                            .style(.caption)
+                            .font(.caption)
                             .multilineTextAlignment(.center)
                             .padding()
                             .frame(maxWidth: .infinity)
@@ -197,16 +192,12 @@ private struct PagesListView: View {
                 }
                 .padding()
             }
-            // THIS IS THE CORRECT PLACEMENT
-            // The .onChange modifier is now on the ScrollView, inside the reader's scope.
-            .onChange(of: viewModel.loadCycle) {
-                // Use a tiny delay to ensure views are rendered before scrolling
+            .onChange(of: viewModel.loadCycle) { _ in
                 logger.debug("PageListView::onChange()")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
                     if lastViewedID != 0 {
                         withAnimation {
-                            // The 'proxy' is now correctly found and used here
                             proxy.scrollTo(lastViewedID, anchor: .center)
                         }
                     }
@@ -219,11 +210,10 @@ private struct PagesListView: View {
 @MainActor
 private struct VocabookPageRow: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.theme) var theme: Theme
     @EnvironmentObject var reviewSettings: ReviewSettingsManager
     
-    let flashcardViewModel: FlashcardViewModel
+    @ObservedObject var flashcardViewModel: FlashcardViewModel
     let vocapage: Vocapage
     let allVocapageIds: [Int]
 
@@ -244,26 +234,20 @@ private struct VocabookPageRow: View {
         let totalPossiblePoints = Double(cards.count) * maxCardScore
         
         let currentTotalPoints = cards.reduce(0.0) { total, card in
-            // --- THIS IS THE FIX ---
-            // If the card's tier is explicitly "remembered", it gets full points.
-            // This is the primary source of truth for mastery.
             if card.reviewTire == "remembered" {
                 return total + maxCardScore
             }
 
             var cardScore = Double(card.correctStreak)
-            // Add bonus points for each tier achieved
             for (tierName, tierSetting) in reviewSettings.settings where tierName != "new" {
                 if card.correctStreak >= tierSetting.min_streak {
                     cardScore += Double(promotionBonus)
                 }
             }
-            // The score for a single card cannot exceed the maximum possible score.
             return total + min(cardScore, maxCardScore)
         }
         
         let finalProgress = totalPossiblePoints > 0 ? currentTotalPoints / totalPossiblePoints : 0.0
-        // Ensure that floating point inaccuracies don't prevent completion
         let isComplete = finalProgress >= 0.999
         return WeightedProgress(progress: finalProgress, isComplete: isComplete)
     }
@@ -276,20 +260,20 @@ private struct VocabookPageRow: View {
     }
 
     var body: some View {
+        // THIS IS THE FINAL FIX
         NavigationLink(destination: VocapageHostView(
             allVocapageIds: allVocapageIds,
             selectedVocapageId: vocapage.id,
-            modelContext: modelContext,
             strapiService: appEnvironment.strapiService,
             flashcardViewModel: flashcardViewModel
         )) {
             HStack(spacing: 15) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Page \(vocapage.order)")
-                        .style(.body)
+                        .font(.body)
                         .fontWeight(.bold)
                     Text(getRelativeDate(from: vocapage.flashcards?.first?.lastReviewedAt))
-                        .style(.caption)
+                        .font(.caption)
                 }
                 Spacer()
                 
@@ -308,7 +292,6 @@ private struct VocabookPageRow: View {
             .cornerRadius(12)
         }
         .buttonStyle(PlainButtonStyle())
-        // ADD THIS GESTURE MODIFIER
         .simultaneousGesture(TapGesture().onEnded {
             UserDefaults.standard.set(vocapage.id, forKey: "lastViewedVocapageID")
         })
@@ -340,7 +323,7 @@ private struct PageProgressCircle: View {
             Circle()
                 .trim(from: 0.0, to: progress)
                 .stroke(style: StrokeStyle(lineWidth: 5.0, lineCap: .round))
-                .foregroundColor(progressColor) // Use the tier-specific color
+                .foregroundColor(progressColor)
                 .rotationEffect(.degrees(-90))
                 .animation(.linear, value: progress)
             Text(progressString)

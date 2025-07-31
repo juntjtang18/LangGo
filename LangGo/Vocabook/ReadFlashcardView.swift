@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 
 struct ReadFlashcardView: View {
     @StateObject private var viewModel: ReadFlashcardViewModel
@@ -17,8 +16,10 @@ struct ReadFlashcardView: View {
         case list
     }
 
-    init(modelContext: ModelContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
-        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel(modelContext: modelContext, languageSettings: languageSettings, strapiService: strapiService))
+    // MODIFIED: The initializer no longer requires a ModelContext.
+    init(languageSettings: LanguageSettings, strapiService: StrapiService) {
+        // MODIFIED: The ViewModel is now initialized without a modelContext.
+        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel(languageSettings: languageSettings, strapiService: strapiService))
     }
 
     var body: some View {
@@ -70,7 +71,7 @@ struct ReadFlashcardView: View {
             .onDisappear {
                 saveSettings()
             }
-            .onChange(of: viewModel.currentCardIndex) {
+            .onChange(of: viewModel.currentCardIndex) { _ in // The parameter name can be _ if not used
                 guard viewMode == .card else { return }
                 cardOffset = 0
                 cardOpacity = 1
@@ -250,7 +251,8 @@ private struct FlashcardListView: View {
                     .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
-                .onChange(of: currentCardIndex) { _, newIndex in
+                // MODIFIED: The onChange closure is updated for iOS 16 compatibility.
+                .onChange(of: currentCardIndex) { newIndex in
                     withAnimation {
                         proxy.scrollTo(newIndex, anchor: .center)
                     }

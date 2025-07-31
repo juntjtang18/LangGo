@@ -1,11 +1,10 @@
-// LangGo/VocabookTabView.swift
+// LangGo/Vocabook/VocabookTabView.swift
 import SwiftUI
-import SwiftData
 
 struct VocabookTabView: View {
     @Binding var isSideMenuShowing: Bool
     
-    @Environment(\.modelContext) private var modelContext
+    // REMOVED: @Environment(\.modelContext) is no longer needed.
     @EnvironmentObject var appEnvironment: AppEnvironment
     
     // View models required by the new screen
@@ -34,11 +33,12 @@ struct VocabookTabView: View {
                 // Show a loading indicator while view models are being initialized
                 ProgressView()
                     .onAppear {
+                        // MODIFIED: View models are now initialized without the modelContext.
                         if flashcardViewModel == nil {
-                            flashcardViewModel = FlashcardViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                            flashcardViewModel = FlashcardViewModel(strapiService: appEnvironment.strapiService)
                         }
                         if vocabookViewModel == nil {
-                            vocabookViewModel = VocabookViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                            vocabookViewModel = VocabookViewModel(strapiService: appEnvironment.strapiService)
                         }
                     }
             }

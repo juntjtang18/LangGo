@@ -1,3 +1,5 @@
+// LangGo/Home/HomeView.swift
+
 import SwiftUI
 import AVKit
 
@@ -36,7 +38,6 @@ struct HomeView: View {
         PracticeAction(
             id: "ai_partner_video",
             image: .system("message.fill"),
-            // CHANGED: Title updated as requested.
             title: "Talk to my Conversation Partner",
             tabIndex: 2,
             videoAssetName: "LangGo App_ Talk to Your Learning Partner Feature"
@@ -44,14 +45,12 @@ struct HomeView: View {
         PracticeAction(
             id: "read_stories",
             image: .system("book.fill"),
-            // CHANGED: Title updated as requested.
             title: "Reading/Listening Stories",
             tabIndex: 3,
             videoAssetName: "LangGo_ Learn English Through Stories"
         )
     ]
 
-    // The body and main logic of HomeView remain the same.
     var body: some View {
         GeometryReader { screenGeometry in
             ScrollView {
@@ -60,7 +59,7 @@ struct HomeView: View {
                         .homeStyle(.greetingTitle)
 
                     OfferBannerView()
-                    
+                        
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text("LangGo to Pro, Ready to GO?")
@@ -98,7 +97,7 @@ struct HomeView: View {
                             }
                         }
                     }
-                    
+                        
                     ExploreLessonsView()
                 }
                 .padding()
@@ -108,7 +107,8 @@ struct HomeView: View {
         .onAppear {
             self.username = UserDefaults.standard.string(forKey: "username") ?? "Vivian"
         }
-        .onChange(of: isViewActive) { _, active in
+        // MODIFIED: Changed the closure to match the iOS 14-16 signature.
+        .onChange(of: isViewActive) { active in
             if !active {
                 playerManager.stopAllPlayback()
             }
@@ -207,11 +207,8 @@ private struct PracticeCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             ZStack {
-                // CHANGED: The logic for showing the VideoPlayer is now more specific.
-                // It will only show if it's the currently playing video AND it hasn't finished.
                 let shouldShowVideo = playerManager.currentlyPlayingID == action.id && !playerManager.finishedVideoIDs.contains(action.id)
 
-                // The placeholder/thumbnail now shows if the video is NOT playing OR if it has finished.
                 if !shouldShowVideo {
                     switch action.image {
                     case .asset(let name):
@@ -224,7 +221,7 @@ private struct PracticeCardView: View {
                 if let player = player {
                     VideoPlayer(player: player)
                         .allowsHitTesting(false)
-                        .opacity(shouldShowVideo ? 1 : 0) // Controls visibility
+                        .opacity(shouldShowVideo ? 1 : 0)
                 }
             }
             .frame(height: 180)

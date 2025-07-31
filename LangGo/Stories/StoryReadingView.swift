@@ -119,7 +119,6 @@ struct StoryReadingView: View {
         // This line hides the automatic back button, fixing the double-chevron issue
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            // This is now the only back button that will be displayed
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: { dismiss() }) {
                     HStack {
@@ -128,7 +127,7 @@ struct StoryReadingView: View {
                     }
                 }
             }
-            
+
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     isLiked.toggle()
@@ -138,33 +137,32 @@ struct StoryReadingView: View {
                         .foregroundColor(isLiked ? .red : nil)
                 }
             }
-            
-            ToolbarItem(placement: .bottomBar) {
-                HStack {
-                    Button(action: {
-                        if fontSize > 12 { fontSize -= 1 }
-                    }) {
-                        Image(systemName: "minus")
-                    }
-                    
-                    Spacer()
-                    Text("Font Size").font(.caption)
-                    Spacer()
-                    
-                    Button(action: {
-                        if fontSize < 28 { fontSize += 1 }
-                    }) {
-                        Image(systemName: "plus")
-                    }
+        }
+
+        .toolbar {
+            ToolbarItemGroup(placement: .bottomBar) {
+                Button(action: {
+                    if fontSize > 12 { fontSize -= 1 }
+                }) {
+                    Image(systemName: "minus")
                 }
-                .font(.headline)
+
+                Text("Font Size")
+                    .font(.caption)
+
+                Button(action: {
+                    if fontSize < 28 { fontSize += 1 }
+                }) {
+                    Image(systemName: "plus")
+                }
             }
         }
-        .onChange(of: viewModel.selectedStory) { _, newStory in
+        .onChange(of: viewModel.selectedStory) { newStory in
             if let newStory = newStory, newStory.id == story.id {
                 isLiked = (newStory.attributes.like_count ?? 0) > 0
             }
         }
+
         .onAppear {
             viewModel.selectedStory = self.story
         }

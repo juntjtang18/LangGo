@@ -1,35 +1,35 @@
-// LangGo/FlashcardViewModel.swift
+// LangGo/Vocabook/FlashcardViewModel.swift
+
 import SwiftUI
-import SwiftData
 import os
 
-@Observable
-class FlashcardViewModel {
+// MODIFIED: Converted to ObservableObject for iOS 16 compatibility.
+class FlashcardViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardViewModel")
     private let strapiService: StrapiService
-    private let modelContext: ModelContext
-    var userReviewLogs: [StrapiReviewLog] = []
+    
+    // MODIFIED: All properties that should trigger UI updates are now @Published.
+    @Published var userReviewLogs: [StrapiReviewLog] = []
+    @Published var totalCardCount: Int = 0
+    @Published var rememberedCount: Int = 0
+    @Published var reviewCards: [Flashcard] = []
+    @Published var newCardCount: Int = 0
+    @Published var warmUpCardCount: Int = 0
+    @Published var weeklyReviewCardCount: Int = 0
+    @Published var monthlyCardCount: Int = 0
+    @Published var hardToRememberCount: Int = 0
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
     }
-
-    var totalCardCount: Int = 0
-    var rememberedCount: Int = 0
-    var reviewCards: [Flashcard] = []
-    var newCardCount: Int = 0
-    var warmUpCardCount: Int = 0
-    var weeklyReviewCardCount: Int = 0
-    var monthlyCardCount: Int = 0
-    var hardToRememberCount: Int = 0
 
     var inProgressCount: Int {
         let count = totalCardCount - rememberedCount - newCardCount
         return max(0, count)
     }
 
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        self.modelContext = modelContext
+    // MODIFIED: Initializer no longer takes a ModelContext.
+    init(strapiService: StrapiService) {
         self.strapiService = strapiService
     }
 
@@ -49,32 +49,13 @@ class FlashcardViewModel {
             
             logger.info("Successfully loaded statistics from the server.")
         } catch {
-            logger.error("Failed to fetch statistics from server: \(error.localizedDescription). Falling back to local calculation.")
-            await calculateStatisticsLocally()
+            // REMOVED: The local fallback calculation is gone. If the network fails, we log the error
+            // and the UI will show zeros, which is the correct state when data can't be fetched.
+            logger.error("Failed to fetch statistics from server: \(error.localizedDescription).")
         }
     }
 
-    @MainActor
-    private func calculateStatisticsLocally() async {
-        logger.info("Calculating statistics from local data as a fallback.")
-        do {
-            let descriptor = FetchDescriptor<Flashcard>()
-            let allCards = try modelContext.fetch(descriptor)
-
-            self.totalCardCount = allCards.count
-            self.rememberedCount = allCards.filter { $0.reviewTire == "remembered" }.count
-            self.newCardCount = allCards.filter { $0.reviewTire == "new" }.count
-            self.warmUpCardCount = allCards.filter { $0.reviewTire == "warmup" }.count
-            self.weeklyReviewCardCount = allCards.filter { $0.reviewTire == "weekly" }.count
-            self.monthlyCardCount = allCards.filter { $0.reviewTire == "monthly" }.count
-            self.hardToRememberCount = allCards.filter { $0.wrongStreak >= 3 }.count
-
-            logger.info("Successfully calculated statistics locally from \(allCards.count) cards.")
-
-        } catch {
-            logger.error("calculateStatisticsLocally: Failed to load cards from local store: \(error.localizedDescription)")
-        }
-    }
+    // REMOVED: The `calculateStatisticsLocally` function was deleted as it's no longer needed.
 
     @MainActor
     func prepareReviewSession() async {
@@ -84,18 +65,10 @@ class FlashcardViewModel {
             self.reviewCards = fetchedCards.sorted(by: { ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast) })
             logger.info("prepareReviewSession: Successfully loaded \(self.reviewCards.count) cards for review from server.")
         } catch {
-            logger.warning("Could not fetch review session from server. Error: \(error.localizedDescription). Falling back to local data.")
-            do {
-                let descriptor = FetchDescriptor<Flashcard>(
-                    predicate: #Predicate { !$0.isRemembered },
-                    sortBy: [SortDescriptor(\.lastReviewedAt, order: .forward)]
-                )
-                self.reviewCards = try modelContext.fetch(descriptor)
-                logger.info("Successfully loaded \(self.reviewCards.count) cards for review from local storage as a fallback.")
-            } catch {
-                logger.error("Fallback failed: Could not fetch cards from local storage either: \(error.localizedDescription)")
-                self.reviewCards = []
-            }
+            // REMOVED: The local storage fallback is gone. If the network call fails, we log the error
+            // and set the review cards to an empty array.
+            logger.error("Could not fetch review session from server. Error: \(error.localizedDescription).")
+            self.reviewCards = []
         }
     }
     

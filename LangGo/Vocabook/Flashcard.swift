@@ -1,10 +1,8 @@
-// LangGo/Flashcard.swift
+// LangGo/Vocabook/Flashcard.swift
 import Foundation
-import SwiftData
 
-@Model
-final class Flashcard {
-    @Attribute(.unique) var id: Int
+struct Flashcard: Codable, Identifiable {
+    let id: Int
     
     // For immediate display
     var frontContent: String
@@ -12,7 +10,7 @@ final class Flashcard {
     var register: String?
     
     // Stores the full, original component JSON for future use.
-    @Attribute(.externalStorage) var rawComponentData: Data?
+    var rawComponentData: Data?
     
     // This will now store values like "a.word-ref", "a.user-word-ref", etc.
     var contentType: String
@@ -23,7 +21,7 @@ final class Flashcard {
     var wrongStreak: Int
     
     var isRemembered: Bool
-    var reviewTire: String? // FIX: Correctly added the reviewTire property
+    var reviewTire: String?
 
     // UPDATED: The init method now uses the new streak properties.
     init(id: Int, frontContent: String, backContent: String, register: String?, contentType: String, rawComponentData: Data?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, reviewTire: String?) {
@@ -37,7 +35,7 @@ final class Flashcard {
         self.correctStreak = correctStreak
         self.wrongStreak = wrongStreak
         self.isRemembered = isRemembered
-        self.reviewTire = reviewTire // FIX: Assigned in the initializer
+        self.reviewTire = reviewTire
     }
     
     private var decodedComponent: StrapiComponent? {

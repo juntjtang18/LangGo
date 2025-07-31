@@ -1,17 +1,15 @@
 import SwiftUI
 import KeychainAccess
-import SwiftData
+// REMOVED: import SwiftData is no longer needed.
 
 // MARK: - Main Container View
 
 struct MainView: View {
     @Binding var authState: AuthState
     @EnvironmentObject var appEnvironment: AppEnvironment
-    @EnvironmentObject var languageSettings: LanguageSettings // ADD THIS
+    @EnvironmentObject var languageSettings: LanguageSettings
 
-    // State to control the active tab
     @State private var selectedTab = 0
-
     @State private var isSideMenuShowing = false
     @State private var isShowingProfileSheet = false
     @State private var isShowingSettingSheet = false
@@ -32,9 +30,7 @@ struct MainView: View {
 
     var body: some View {
         ZStack {
-            // The TabView selection is now bound to our state variable
             TabView(selection: $selectedTab) {
-                // The Home tab receives a binding to control the selected tab
                 HomeTabView(isSideMenuShowing: $isSideMenuShowing, selectedTab: $selectedTab)
                     .tabItem { Label("Home", systemImage: "house.fill") }
                     .tag(0)
@@ -47,9 +43,8 @@ struct MainView: View {
                     .tabItem { Label("AI Conversation", systemImage: "message.fill") }
                     .tag(2)
                 
-                // --- THIS LINE IS NOW CORRECT ---
                 StoriesTabView(isSideMenuShowing: $isSideMenuShowing, appEnvironment: appEnvironment, languageSettings: languageSettings)
-                     .tabItem { Label("Stories", systemImage: "book.fill") }
+                    .tabItem { Label("Stories", systemImage: "book.fill") }
                     .tag(3)
 
                 TranslationTabView(isSideMenuShowing: $isSideMenuShowing)
@@ -58,17 +53,14 @@ struct MainView: View {
             }
             .tint(Color.purple)
             
-            // Logic for showing the side menu with lazy loading.
             if isSideMenuShowing {
-                // A semi-transparent background overlay
                 Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .onTapGesture {
                         withAnimation(.easeInOut) { isSideMenuShowing = false }
                     }
-                    .transition(.opacity) // Fade in/out
+                    .transition(.opacity)
                 
-                // Conditionally add SideMenuView to the hierarchy.
                 SideMenuView(
                     isShowing: $isSideMenuShowing,
                     authState: $authState,
@@ -77,7 +69,7 @@ struct MainView: View {
                     isShowingVocabookSettingSheet: $isShowingVocabookSettingSheet
                 )
                 .frame(width: UIScreen.main.bounds.width * 0.75)
-                .transition(.move(edge: .trailing)) // Slide in from the right
+                .transition(.move(edge: .trailing))
                 .ignoresSafeArea()
             }
         }
@@ -94,10 +86,7 @@ struct MainView: View {
 }
 
 
-// MARK: - Placeholder Tab Views (Definitions Restored)
-
-// AITabView has been removed as requested.
-
+// MARK: - Placeholder Tab Views
 
 /*
 struct TranslationTabView: View {
@@ -106,7 +95,6 @@ struct TranslationTabView: View {
 }
 */
 
-/// The toolbar item containing the hamburger menu button.
 struct MenuToolbar: ToolbarContent {
     @Binding var isSideMenuShowing: Bool
     var body: some ToolbarContent {
@@ -127,8 +115,9 @@ struct MenuToolbar: ToolbarContent {
 
 // MARK: - Preview
 #Preview {
-    // You will need to provide a mock LanguageSettings object for the preview to work.
+    // MODIFIED: The AppEnvironment is now initialized without any arguments.
+    // This removes the dependency on ModelContainer and fixes all errors.
     MainView(authState: .constant(.loggedIn))
         .environmentObject(LanguageSettings())
-        .environmentObject(AppEnvironment(modelContainer: try! ModelContainer(for: Flashcard.self, Vocabook.self, Vocapage.self)))
+        .environmentObject(AppEnvironment())
 }

@@ -1,24 +1,25 @@
-// LangGo/TranslationView.swift
+// LangGo/Vocabook/TranslationView.swift
+
 import SwiftUI
-import SwiftData
 import os
 
 // New enum to manage the direction of translation input
 enum InputDirection: String, CaseIterable, Identifiable {
-    case baseToTarget = "Base to Target" // User inputs native language, translates to learning language
-    case targetToBase = "Target to Base" // User inputs learning language, translates to native language
+    case baseToTarget = "Base to Target"
+    case targetToBase = "Target to Base"
     var id: String { self.rawValue }
 }
 
 struct TranslationTabView: View {
     @Binding var isSideMenuShowing: Bool
-    @Environment(\.modelContext) private var modelContext
+    // REMOVED: @Environment(\.modelContext) is no longer needed.
     @EnvironmentObject var languageSettings: LanguageSettings
     @EnvironmentObject var appEnvironment: AppEnvironment
 
     var body: some View {
         NavigationStack {
-            TranslationView(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+            // MODIFIED: TranslationView is now initialized without a modelContext.
+            TranslationView(strapiService: appEnvironment.strapiService)
                 .navigationTitle("Translation")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -40,52 +41,41 @@ struct TranslationView: View {
     @State private var showErrorMessage: Bool = false
     @State private var errorMessageText: String = ""
 
-    // Use the configurable learning target language from Config.swift
     private let learningTargetLanguageCode: String = Config.learningTargetLanguageCode
     
-    // Default part of speech for new words
     @State private var partOfSpeech: PartOfSpeech = .noun
-
-    // New state to manage the direction of translation
     @State private var inputDirection: InputDirection = .baseToTarget
-
-    // FIX: New state variable to track if input has changed since last translation
-    @State private var inputIsStale: Bool = true // Initially true because no translation has occurred yet
-
-    // FIX: New state variables to store the last successfully translated pair
+    @State private var inputIsStale: Bool = true
     @State private var lastTranslatedInput: String?
     @State private var lastTranslatedOutput: String?
 
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        _viewModel = State(initialValue: FlashcardViewModel(modelContext: modelContext, strapiService: strapiService))
+    // MODIFIED: The initializer no longer requires a ModelContext.
+    init(strapiService: StrapiService) {
+        _viewModel = State(initialValue: FlashcardViewModel(strapiService: strapiService))
     }
 
     var body: some View {
         VStack {
             Form {
-                // Input Section - dynamically adjusts based on inputDirection
                 Section(header: Text("Input Text (\(inputLanguageCode.uppercased()))")) {
-                    TextField("Enter word or sentence", text: $inputText, axis: .vertical) // Allow multiline input
+                    TextField("Enter word or sentence", text: $inputText, axis: .vertical)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
-                        .frame(minHeight: 80) // Enlarge input text box
-                        // FIX: Detect changes in inputText to mark it as stale or restore
-                        .onChange(of: inputText) { _, newText in
+                        .frame(minHeight: 80)
+                        // MODIFIED: The closure for onChange is updated for iOS 16 compatibility.
+                        .onChange(of: inputText) { newText in
                             if newText == lastTranslatedInput {
-                                // Input matches a previously translated word, restore translation and enable button
                                 translatedText = lastTranslatedOutput ?? ""
                                 inputIsStale = false
                             } else {
-                                // Input has changed to something new or different from last translated
                                 inputIsStale = true
-                                translatedText = "" // Clear translated text for new input
+                                translatedText = ""
                             }
                             showSuccessMessage = false
                             showErrorMessage = false
                         }
                 }
 
-                // Swap Button
                 HStack {
                     Spacer()
                     Button(action: swapLanguages) {
@@ -95,17 +85,16 @@ struct TranslationView: View {
                     }
                     Spacer()
                 }
-                .listRowBackground(Color.clear) // Ensure the button background is clear
+                .listRowBackground(Color.clear)
 
-                // Translation Section - dynamically adjusts based on inputDirection
                 Section(header: Text("Translation (\(translationLanguageCode.uppercased()))")) {
                     TextEditor(text: $translatedText)
-                        .frame(minHeight: 150) // Enlarge target text box
-                        .disabled(true) // Make it read-only
+                        .frame(minHeight: 150)
+                        .disabled(true)
                         .foregroundColor(.gray)
                 }
             }
-            .id(inputDirection) // Force redraw of the Form when inputDirection changes
+            .id(inputDirection)
             .padding(.bottom, 10)
 
             HStack(spacing: 20) {
@@ -137,10 +126,8 @@ struct TranslationView: View {
                     .background(Capsule().fill(Color.green))
                     .foregroundColor(.white)
                     .font(.headline)
-                    // FIX: Disable if input is stale (not translated), or other existing conditions
                     .opacity(translatedText.isEmpty || inputText.isEmpty || isLoadingSave || isLoadingTranslation || sourceTranslationLanguageCode == targetTranslationLanguageCode || inputIsStale ? 0.5 : 1.0)
                 }
-                // FIX: Disable if input is stale (not translated), or other existing conditions
                 .disabled(translatedText.isEmpty || inputText.isEmpty || isLoadingSave || isLoadingTranslation || sourceTranslationLanguageCode == targetTranslationLanguageCode || inputIsStale)
             }
             .padding(.horizontal)
@@ -166,14 +153,13 @@ struct TranslationView: View {
                         .transition(.opacity)
                 }
             }
-            .frame(height: 50) // Fixed space for messages
+            .frame(height: 50)
         }
         .onAppear {
-            inputIsStale = true // Ensure button is disabled on initial appearance
+            inputIsStale = true
         }
     }
 
-    // Helper computed properties for language codes based on current input direction
     private var inputLanguageCode: String {
         inputDirection == .baseToTarget ? languageSettings.selectedLanguageCode : learningTargetLanguageCode
     }
@@ -182,7 +168,6 @@ struct TranslationView: View {
         inputDirection == .baseToTarget ? learningTargetLanguageCode : languageSettings.selectedLanguageCode
     }
 
-    // These are the actual source and target for the API call
     private var sourceTranslationLanguageCode: String {
         inputDirection == .baseToTarget ? languageSettings.selectedLanguageCode : learningTargetLanguageCode
     }
@@ -194,11 +179,11 @@ struct TranslationView: View {
     private func swapLanguages() {
         withAnimation {
             inputDirection = (inputDirection == .baseToTarget) ? .targetToBase : .baseToTarget
-            inputText = ""       // Clear input when swapping
-            translatedText = ""  // Clear translation when swapping
-            inputIsStale = true  // Mark as stale after swap
-            lastTranslatedInput = nil // Clear last translated state
-            lastTranslatedOutput = nil // Clear last translated state
+            inputText = ""
+            translatedText = ""
+            inputIsStale = true
+            lastTranslatedInput = nil
+            lastTranslatedOutput = nil
             showSuccessMessage = false
             showErrorMessage = false
         }
@@ -213,16 +198,13 @@ struct TranslationView: View {
             do {
                 let result = try await viewModel.translateWord(
                     word: inputText,
-                    source: sourceTranslationLanguageCode, // Dynamic source
-                    target: targetTranslationLanguageCode  // Dynamic target
+                    source: sourceTranslationLanguageCode,
+                    target: targetTranslationLanguageCode
                 )
                 translatedText = result
-
-                // FIX: Store the newly translated pair
                 lastTranslatedInput = inputText
                 lastTranslatedOutput = translatedText
-
-                inputIsStale = false // Mark input as fresh after successful translation
+                inputIsStale = false
                 withAnimation { showSuccessMessage = true }
             } catch {
                 errorMessageText = "Translation failed: \(error.localizedDescription)"
@@ -248,18 +230,13 @@ struct TranslationView: View {
                 let baseLangContentForSave: String
                 let targetLangContentForSave: String
                 
-                // baseLocaleForSave will always be the user's selected app language
                 let baseLocaleForSave: String = languageSettings.selectedLanguageCode
-                // targetLocaleForSave will always be the app's learning target language
                 let targetLocaleForSave: String = learningTargetLanguageCode
 
-                // Determine content based on input direction
                 if inputDirection == .baseToTarget {
-                    // User inputs native language (base), translates to learning language (target)
                     baseLangContentForSave = inputText
                     targetLangContentForSave = translatedText
-                } else { // inputDirection == .targetToBase
-                    // User inputs learning language (target), translates to native language (base)
+                } else {
                     baseLangContentForSave = translatedText
                     targetLangContentForSave = inputText
                 }
@@ -272,7 +249,6 @@ struct TranslationView: View {
                     targetLocale: targetLocaleForSave
                 )
                 withAnimation { showSuccessMessage = true }
-                // Clear inputs after successful save
                 inputText = ""
                 translatedText = ""
                 inputIsStale = true

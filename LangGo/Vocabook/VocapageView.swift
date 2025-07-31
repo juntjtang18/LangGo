@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftData
 import AVFoundation
 import os // For logging
 
@@ -9,7 +8,6 @@ struct VocapageHostView: View {
     
     @StateObject private var loader: VocapageLoader
     
-    // Use @AppStorage to automatically save the user's preference
     @AppStorage("showBaseTextInVocapage") private var showBaseText: Bool = true
     
     @State private var isShowingExamView: Bool = false
@@ -18,15 +16,16 @@ struct VocapageHostView: View {
     let allVocapageIds: [Int]
     @State private var currentPageIndex: Int
 
-    // New properties to handle global actions
     let flashcardViewModel: FlashcardViewModel
     @State private var isShowingReviewView: Bool = false
+    private let strapiService: StrapiService // Add strapiService as a property
 
-    init(allVocapageIds: [Int], selectedVocapageId: Int, modelContext: ModelContext, strapiService: StrapiService, flashcardViewModel: FlashcardViewModel) {
+    init(allVocapageIds: [Int], selectedVocapageId: Int, strapiService: StrapiService, flashcardViewModel: FlashcardViewModel) {
         self.allVocapageIds = allVocapageIds
         _currentPageIndex = State(initialValue: allVocapageIds.firstIndex(of: selectedVocapageId) ?? 0)
-        _loader = StateObject(wrappedValue: VocapageLoader(modelContext: modelContext, strapiService: strapiService))
+        _loader = StateObject(wrappedValue: VocapageLoader(strapiService: strapiService))
         self.flashcardViewModel = flashcardViewModel
+        self.strapiService = strapiService // Store strapiService
     }
 
     private var currentVocapage: Vocapage? {
@@ -35,13 +34,11 @@ struct VocapageHostView: View {
         return loader.vocapages[currentId]
     }
     
-    // REFACTORED: Sort the list once here.
     private var sortedFlashcardsForCurrentPage: [Flashcard] {
         return currentVocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
     }
 
     var body: some View {
-        // REFACTORED: The main view is now a scaffold for the subviews.
         VocapagePagingView(
             currentPageIndex: $currentPageIndex,
             allVocapageIds: allVocapageIds,
@@ -63,12 +60,12 @@ struct VocapageHostView: View {
             )
         }
         .toolbar(.hidden, for: .tabBar)
-        .onChange(of: currentPageIndex) {
+        .onChange(of: currentPageIndex) { _ in
             speechManager.stopReadingSession()
         }
         .sheet(isPresented: $isShowingExamView) {
             if let vocapage = currentVocapage, let flashcards = vocapage.flashcards, !flashcards.isEmpty {
-                ExamView(flashcards: flashcards, strapiService: loader.strapiService)
+                ExamView(flashcards: flashcards, strapiService: strapiService) // Pass strapiService here
             }
         }
         .fullScreenCover(isPresented: $isShowingReviewView) {
@@ -270,8 +267,7 @@ private struct VocapageContentListView: View {
                 List {
                     Section(header: Color.clear.frame(height: 10)) {
                         ForEach(sortedFlashcards.enumerated().map { (index, card) in (index, card) }, id: \.1.id) { index, card in
-                            HStack(spacing: 8) { // Adjusted spacing
-                                // ADDED: Tier icon is displayed here
+                            HStack(spacing: 8) {
                                 TierIconView(tier: card.reviewTire)
 
                                 Text(card.backContent)
@@ -294,7 +290,8 @@ private struct VocapageContentListView: View {
                 }
                 .listStyle(.plain)
                 .background(Color.clear)
-                .onChange(of: speechManager.currentIndex) { _, newIndex in
+                // MODIFIED: .onChange signature updated for iOS 16.
+                .onChange(of: speechManager.currentIndex) { newIndex in
                     if newIndex >= 0 && newIndex < sortedFlashcards.count {
                         let cardIdToScroll = sortedFlashcards[newIndex].id
                         withAnimation {

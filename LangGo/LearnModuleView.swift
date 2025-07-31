@@ -1,6 +1,8 @@
+// LangGo/LearnModuleView.swift
+
 import Foundation
 import SwiftUI
-import SwiftData
+// REMOVED: import SwiftData
 
 // The old LearnView and its components are no longer directly used in the tab
 // but are kept to prevent breaking other parts of the app.
@@ -8,9 +10,10 @@ import SwiftData
 
 // MARK: - Primary Learn Screen UI
 struct LearnView: View {
-    @Environment(\.modelContext) private var modelContext
+    // REMOVED: The modelContext environment variable is no longer needed.
     @State private var viewModel: VocabookViewModel
     
+    // This data remains as placeholder content for the view.
     let mainUnits: [CourseUnit] = [
         .init(number: 1, title: "Introductions", progress: 1.0, isSelected: true),
         .init(number: 2, title: "Connections", progress: 0.6),
@@ -25,8 +28,10 @@ struct LearnView: View {
         .init(icon: "text.quote", title: "Argot", progress: 0.0)
     ]
 
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        _viewModel = State(initialValue: VocabookViewModel(modelContext: modelContext, strapiService: strapiService))
+    // MODIFIED: The initializer no longer takes a ModelContext. It now requires the StrapiService,
+    // which is consistent with the refactored VocabookViewModel.
+    init(strapiService: StrapiService) {
+        _viewModel = State(initialValue: VocabookViewModel(strapiService: strapiService))
     }
     
     var body: some View {
@@ -49,7 +54,7 @@ struct LearnView: View {
     }
 }
 
-// MARK: - LearnView Components
+// MARK: - LearnView Components (Unchanged)
 struct CourseUnit: Identifiable {
     let id = UUID()
     var number: Int? = nil

@@ -1,21 +1,25 @@
+// LangGo/Vocabook/ExamViewModel.swift
+
 import SwiftUI
-import SwiftData
+// import SwiftData // REMOVED: No longer needed.
 
 // Enum to define the direction of the exam
 enum ExamDirection {
     case baseToTarget, targetToBase
 }
 
-@Observable
-class ExamViewModel {
+// MODIFIED: Changed from @Observable to conform to ObservableObject for iOS 16 compatibility.
+class ExamViewModel: ObservableObject {
+    // These properties are not marked @Published because they are set once at initialization.
     var flashcards: [Flashcard]
-    var currentCardIndex: Int = 0
-    var selectedOption: ExamOption?
-    var isAnswerSubmitted = false
-    var direction: ExamDirection = .baseToTarget // Default direction
-    
     private let strapiService: StrapiService
 
+    // MODIFIED: Properties that change and should update the UI are marked with @Published.
+    @Published var currentCardIndex: Int = 0
+    @Published var selectedOption: ExamOption?
+    @Published var isAnswerSubmitted = false
+    @Published var direction: ExamDirection = .baseToTarget // Default direction
+    
     init(flashcards: [Flashcard], strapiService: StrapiService) {
         // Filter for cards that have exam data for BOTH directions
         self.flashcards = flashcards.filter { card in
@@ -30,18 +34,18 @@ class ExamViewModel {
         self.strapiService = strapiService
     }
 
+    // Computed properties do not need to be @Published.
+    // They will automatically update when their dependent @Published properties change.
     var currentCard: Flashcard? {
         guard !flashcards.isEmpty else { return nil }
         return flashcards[safe: currentCardIndex]
     }
     
-    // The question text now depends on the exam direction
     var questionText: String? {
         guard let card = currentCard else { return nil }
         return direction == .baseToTarget ? card.backContent : card.frontContent
     }
 
-    // The options now depend on the exam direction
     var examOptions: [ExamOption]? {
         guard let card = currentCard else { return nil }
         let options = direction == .baseToTarget ? card.wordAttributes?.examBase ?? card.userWordAttributes?.examBase : card.wordAttributes?.examTarget ?? card.userWordAttributes?.examTarget
