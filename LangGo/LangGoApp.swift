@@ -1,63 +1,57 @@
-// LangGoApp.swift
 import SwiftUI
-import SwiftData
+import CoreData
 import KeychainAccess
-
-// A new class to hold our services, making them available to the entire app.
-@MainActor
-class AppEnvironment: ObservableObject {
-    let strapiService: StrapiService
-    let conversationService: ConversationService
-    let reviewSettingsManager = ReviewSettingsManager()
-    let storyService: StoryService // Added the new service
-
-    init(modelContainer: ModelContainer) {
-        self.strapiService = StrapiService(modelContext: modelContainer.mainContext)
-        self.conversationService = ConversationService()
-        self.storyService = StoryService() // Initialized the new service
-    }
-}
-
-// Define the possible authentication states for the app
-enum AuthState {
-    case checking
-    case loggedIn
-    case loggedOut
-}
 
 @main
 struct LangGoApp: App {
-    @State private var authState: AuthState = .checking
-    @StateObject private var languageSettings = LanguageSettings()
-
-    // The single instance of our environment object and the model container.
+    let persistenceController = PersistenceController.shared
+    
+    // Declare the StateObjects here, but we will initialize them in init()
     @StateObject private var appEnvironment: AppEnvironment
-    private let modelContainer: ModelContainer
-
+    @StateObject private var reviewSettingsManager: ReviewSettingsManager
+    
+    // These have no dependencies, so they can be initialized directly
+    @StateObject private var languageSettings = LanguageSettings()
+    
+    @State private var authState: AuthState
+    
     init() {
-        // 1. Create the model container once.
-        let container = try! ModelContainer(for: Flashcard.self, Vocabook.self, Vocapage.self)
-        self.modelContainer = container
+        // 1. Create the single StrapiService instance
+        let strapiService = StrapiService(managedObjectContext: persistenceController.container.viewContext)
         
-        // 2. Create the environment object that holds the service, injecting the container.
-        _appEnvironment = StateObject(wrappedValue: AppEnvironment(modelContainer: container))
+        // 2. Initialize the objects that depend on the service
+        _appEnvironment = StateObject(wrappedValue: AppEnvironment(strapiService: strapiService))
+        _reviewSettingsManager = StateObject(wrappedValue: ReviewSettingsManager(strapiService: strapiService))
+        
+        // 3. Initialize authState from the keychain
+        let keychain = Keychain(service: Config.keychainService)
+        if keychain["jwt"] != nil {
+            _authState = State(initialValue: .loggedIn)
+        } else {
+            _authState = State(initialValue: .loggedOut)
+        }
     }
 
     var body: some Scene {
         WindowGroup {
-            // 3. Switch the view based on the authentication state
-            switch authState {
-            case .checking:
+            // The view hierarchy remains the same and will now have all required objects
+            if authState == .loggedIn {
                 InitialLoadingView(authState: $authState)
-            case .loggedIn:
-                MainView(authState: $authState)
-            case .loggedOut:
+                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                    .environmentObject(appEnvironment)
+                    .environmentObject(languageSettings)
+                    .environmentObject(reviewSettingsManager)
+            } else {
                 LoginView(authState: $authState)
+                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                    .environmentObject(appEnvironment)
+                    .environmentObject(languageSettings)
+                    .environmentObject(reviewSettingsManager)
             }
         }
-        .modelContainer(modelContainer) // Use the container created in the initializer.
-        .environmentObject(languageSettings)
-        .environmentObject(appEnvironment) // 4. Inject the AppEnvironment into the SwiftUI Environment.
-        .environmentObject(appEnvironment.reviewSettingsManager) // Inject the new manager
     }
+}
+
+enum AuthState {
+    case loggedIn, loggedOut
 }

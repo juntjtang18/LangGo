@@ -1,5 +1,5 @@
 import SwiftUI
-import SwiftData
+import CoreData // Use CoreData instead of SwiftData
 import AVFoundation
 import os
 
@@ -18,8 +18,9 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     // MARK: - Private Properties
     private let synthesizer = AVSpeechSynthesizer()
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ReadFlashcardViewModel")
-    private var modelContext: ModelContext
-    private var languageSettings: LanguageSettings
+    // Use the Core Data context
+    private let managedObjectContext: NSManagedObjectContext
+    private let languageSettings: LanguageSettings
     private let strapiService: StrapiService
     private var showBaseTextBinding: Binding<Bool>?
     
@@ -29,8 +30,9 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     private var currentStep: ReadingStep = .firstWord
 
     // MARK: - Initialization
-    init(modelContext: ModelContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
-        self.modelContext = modelContext
+    // The initializer is now updated for Core Data and is compatible with iOS 16
+    init(managedObjectContext: NSManagedObjectContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
+        self.managedObjectContext = managedObjectContext
         self.languageSettings = languageSettings
         self.strapiService = strapiService
         super.init()
@@ -42,11 +44,12 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     func fetchReviewFlashcards() async {
         isLoading = true
         do {
+            // This function already fetches from the network, so no changes are needed here.
             self.flashcards = try await strapiService.fetchAllReviewFlashcards()
             logger.info("Successfully loaded \(self.flashcards.count) cards for review session.")
         } catch {
             logger.error("Failed to fetch flashcards for review session: \(error.localizedDescription)")
-            self.flashcards = [] // Ensure flashcards are empty on error
+            self.flashcards = []
         }
         isLoading = false
     }
@@ -126,11 +129,11 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
 
         switch currentStep {
         case .firstWord, .secondWord:
-            textToSpeak = card.backContent
-            languageCode = "en-US"
+            textToSpeak = card.backContent ?? "No content" // Provide a default value
+            languageCode = "en-US" // This seems to be hardcoded for the back content
             readingState = .readingWord
         case .baseText:
-            textToSpeak = card.frontContent
+            textToSpeak = card.frontContent ?? "No content" // Provide a default value
             languageCode = self.languageSettings.selectedLanguageCode
             readingState = .readingBaseText
         case .finished:
@@ -165,3 +168,4 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
         }
     }
 }
+

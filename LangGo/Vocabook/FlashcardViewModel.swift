@@ -1,35 +1,37 @@
-// LangGo/FlashcardViewModel.swift
 import SwiftUI
-import SwiftData
+import CoreData // Use CoreData instead of SwiftData
 import os
 
-@Observable
-class FlashcardViewModel {
+// 1. Conform to ObservableObject instead of using @Observable
+class FlashcardViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardViewModel")
     private let strapiService: StrapiService
-    private let modelContext: ModelContext
-    var userReviewLogs: [StrapiReviewLog] = []
+    // 2. Use NSManagedObjectContext
+    private let managedObjectContext: NSManagedObjectContext
+    
+    // 3. Use @Published to notify views of changes
+    @Published var userReviewLogs: [StrapiReviewLog] = []
+    @Published var totalCardCount: Int = 0
+    @Published var rememberedCount: Int = 0
+    @Published var reviewCards: [Flashcard] = []
+    @Published var newCardCount: Int = 0
+    @Published var warmUpCardCount: Int = 0
+    @Published var weeklyReviewCardCount: Int = 0
+    @Published var monthlyCardCount: Int = 0
+    @Published var hardToRememberCount: Int = 0
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
     }
-
-    var totalCardCount: Int = 0
-    var rememberedCount: Int = 0
-    var reviewCards: [Flashcard] = []
-    var newCardCount: Int = 0
-    var warmUpCardCount: Int = 0
-    var weeklyReviewCardCount: Int = 0
-    var monthlyCardCount: Int = 0
-    var hardToRememberCount: Int = 0
 
     var inProgressCount: Int {
         let count = totalCardCount - rememberedCount - newCardCount
         return max(0, count)
     }
 
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        self.modelContext = modelContext
+    // 4. The initializer now accepts the Core Data context
+    init(managedObjectContext: NSManagedObjectContext, strapiService: StrapiService) {
+        self.managedObjectContext = managedObjectContext
         self.strapiService = strapiService
     }
 
@@ -58,8 +60,9 @@ class FlashcardViewModel {
     private func calculateStatisticsLocally() async {
         logger.info("Calculating statistics from local data as a fallback.")
         do {
-            let descriptor = FetchDescriptor<Flashcard>()
-            let allCards = try modelContext.fetch(descriptor)
+            // 5. Use NSFetchRequest to fetch local data
+            let request = NSFetchRequest<Flashcard>(entityName: "Flashcard")
+            let allCards = try managedObjectContext.fetch(request)
 
             self.totalCardCount = allCards.count
             self.rememberedCount = allCards.filter { $0.reviewTire == "remembered" }.count
@@ -86,11 +89,12 @@ class FlashcardViewModel {
         } catch {
             logger.warning("Could not fetch review session from server. Error: \(error.localizedDescription). Falling back to local data.")
             do {
-                let descriptor = FetchDescriptor<Flashcard>(
-                    predicate: #Predicate { !$0.isRemembered },
-                    sortBy: [SortDescriptor(\.lastReviewedAt, order: .forward)]
-                )
-                self.reviewCards = try modelContext.fetch(descriptor)
+                // 6. Use NSFetchRequest for the local fallback
+                let request = NSFetchRequest<Flashcard>(entityName: "Flashcard")
+                request.predicate = NSPredicate(format: "isRemembered == NO")
+                request.sortDescriptors = [NSSortDescriptor(keyPath: \Flashcard.lastReviewedAt, ascending: true)]
+                
+                self.reviewCards = try managedObjectContext.fetch(request)
                 logger.info("Successfully loaded \(self.reviewCards.count) cards for review from local storage as a fallback.")
             } catch {
                 logger.error("Fallback failed: Could not fetch cards from local storage either: \(error.localizedDescription)")
@@ -111,7 +115,7 @@ class FlashcardViewModel {
     private func submitReview(for card: Flashcard, result: ReviewResult) async {
         do {
             logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)'")
-            _ = try await strapiService.submitFlashcardReview(cardId: card.id, result: result)
+            _ = try await strapiService.submitFlashcardReview(cardId: Int(card.id), result: result)
             logger.info("Successfully synced updated card \(card.id) from server after review.")
         } catch {
             logger.error("Failed to submit and sync review for flashcard \(card.id): \(error.localizedDescription)")
@@ -149,6 +153,7 @@ class FlashcardViewModel {
 
 /// Enum to provide strong typing for review results.
 enum ReviewResult: String {
+    // Corrected to match StrapiService enum if it exists, otherwise keep as is.
     case correct
     case wrong
 }

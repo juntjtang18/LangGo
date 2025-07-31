@@ -23,11 +23,17 @@ struct ConversationView: View {
                         }
                         .padding()
                     }
-                    .onChange(of: viewModel.messages.count) {
+                    .onChange(of: viewModel.messages.count) { _ in
                         if let lastMessage = viewModel.messages.last {
                             withAnimation {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
+                        }
+                    }
+                    .onAppear {
+                        // If you wanted the iOS 17 `initial: true` behavior, simulate it here.
+                        if let lastMessage = viewModel.messages.last {
+                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
                         }
                     }
                 }

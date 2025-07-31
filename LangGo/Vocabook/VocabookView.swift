@@ -1,13 +1,15 @@
 // LangGo/MyVocabookView.swift
 import SwiftUI
 import os
+import CoreData // Use CoreData instead of SwiftData
 
 struct VocabookView: View {
     let flashcardViewModel: FlashcardViewModel
     let vocabookViewModel: VocabookViewModel
     
     @EnvironmentObject var appEnvironment: AppEnvironment
-    @Environment(\.modelContext) private var modelContext
+    // Use the Core Data context
+    @Environment(\.managedObjectContext) private var managedObjectContext
     @EnvironmentObject var languageSettings: LanguageSettings
     @Environment(\.theme) var theme: Theme
 
@@ -18,7 +20,6 @@ struct VocabookView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            // This top part is now fixed and does not scroll
             OverallProgressView(viewModel: flashcardViewModel)
                 .padding(.horizontal)
 
@@ -30,7 +31,6 @@ struct VocabookView: View {
             )
             .padding(.horizontal)
 
-            // This list view now handles its own scrolling
             PagesListView(viewModel: vocabookViewModel, flashcardViewModel: flashcardViewModel)
         }
         .padding(.top)
@@ -42,7 +42,9 @@ struct VocabookView: View {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isListening) {
-             ReadFlashcardView(modelContext: modelContext, languageSettings: languageSettings, strapiService: appEnvironment.strapiService)
+             // FIX 1: This now passes the Core Data context.
+             // This will cause an error in ReadFlashcardView until we fix that file next.
+             ReadFlashcardView(managedObjectContext: managedObjectContext, languageSettings: languageSettings, strapiService: appEnvironment.strapiService)
         }
         .sheet(isPresented: $isQuizzing) {
             if !flashcardViewModel.reviewCards.isEmpty {
@@ -174,18 +176,17 @@ private struct PagesListView: View {
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        // The ScrollViewReader provides the 'proxy' to its content.
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     if viewModel.isLoadingVocabooks {
                         ProgressView()
                             .frame(maxWidth: .infinity)
-                    } else if let vocabook = viewModel.vocabook, let pages = vocabook.vocapages, !pages.isEmpty {
-                        let sortedPages = pages.sorted(by: { $0.order < $1.order })
+                    } else if let vocabook = viewModel.vocabook, let pages = vocabook.vocapages, (pages.count > 0) {
+                        let sortedPages = (pages.allObjects as? [Vocapage] ?? []).sorted(by: { $0.order < $1.order })
                         ForEach(sortedPages) { page in
-                            VocabookPageRow(flashcardViewModel: flashcardViewModel, vocapage: page, allVocapageIds: sortedPages.map { $0.id })
-                                .id(page.id) // Ensure each row has an ID
+                            VocabookPageRow(flashcardViewModel: flashcardViewModel, vocapage: page, allVocapageIds: sortedPages.map { Int($0.id) })
+                                .id(page.id)
                         }
                     } else {
                         Text("No vocabulary pages found. Start learning to create them!")
@@ -197,19 +198,28 @@ private struct PagesListView: View {
                 }
                 .padding()
             }
-            // THIS IS THE CORRECT PLACEMENT
-            // The .onChange modifier is now on the ScrollView, inside the reader's scope.
-            .onChange(of: viewModel.loadCycle) {
-                // Use a tiny delay to ensure views are rendered before scrolling
-                logger.debug("PageListView::onChange()")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-                    if lastViewedID != 0 {
-                        withAnimation {
-                            // The 'proxy' is now correctly found and used here
-                            proxy.scrollTo(lastViewedID, anchor: .center)
-                        }
-                    }
+            // --- THIS IS THE CORRECT FIX ---
+            .onAppear {
+                // This closure runs once when the view first appears,
+                // replicating the 'initial' parameter.
+                scrollToLastViewed(proxy: proxy)
+            }
+            .onChange(of: viewModel.loadCycle) { _ in
+                // This is the iOS 16-compatible version of onChange.
+                // It will run for all subsequent changes to loadCycle.
+                scrollToLastViewed(proxy: proxy)
+            }
+        }
+    }
+    
+    // I've extracted the scrolling logic into a helper function to avoid repetition.
+    private func scrollToLastViewed(proxy: ScrollViewProxy) {
+        logger.debug("PageListView: Attempting to scroll.")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
+            if lastViewedID != 0 {
+                withAnimation {
+                    proxy.scrollTo(lastViewedID, anchor: .center)
                 }
             }
         }
@@ -219,7 +229,7 @@ private struct PagesListView: View {
 @MainActor
 private struct VocabookPageRow: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.managedObjectContext) private var managedObjectContext
     @Environment(\.theme) var theme: Theme
     @EnvironmentObject var reviewSettings: ReviewSettingsManager
     
@@ -227,8 +237,9 @@ private struct VocabookPageRow: View {
     let vocapage: Vocapage
     let allVocapageIds: [Int]
 
+    // ... weightedProgress logic remains the same ...
     private var weightedProgress: WeightedProgress {
-        guard let cards = vocapage.flashcards, !cards.isEmpty, !reviewSettings.settings.isEmpty else {
+        guard let cards = vocapage.flashcards?.allObjects as? [Flashcard], !cards.isEmpty, !reviewSettings.settings.isEmpty else {
             return WeightedProgress(progress: 0.0, isComplete: false)
         }
 
@@ -244,30 +255,24 @@ private struct VocabookPageRow: View {
         let totalPossiblePoints = Double(cards.count) * maxCardScore
         
         let currentTotalPoints = cards.reduce(0.0) { total, card in
-            // --- THIS IS THE FIX ---
-            // If the card's tier is explicitly "remembered", it gets full points.
-            // This is the primary source of truth for mastery.
             if card.reviewTire == "remembered" {
                 return total + maxCardScore
             }
 
             var cardScore = Double(card.correctStreak)
-            // Add bonus points for each tier achieved
             for (tierName, tierSetting) in reviewSettings.settings where tierName != "new" {
                 if card.correctStreak >= tierSetting.min_streak {
                     cardScore += Double(promotionBonus)
                 }
             }
-            // The score for a single card cannot exceed the maximum possible score.
             return total + min(cardScore, maxCardScore)
         }
         
         let finalProgress = totalPossiblePoints > 0 ? currentTotalPoints / totalPossiblePoints : 0.0
-        // Ensure that floating point inaccuracies don't prevent completion
         let isComplete = finalProgress >= 0.999
         return WeightedProgress(progress: finalProgress, isComplete: isComplete)
     }
-
+    // ... getRelativeDate logic remains the same ...
     private func getRelativeDate(from date: Date?) -> String {
         guard let date = date else { return "Not reviewed yet" }
         let formatter = RelativeDateTimeFormatter()
@@ -275,11 +280,13 @@ private struct VocabookPageRow: View {
         return "Reviewed \(formatter.localizedString(for: date, relativeTo: Date()))"
     }
 
+
     var body: some View {
+        // FIX 3: Pass the Core Data context to the NavigationLink destination
         NavigationLink(destination: VocapageHostView(
             allVocapageIds: allVocapageIds,
-            selectedVocapageId: vocapage.id,
-            modelContext: modelContext,
+            selectedVocapageId: Int(vocapage.id), // Cast to Int
+            managedObjectContext: managedObjectContext,
             strapiService: appEnvironment.strapiService,
             flashcardViewModel: flashcardViewModel
         )) {
@@ -288,7 +295,8 @@ private struct VocabookPageRow: View {
                     Text("Page \(vocapage.order)")
                         .style(.body)
                         .fontWeight(.bold)
-                    Text(getRelativeDate(from: vocapage.flashcards?.first?.lastReviewedAt))
+                    // Safely get a date from any flashcard in the set
+                    Text(getRelativeDate(from: (vocapage.flashcards?.anyObject() as? Flashcard)?.lastReviewedAt))
                         .style(.caption)
                 }
                 Spacer()
@@ -308,11 +316,9 @@ private struct VocabookPageRow: View {
             .cornerRadius(12)
         }
         .buttonStyle(PlainButtonStyle())
-        // ADD THIS GESTURE MODIFIER
         .simultaneousGesture(TapGesture().onEnded {
             UserDefaults.standard.set(vocapage.id, forKey: "lastViewedVocapageID")
         })
-
     }
 }
 

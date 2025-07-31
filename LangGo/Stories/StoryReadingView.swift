@@ -40,6 +40,7 @@ struct StoryReadingView: View {
     var body: some View {
         GeometryReader { screenGeometry in
             ScrollView {
+                // ... Your existing ScrollView content is unchanged ...
                 VStack(alignment: .leading, spacing: 20) {
                     AsyncImage(url: story.attributes.coverImageURL) { image in
                         image.resizable()
@@ -89,6 +90,8 @@ struct StoryReadingView: View {
                     .padding(.horizontal)
                 }
                 .frame(maxWidth: .infinity)
+                // Add padding at the bottom to ensure content doesn't hide behind the new bottom bar
+                .padding(.bottom, 60)
             }
             .overlay(
                 ZStack {
@@ -116,10 +119,9 @@ struct StoryReadingView: View {
         .background(theme.background.ignoresSafeArea())
         .navigationTitle(story.attributes.title)
         .navigationBarTitleDisplayMode(.inline)
-        // This line hides the automatic back button, fixing the double-chevron issue
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            // This is now the only back button that will be displayed
+            // --- FIX 1: The .bottomBar item has been removed ---
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: { dismiss() }) {
                     HStack {
@@ -138,29 +140,31 @@ struct StoryReadingView: View {
                         .foregroundColor(isLiked ? .red : nil)
                 }
             }
-            
-            ToolbarItem(placement: .bottomBar) {
-                HStack {
-                    Button(action: {
-                        if fontSize > 12 { fontSize -= 1 }
-                    }) {
-                        Image(systemName: "minus")
-                    }
-                    
-                    Spacer()
-                    Text("Font Size").font(.caption)
-                    Spacer()
-                    
-                    Button(action: {
-                        if fontSize < 28 { fontSize += 1 }
-                    }) {
-                        Image(systemName: "plus")
-                    }
-                }
-                .font(.headline)
-            }
         }
-        .onChange(of: viewModel.selectedStory) { _, newStory in
+        // --- FIX 2: The bottom bar is now a safeAreaInset ---
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                Button(action: {
+                    if fontSize > 12 { fontSize -= 1 }
+                }) {
+                    Image(systemName: "minus")
+                }
+                
+                Spacer()
+                Text("Font Size").font(.caption)
+                Spacer()
+                
+                Button(action: {
+                    if fontSize < 28 { fontSize += 1 }
+                }) {
+                    Image(systemName: "plus")
+                }
+            }
+            .font(.headline)
+            .padding()
+            .background(.thinMaterial)
+        }
+        .onChange(of: viewModel.selectedStory) { newStory in // iOS 16 compatible
             if let newStory = newStory, newStory.id == story.id {
                 isLiked = (newStory.attributes.like_count ?? 0) > 0
             }
@@ -170,6 +174,8 @@ struct StoryReadingView: View {
         }
     }
 }
+
+
 
 
 struct SelectableTextView: View {

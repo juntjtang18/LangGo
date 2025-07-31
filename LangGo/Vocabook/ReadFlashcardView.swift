@@ -1,5 +1,5 @@
 import SwiftUI
-import SwiftData
+import CoreData
 
 struct ReadFlashcardView: View {
     @StateObject private var viewModel: ReadFlashcardViewModel
@@ -17,8 +17,8 @@ struct ReadFlashcardView: View {
         case list
     }
 
-    init(modelContext: ModelContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
-        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel(modelContext: modelContext, languageSettings: languageSettings, strapiService: strapiService))
+    init(managedObjectContext: NSManagedObjectContext, languageSettings: LanguageSettings, strapiService: StrapiService) {
+        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel(managedObjectContext: managedObjectContext, languageSettings: languageSettings, strapiService: strapiService))
     }
 
     var body: some View {
@@ -43,6 +43,8 @@ struct ReadFlashcardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .background(theme.background.ignoresSafeArea())
             .toolbar {
+                // --- THIS IS THE FIX ---
+                // We are defining each ToolbarItem explicitly to remove the ambiguity.
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Back") {
                         viewModel.stopReading()
@@ -70,7 +72,7 @@ struct ReadFlashcardView: View {
             .onDisappear {
                 saveSettings()
             }
-            .onChange(of: viewModel.currentCardIndex) {
+            .onChange(of: viewModel.currentCardIndex) { newIndex in // Using the iOS 16 compatible version
                 guard viewMode == .card else { return }
                 cardOffset = 0
                 cardOpacity = 1
@@ -87,6 +89,7 @@ struct ReadFlashcardView: View {
         }
     }
     
+    // ... The rest of your private functions and subviews remain unchanged ...
     private func handleOnAppear() {
         loadSettings()
         if viewModel.flashcards.isEmpty {
@@ -116,8 +119,10 @@ struct ReadFlashcardView: View {
     }
 }
 
-// MARK: - Extracted Subviews
 
+// MARK: - Extracted Subviews
+// The private subviews ReadingSessionView, CardDisplayView, FlashcardListView,
+// and CardReadingView are unchanged and have been omitted for brevity.
 private struct ReadingSessionView: View {
     @ObservedObject var viewModel: ReadFlashcardViewModel
     @Binding var viewMode: ReadFlashcardView.ViewMode
@@ -234,12 +239,12 @@ private struct FlashcardListView: View {
                     HStack(spacing: 8) {
                         TierIconView(tier: card.reviewTire)
                         
-                        Text(card.backContent)
+                        Text(card.backContent ?? "")
                             .font(.body)
                             .frame(width: geometry.size.width * 0.5, alignment: .leading)
                         
                         if showBaseText {
-                            Text(card.frontContent)
+                            Text(card.frontContent ?? "")
                                 .font(.subheadline)
                                 .foregroundColor(theme.text.opacity(0.7))
                                 .frame(width: geometry.size.width * 0.3, alignment: .leading)
@@ -250,7 +255,12 @@ private struct FlashcardListView: View {
                     .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
-                .onChange(of: currentCardIndex) { _, newIndex in
+                // --- FIX 1: Add .onAppear for the initial scroll ---
+                .onAppear {
+                    proxy.scrollTo(currentCardIndex, anchor: .center)
+                }
+                // --- FIX 2: Use the iOS 16-compatible onChange modifier ---
+                .onChange(of: currentCardIndex) { newIndex in
                     withAnimation {
                         proxy.scrollTo(newIndex, anchor: .center)
                     }
@@ -269,14 +279,14 @@ private struct CardReadingView: View {
     var body: some View {
         VStack(spacing: 20) {
             
-            Text(card.backContent)
+            Text(card.backContent ?? "")
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .foregroundColor(readingState == .readingWord ? theme.accent : theme.text)
                 .scaleEffect(readingState == .readingWord ? 1.05 : 1.0)
 
             if showBaseText {
-                Text(card.frontContent)
+                Text(card.frontContent ?? "")
                     .font(.title2)
                     .foregroundColor(readingState == .readingBaseText ? theme.accent : theme.text.opacity(0.7))
                     .scaleEffect(readingState == .readingBaseText ? 1.05 : 1.0)

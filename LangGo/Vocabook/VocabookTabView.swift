@@ -1,21 +1,19 @@
-// LangGo/VocabookTabView.swift
 import SwiftUI
-import SwiftData
+import CoreData // Use CoreData instead of SwiftData
 
 struct VocabookTabView: View {
     @Binding var isSideMenuShowing: Bool
     
-    @Environment(\.modelContext) private var modelContext
+    // 1. Use the Core Data context from the environment
+    @Environment(\.managedObjectContext) private var managedObjectContext
     @EnvironmentObject var appEnvironment: AppEnvironment
     
-    // View models required by the new screen
     @State private var flashcardViewModel: FlashcardViewModel?
     @State private var vocabookViewModel: VocabookViewModel?
 
     var body: some View {
         NavigationStack {
             if let flashcardViewModel = flashcardViewModel, let vocabookViewModel = vocabookViewModel {
-                // The new view is composed in a separate file for clarity
                 VocabookView(
                     flashcardViewModel: flashcardViewModel,
                     vocabookViewModel: vocabookViewModel
@@ -23,22 +21,38 @@ struct VocabookTabView: View {
                 .navigationTitle("My Vocabulary Book")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
+                    // 2. Use an explicit ToolbarItem to fix the ambiguity error
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            withAnimation(.easeInOut) {
+                                isSideMenuShowing.toggle()
+                            }
+                        }) {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.title3)
+                                .foregroundColor(.primary)
+                        }
+                    }
                 }
                 .task {
-                    // Load all necessary data when the view appears
                     await flashcardViewModel.loadStatistics()
                     await vocabookViewModel.loadVocabookPages()
                 }
             } else {
-                // Show a loading indicator while view models are being initialized
                 ProgressView()
                     .onAppear {
                         if flashcardViewModel == nil {
-                            flashcardViewModel = FlashcardViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                            // 3. Initialize ViewModels with the Core Data context
+                            flashcardViewModel = FlashcardViewModel(
+                                managedObjectContext: managedObjectContext,
+                                strapiService: appEnvironment.strapiService
+                            )
                         }
                         if vocabookViewModel == nil {
-                            vocabookViewModel = VocabookViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                            vocabookViewModel = VocabookViewModel(
+                                managedObjectContext: managedObjectContext,
+                                strapiService: appEnvironment.strapiService
+                            )
                         }
                     }
             }

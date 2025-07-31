@@ -1,76 +1,26 @@
-// LangGo/VocabookViewModel.swift
+// LangGo/Vocabook/VocabookViewModel.swift
 import Foundation
-import SwiftData
+import CoreData // Use CoreData instead of SwiftData
 import os
 import SwiftUI
 
-// MARK: - SwiftData Models (Moved from separate files)
-@Model
-final class Vocabook {
-    @Attribute(.unique) var id: Int
-    var title: String
-    @Relationship(deleteRule: .cascade, inverse: \Vocapage.vocabook)
-    var vocapages: [Vocapage]?
-
-    init(id: Int, title: String) {
-        self.id = id
-        self.title = title
-    }
-}
-
-// A new struct to hold the calculated weighted progress.
-struct WeightedProgress {
-    let progress: Double
-    let isComplete: Bool
-}
-
-@Model
-final class Vocapage {
-    @Attribute(.unique) var id: Int
-    var title: String
-    var order: Int
-    @Relationship(deleteRule: .nullify)
-    var flashcards: [Flashcard]?
-    var vocabook: Vocabook?
-
-    init(id: Int, title: String, order: Int) {
-        self.id = id
-        self.title = title
-        self.order = order
-    }
-
-    var progress: Double {
-        guard let cards = flashcards, !cards.isEmpty else { return 0.0 }
-        let rememberedCount = cards.filter { $0.isRemembered || $0.correctStreak >= 11 }.count
-        return Double(rememberedCount) / Double(cards.count)
-    }
-    
-    // This property is now a placeholder; the real calculation happens in the View.
-    var weightedProgress: WeightedProgress {
-        // The actual calculation requires the settings manager, so we do it in the view.
-        // This just provides a default structure.
-        return WeightedProgress(progress: 0.0, isComplete: false)
-    }
-}
-
-
-// MARK: - VocabookViewModel
-@Observable
-class VocabookViewModel {
+// This is no longer a @Model class, but an ObservableObject
+class VocabookViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
-    private let modelContext: ModelContext
+    // Use NSManagedObjectContext for Core Data
+    private let managedObjectContext: NSManagedObjectContext
     private let strapiService: StrapiService
-    var loadCycle: Int = 0
-
-    var vocabook: Vocabook?
-    var isLoadingVocabooks = false
-    var expandedVocabooks: Set<Int> = []
     
-    var totalFlashcards: Int = 0
-    var totalPages: Int = 1
+    // Use @Published for properties that should trigger UI updates
+    @Published var loadCycle: Int = 0
+    @Published var vocabook: Vocabook?
+    @Published var isLoadingVocabooks = false
+    @Published var expandedVocabooks: Set<Int> = []
+    @Published var totalFlashcards: Int = 0
+    @Published var totalPages: Int = 1
     
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        self.modelContext = modelContext
+    init(managedObjectContext: NSManagedObjectContext, strapiService: StrapiService) {
+        self.managedObjectContext = managedObjectContext
         self.strapiService = strapiService
     }
     
@@ -80,7 +30,7 @@ class VocabookViewModel {
         defer { isLoadingVocabooks = false }
 
         do {
-            // 1. Fetch settings and pagination info in one call
+            // 1. Fetch settings and pagination info
             let vb = try await strapiService.fetchVBSetting()
             let pageSize = vb.attributes.wordsPerPage
             let (_, pagination) = try await strapiService.fetchFlashcards(page: 1, pageSize: pageSize)
@@ -93,40 +43,46 @@ class VocabookViewModel {
             totalFlashcards = pag.total
             totalPages = pag.pageCount
 
-            // 2. Find or create the main Vocabook
+            // 2. Find or create the main Vocabook using NSFetchRequest
             let bookId = 1
-            var fetchDescriptor = FetchDescriptor<Vocabook>(predicate: #Predicate { $0.id == bookId })
-            fetchDescriptor.fetchLimit = 1
+            let fetchRequest = NSFetchRequest<Vocabook>(entityName: "Vocabook")
+            fetchRequest.predicate = NSPredicate(format: "id == %ld", bookId)
+            fetchRequest.fetchLimit = 1
             
             let book: Vocabook
-            if let existingBook = try modelContext.fetch(fetchDescriptor).first {
+            if let existingBook = try managedObjectContext.fetch(fetchRequest).first {
                 book = existingBook
             } else {
-                book = Vocabook(id: bookId, title: "All Flashcards")
-                modelContext.insert(book)
+                book = Vocabook(context: managedObjectContext)
+                book.id = Int64(bookId)
+                book.title = "All Flashcards"
             }
 
             // 3. Sync Vocapages
-            let existingPages = book.vocapages ?? []
-            let existingPageIds = Set(existingPages.map { $0.id })
+            let existingPages = book.vocapages?.allObjects as? [Vocapage] ?? []
+            let existingPageIds = Set(existingPages.map { Int($0.id) })
             let pageNumbersToKeep = Set(1...totalPages)
 
-            // Delete stale pages that are no longer valid
-            let pagesToDelete = existingPages.filter { !pageNumbersToKeep.contains($0.id) }
+            // Delete stale pages
+            let pagesToDelete = existingPages.filter { !pageNumbersToKeep.contains(Int($0.id)) }
             for page in pagesToDelete {
-                modelContext.delete(page)
+                managedObjectContext.delete(page)
             }
 
-            // Add new pages that don't exist yet
+            // Add new pages
             let newPageNumbers = pageNumbersToKeep.subtracting(existingPageIds)
             for pageNum in newPageNumbers {
-                let newPage = Vocapage(id: pageNum, title: "Page \(pageNum)", order: pageNum)
+                let newPage = Vocapage(context: managedObjectContext)
+                newPage.id = Int64(pageNum)
+                newPage.title = "Page \(pageNum)"
+                newPage.order = Int32(pageNum)
                 newPage.vocabook = book
-                modelContext.insert(newPage)
             }
             
-            // 4. Save changes and update the view model's vocabook property
-            try modelContext.save()
+            // 4. Save changes and update properties
+            if managedObjectContext.hasChanges {
+                try managedObjectContext.save()
+            }
             self.vocabook = book
             self.loadCycle += 1
 

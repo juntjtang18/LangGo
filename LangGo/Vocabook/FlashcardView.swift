@@ -1,10 +1,10 @@
 import SwiftUI
-import SwiftData
+import CoreData // Use CoreData
 
 struct FlashcardTabView: View {
     @Binding var isSideMenuShowing: Bool
     
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.managedObjectContext) private var managedObjectContext
     @EnvironmentObject var appEnvironment: AppEnvironment
     
     @State private var viewModel: FlashcardViewModel?
@@ -34,7 +34,18 @@ struct FlashcardTabView: View {
                     FlashcardReviewView(viewModel: viewModel)
                 }
                 .toolbar {
-                    MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
+                    // --- THIS IS THE FIX FOR THE TOOLBAR AMBIGUITY ---
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            withAnimation(.easeInOut) {
+                                isSideMenuShowing.toggle()
+                            }
+                        }) {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.title3)
+                                .foregroundColor(.primary)
+                        }
+                    }
                 }
                 .task {
                     await viewModel.loadStatistics()
@@ -43,13 +54,20 @@ struct FlashcardTabView: View {
                 ProgressView()
                     .onAppear {
                         if viewModel == nil {
-                            viewModel = FlashcardViewModel(modelContext: modelContext, strapiService: appEnvironment.strapiService)
+                            // Initialize ViewModel with the Core Data context
+                            viewModel = FlashcardViewModel(
+                                managedObjectContext: managedObjectContext,
+                                strapiService: appEnvironment.strapiService
+                            )
                         }
                     }
             }
         }
     }
 }
+
+
+// --- All of your private helper views are unchanged ---
 
 private struct FlashcardProgressCircleView: View {
     let viewModel: FlashcardViewModel

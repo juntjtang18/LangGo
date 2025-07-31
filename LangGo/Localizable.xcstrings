@@ -14,6 +14,9 @@
         }
       }
     },
+    "%d" : {
+
+    },
     "%lld" : {
 
     },
@@ -483,6 +486,9 @@
     "Loading stories..." : {
 
     },
+    "Loading Your App..." : {
+
+    },
     "Login" : {
       "localizations" : {
         "ja" : {
@@ -619,7 +625,7 @@
         }
       }
     },
-    "Page %lld" : {
+    "Page %d" : {
 
     },
     "Page Review" : {
@@ -1219,6 +1225,7 @@
       }
     },
     "Verifying Session..." : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {

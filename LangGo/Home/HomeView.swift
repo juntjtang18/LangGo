@@ -108,7 +108,7 @@ struct HomeView: View {
         .onAppear {
             self.username = UserDefaults.standard.string(forKey: "username") ?? "Vivian"
         }
-        .onChange(of: isViewActive) { _, active in
+        .onChange(of: isViewActive) { active in
             if !active {
                 playerManager.stopAllPlayback()
             }

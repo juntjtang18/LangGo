@@ -1,17 +1,17 @@
 // LangGo/StrapiService.swift
 import Foundation
 import os
-import SwiftData
+import CoreData
 
 /// A service layer for interacting with the Strapi backend API.
-/// This class is now instantiated once at app launch and holds a reference to the modelContext.
+/// This class is now instantiated once at app launch and holds a reference to the managedObjectContext.
 class StrapiService {
-    private let modelContext: ModelContext
+    private let managedObjectContext: NSManagedObjectContext
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StrapiService")
+    private var flashcardCache: [Int: Flashcard] = [:]
 
-    /// The modelContext is now injected during initialization.
-    init(modelContext: ModelContext) {
-        self.modelContext = modelContext
+    init(managedObjectContext: NSManagedObjectContext) {
+        self.managedObjectContext = managedObjectContext
     }
 
     // MARK: - Authentication & User Management
@@ -67,7 +67,6 @@ class StrapiService {
         return response.data ?? []
     }
 
-    /// Fetches a single page of review flashcards from the `/api/review-flashcards` endpoint.
     @MainActor
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching review flashcards page \(page), size \(pageSize).")
@@ -92,16 +91,17 @@ class StrapiService {
                 syncedFlashcards.append(syncedCard)
             }
         }
-        try modelContext.save()
+        if managedObjectContext.hasChanges {
+            try managedObjectContext.save()
+        }
         return (syncedFlashcards, response.meta?.pagination)
     }
     
-    /// Fetches all available flashcards due for review by handling pagination internally.
     @MainActor
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
         var allCards: [Flashcard] = []
         var currentPage = 1
-        let pageSize = 100 // Use a larger page size for efficiency
+        let pageSize = 100
         var hasMorePages = true
 
         logger.debug("StrapiService: Fetching all pages of review flashcards from /api/review-flashcards.")
@@ -135,7 +135,9 @@ class StrapiService {
         }
         
         let syncedCard = try await syncCard(updatedStrapiCard)
-        try modelContext.save()
+        if managedObjectContext.hasChanges {
+            try managedObjectContext.save()
+        }
         return syncedCard
     }
 
@@ -203,15 +205,19 @@ class StrapiService {
     @discardableResult
     private func syncCard(_ strapiCard: StrapiFlashcard) async throws -> Flashcard {
         let cardId = strapiCard.id
-        var fetchDescriptor = FetchDescriptor<Flashcard>(predicate: #Predicate { $0.id == cardId })
-        fetchDescriptor.fetchLimit = 1
+        let fetchRequest = NSFetchRequest<Flashcard>(entityName: "Flashcard")
+        fetchRequest.predicate = NSPredicate(format: "id == %ld", cardId)
+        fetchRequest.fetchLimit = 1
         
         let cardToUpdate: Flashcard
-        if let existingCard = try modelContext.fetch(fetchDescriptor).first {
+        
+        if let existingCard = try managedObjectContext.fetch(fetchRequest).first {
             cardToUpdate = existingCard
         } else {
-            cardToUpdate = Flashcard(id: cardId, frontContent: "", backContent: "", register: nil, contentType: "", rawComponentData: nil, lastReviewedAt: nil, correctStreak: 0, wrongStreak: 0, isRemembered: false, reviewTire: nil)
-            modelContext.insert(cardToUpdate)
+            // This now assumes Flashcard is an NSManagedObject subclass
+            cardToUpdate = Flashcard(context: self.managedObjectContext)
+            // FIX: Assign Int directly, not Int64
+            cardToUpdate.id = cardId
         }
         
         let attributes = strapiCard.attributes
@@ -241,6 +247,7 @@ class StrapiService {
         cardToUpdate.rawComponentData = try? JSONEncoder().encode(contentComponent)
         cardToUpdate.lastReviewedAt = attributes.lastReviewedAt
         cardToUpdate.isRemembered = attributes.isRemembered
+        // FIX: Assign Int directly, not Int32
         cardToUpdate.correctStreak = attributes.correctStreak ?? 0
         cardToUpdate.wrongStreak = attributes.wrongStreak ?? 0
         cardToUpdate.reviewTire = attributes.reviewTire?.data?.attributes.tier

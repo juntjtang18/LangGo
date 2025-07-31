@@ -1,16 +1,16 @@
 import Foundation
 import SwiftUI
-import SwiftData
-
-// The old LearnView and its components are no longer directly used in the tab
-// but are kept to prevent breaking other parts of the app.
-// They can be safely removed in a future refactor.
+import CoreData // 1. Use CoreData instead of SwiftData
 
 // MARK: - Primary Learn Screen UI
 struct LearnView: View {
-    @Environment(\.modelContext) private var modelContext
-    @State private var viewModel: VocabookViewModel
+    // 2. Use the Core Data managed object context from the environment
+    @Environment(\.managedObjectContext) private var managedObjectContext
     
+    // 3. The viewModel should be an @StateObject since it's an ObservableObject
+    @StateObject private var viewModel: VocabookViewModel
+    
+    // Static data for the UI, no changes needed here
     let mainUnits: [CourseUnit] = [
         .init(number: 1, title: "Introductions", progress: 1.0, isSelected: true),
         .init(number: 2, title: "Connections", progress: 0.6),
@@ -25,31 +25,33 @@ struct LearnView: View {
         .init(icon: "text.quote", title: "Argot", progress: 0.0)
     ]
 
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        _viewModel = State(initialValue: VocabookViewModel(modelContext: modelContext, strapiService: strapiService))
+    // 4. The initializer now accepts NSManagedObjectContext
+    init(managedObjectContext: NSManagedObjectContext, strapiService: StrapiService) {
+        // Initialize the @StateObject with the correct context
+        _viewModel = StateObject(wrappedValue: VocabookViewModel(managedObjectContext: managedObjectContext, strapiService: strapiService))
     }
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 25) {
                 ResumeLearningView()
-                //VocabularyNotebookView(viewModel: viewModel)
+                // The VocabularyNotebookView seems to be commented out, so we'll leave it
                 
                 UnitListView(title: "Main Units", units: mainUnits)
                 
                 UnitListView(title: "Specialty Units", units: specialtyUnits)
-                
             }
             .padding()
         }
         .background(Color(.systemGroupedBackground))
         .task {
+            // This task remains the same
             await viewModel.loadVocabookPages()
         }
     }
 }
 
-// MARK: - LearnView Components
+// MARK: - LearnView Components (No changes needed below this line)
 struct CourseUnit: Identifiable {
     let id = UUID()
     var number: Int? = nil

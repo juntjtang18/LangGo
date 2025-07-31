@@ -123,12 +123,3 @@ struct MenuToolbar: ToolbarContent {
         }
     }
 }
-
-
-// MARK: - Preview
-#Preview {
-    // You will need to provide a mock LanguageSettings object for the preview to work.
-    MainView(authState: .constant(.loggedIn))
-        .environmentObject(LanguageSettings())
-        .environmentObject(AppEnvironment(modelContainer: try! ModelContainer(for: Flashcard.self, Vocabook.self, Vocapage.self)))
-}

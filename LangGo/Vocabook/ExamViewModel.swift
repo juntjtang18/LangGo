@@ -1,30 +1,34 @@
 import SwiftUI
 import SwiftData
 
-// Enum to define the direction of the exam
 enum ExamDirection {
     case baseToTarget, targetToBase
 }
 
-@Observable
-class ExamViewModel {
-    var flashcards: [Flashcard]
-    var currentCardIndex: Int = 0
-    var selectedOption: ExamOption?
-    var isAnswerSubmitted = false
-    var direction: ExamDirection = .baseToTarget // Default direction
-    
+@MainActor
+final class ExamViewModel: ObservableObject {
+    @Published var flashcards: [Flashcard]
+    @Published var currentCardIndex: Int = 0
+    @Published var selectedOption: ExamOption?
+    @Published var isAnswerSubmitted: Bool = false
+    @Published var direction: ExamDirection = .baseToTarget
+
     private let strapiService: StrapiService
 
     init(flashcards: [Flashcard], strapiService: StrapiService) {
-        // Filter for cards that have exam data for BOTH directions
+        // Keep your existing filtering logic
         self.flashcards = flashcards.filter { card in
             let wordAttrs = card.wordAttributes
             let userWordAttrs = card.userWordAttributes
-            
-            let hasWordExam = (wordAttrs?.examBase != nil && !wordAttrs!.examBase!.isEmpty) && (wordAttrs?.examTarget != nil && !wordAttrs!.examTarget!.isEmpty)
-            let hasUserWordExam = (userWordAttrs?.examBase != nil && !userWordAttrs!.examBase!.isEmpty) && (userWordAttrs?.examTarget != nil && !userWordAttrs!.examTarget!.isEmpty)
-            
+
+            let hasWordExam =
+                (wordAttrs?.examBase != nil && !(wordAttrs!.examBase!.isEmpty)) &&
+                (wordAttrs?.examTarget != nil && !(wordAttrs!.examTarget!.isEmpty))
+
+            let hasUserWordExam =
+                (userWordAttrs?.examBase != nil && !(userWordAttrs!.examBase!.isEmpty)) &&
+                (userWordAttrs?.examTarget != nil && !(userWordAttrs!.examTarget!.isEmpty))
+
             return hasWordExam || hasUserWordExam
         }
         self.strapiService = strapiService
@@ -34,52 +38,48 @@ class ExamViewModel {
         guard !flashcards.isEmpty else { return nil }
         return flashcards[safe: currentCardIndex]
     }
-    
-    // The question text now depends on the exam direction
+
     var questionText: String? {
         guard let card = currentCard else { return nil }
         return direction == .baseToTarget ? card.backContent : card.frontContent
     }
 
-    // The options now depend on the exam direction
     var examOptions: [ExamOption]? {
         guard let card = currentCard else { return nil }
-        let options = direction == .baseToTarget ? card.wordAttributes?.examBase ?? card.userWordAttributes?.examBase : card.wordAttributes?.examTarget ?? card.userWordAttributes?.examTarget
-        return options
+        return direction == .baseToTarget
+            ? (card.wordAttributes?.examBase ?? card.userWordAttributes?.examBase)
+            : (card.wordAttributes?.examTarget ?? card.userWordAttributes?.examTarget)
     }
 
     var correctAnswer: String? {
-        return examOptions?.first(where: { $0.isCorrect })?.text
+        examOptions?.first(where: { $0.isCorrect })?.text
     }
 
     func selectOption(_ option: ExamOption) {
         guard !isAnswerSubmitted else { return }
         selectedOption = option
         isAnswerSubmitted = true
-        
-        // --- ADDED: Submit review to Strapi ---
+
+        // Submit review asynchronously
         guard let card = currentCard else { return }
         let result: ReviewResult = option.isCorrect ? .correct : .wrong
-        
+
         Task {
             do {
                 _ = try await strapiService.submitFlashcardReview(cardId: card.id, result: result)
-                print("Successfully submitted review for card \(card.id) with result: \(result.rawValue)")
+                print("Submitted review for card \(card.id): \(result.rawValue)")
             } catch {
                 print("Error submitting review from ExamView: \(error.localizedDescription)")
             }
         }
-        // --- END ADDED ---
 
-        // If the answer is correct, wait one second then move to the next card.
         if option.isCorrect {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 self.goToNextCard()
             }
         }
     }
-    
-    // Toggles the exam direction and resets the state
+
     func swapDirection() {
         direction = (direction == .baseToTarget) ? .targetToBase : .baseToTarget
         resetForNewCard()

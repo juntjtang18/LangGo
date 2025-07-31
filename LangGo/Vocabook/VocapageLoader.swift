@@ -1,27 +1,27 @@
-import SwiftUI
-import SwiftData
+import Foundation
+import CoreData // Use CoreData instead of SwiftData
 import os
 
 // MARK: - Vocapage Loader
-// This ObservableObject class handles all data loading and caching for the Vocapage feature.
 @MainActor
 class VocapageLoader: ObservableObject {
-    var modelContext: ModelContext
+    // 1. Use NSManagedObjectContext for Core Data
+    private let managedObjectContext: NSManagedObjectContext
     let strapiService: StrapiService
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageLoader")
 
-    // State properties to hold the data and loading status for each page
+    // State properties remain the same
     @Published var vocapages: [Int: Vocapage] = [:]
     @Published var loadingStatus: [Int: Bool] = [:]
     @Published var errorMessages: [Int: String] = [:]
 
-    init(modelContext: ModelContext, strapiService: StrapiService) {
-        self.modelContext = modelContext
+    // 2. The initializer now accepts the Core Data context
+    init(managedObjectContext: NSManagedObjectContext, strapiService: StrapiService) {
+        self.managedObjectContext = managedObjectContext
         self.strapiService = strapiService
     }
 
     func loadPage(withId vocapageId: Int) async {
-        // Don't re-load if already loading or loaded
         if loadingStatus[vocapageId] == true || vocapages[vocapageId] != nil {
             return
         }
@@ -29,28 +29,34 @@ class VocapageLoader: ObservableObject {
         loadingStatus[vocapageId] = true
         errorMessages[vocapageId] = nil
 
+        defer { loadingStatus[vocapageId] = false }
+
         do {
-            // 1. Fetch the Vocapage object from SwiftData
-            let fetchDescriptor = FetchDescriptor<Vocapage>(predicate: #Predicate { $0.id == vocapageId })
-            guard let page = (try modelContext.fetch(fetchDescriptor)).first else {
+            // 3. Fetch the Vocapage using NSFetchRequest and NSPredicate
+            let fetchRequest = NSFetchRequest<Vocapage>(entityName: "Vocapage")
+            fetchRequest.predicate = NSPredicate(format: "id == %ld", vocapageId)
+            fetchRequest.fetchLimit = 1
+            
+            guard let page = try managedObjectContext.fetch(fetchRequest).first else {
                 throw NSError(domain: "VocapageLoader", code: 404, userInfo: [NSLocalizedDescriptionKey: "Could not find vocapage with ID \(vocapageId)."])
             }
 
-            // 2. Fetch the flashcards for this page from the server
+            // 4. Fetch flashcards for the page from the server (this logic is the same)
             let vbSetting = try await strapiService.fetchVBSetting()
             let pageSize = vbSetting.attributes.wordsPerPage
-            let (syncedFlashcards, _) = try await strapiService.fetchFlashcards(page: page.order, pageSize: pageSize)
+            let (syncedFlashcards, _) = try await strapiService.fetchFlashcards(page: Int(page.order), pageSize: pageSize) // Cast page.order to Int
             
-            // 3. Link flashcards to the vocapage object and save
-            page.flashcards = syncedFlashcards
-            try modelContext.save()
+            // 5. Link flashcards using NSSet and save the context
+            page.flashcards = NSSet(array: syncedFlashcards)
+            
+            if managedObjectContext.hasChanges {
+                try managedObjectContext.save()
+            }
             vocapages[vocapageId] = page
 
         } catch {
             logger.error("Failed to load details for vocapage \(vocapageId): \(error.localizedDescription)")
             errorMessages[vocapageId] = error.localizedDescription
         }
-
-        loadingStatus[vocapageId] = false
     }
 }

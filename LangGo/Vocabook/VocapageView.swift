@@ -1,5 +1,5 @@
 import SwiftUI
-import SwiftData
+import CoreData // THIS LINE FIXES THE ERROR
 import AVFoundation
 import os // For logging
 
@@ -9,7 +9,6 @@ struct VocapageHostView: View {
     
     @StateObject private var loader: VocapageLoader
     
-    // Use @AppStorage to automatically save the user's preference
     @AppStorage("showBaseTextInVocapage") private var showBaseText: Bool = true
     
     @State private var isShowingExamView: Bool = false
@@ -18,30 +17,28 @@ struct VocapageHostView: View {
     let allVocapageIds: [Int]
     @State private var currentPageIndex: Int
 
-    // New properties to handle global actions
     let flashcardViewModel: FlashcardViewModel
     @State private var isShowingReviewView: Bool = false
 
-    init(allVocapageIds: [Int], selectedVocapageId: Int, modelContext: ModelContext, strapiService: StrapiService, flashcardViewModel: FlashcardViewModel) {
+    init(allVocapageIds: [Int], selectedVocapageId: Int, managedObjectContext: NSManagedObjectContext, strapiService: StrapiService, flashcardViewModel: FlashcardViewModel) {
         self.allVocapageIds = allVocapageIds
         _currentPageIndex = State(initialValue: allVocapageIds.firstIndex(of: selectedVocapageId) ?? 0)
-        _loader = StateObject(wrappedValue: VocapageLoader(modelContext: modelContext, strapiService: strapiService))
+        _loader = StateObject(wrappedValue: VocapageLoader(managedObjectContext: managedObjectContext, strapiService: strapiService))
         self.flashcardViewModel = flashcardViewModel
     }
 
     private var currentVocapage: Vocapage? {
-        guard !allVocapageIds.isEmpty else { return nil }
+        guard !allVocapageIds.isEmpty, currentPageIndex < allVocapageIds.count else { return nil }
         let currentId = allVocapageIds[currentPageIndex]
         return loader.vocapages[currentId]
     }
     
-    // REFACTORED: Sort the list once here.
     private var sortedFlashcardsForCurrentPage: [Flashcard] {
-        return currentVocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
+        let flashcardSet = currentVocapage?.flashcards as? Set<Flashcard> ?? []
+        return Array(flashcardSet).sorted { $0.id < $1.id }
     }
 
     var body: some View {
-        // REFACTORED: The main view is now a scaffold for the subviews.
         VocapagePagingView(
             currentPageIndex: $currentPageIndex,
             allVocapageIds: allVocapageIds,
@@ -53,21 +50,40 @@ struct VocapageHostView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            VocapageToolbar(
-                showBaseText: $showBaseText,
-                isShowingExamView: $isShowingExamView,
+            // --- FIX 1: Toolbar Ambiguity ---
+            // The navigation bar items remain here.
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
+                    }
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showBaseText.toggle() }) {
+                    Image(systemName: showBaseText ? "eye.slash.fill" : "eye.fill")
+                }
+            }
+        }
+        // The bottom bar is moved to a safeAreaInset to resolve the ambiguity.
+        .safeAreaInset(edge: .bottom) {
+            VocapageActionButtons(
                 sortedFlashcards: sortedFlashcardsForCurrentPage,
-                speechManager: speechManager,
-                onDismiss: { dismiss() },
-                isShowingReviewView: $isShowingReviewView
+                showBaseText: showBaseText,
+                isShowingExamView: $isShowingExamView,
+                isShowingReviewView: $isShowingReviewView,
+                speechManager: speechManager
             )
+            .padding(.top, 8) // Add some padding
+            .background(.thinMaterial)
         }
         .toolbar(.hidden, for: .tabBar)
-        .onChange(of: currentPageIndex) {
+        .onChange(of: currentPageIndex) { _ in
             speechManager.stopReadingSession()
         }
         .sheet(isPresented: $isShowingExamView) {
-            if let vocapage = currentVocapage, let flashcards = vocapage.flashcards, !flashcards.isEmpty {
+            if let vocapage = currentVocapage, let flashcards = vocapage.flashcards?.allObjects as? [Flashcard], !flashcards.isEmpty {
                 ExamView(flashcards: flashcards, strapiService: loader.strapiService)
             }
         }
@@ -79,6 +95,7 @@ struct VocapageHostView: View {
         }
     }
 }
+
 
 // MARK: - Extracted Subviews for Simplicity
 
@@ -156,16 +173,23 @@ private struct VocapagePagingView: View {
     var body: some View {
         TabView(selection: $currentPageIndex) {
             ForEach(allVocapageIds.indices, id: \.self) { index in
+                // --- FIX 2: Type-checking timeout ---
+                // The complex expression is broken down to help the compiler.
+                let vocapageId = allVocapageIds[index]
+                let vocapage = loader.vocapages[vocapageId]
+                let flashcardSet = vocapage?.flashcards as? Set<Flashcard> ?? []
+                let sortedFlashcards = Array(flashcardSet).sorted { $0.id < $1.id }
+                
                 VocapageView(
-                    vocapage: loader.vocapages[allVocapageIds[index]],
-                    sortedFlashcards: loader.vocapages[allVocapageIds[index]]?.flashcards?.sorted { $0.id < $1.id } ?? [],
-                    isLoading: loader.loadingStatus[allVocapageIds[index]] ?? false,
-                    errorMessage: loader.errorMessages[allVocapageIds[index]],
+                    vocapage: vocapage,
+                    sortedFlashcards: sortedFlashcards,
+                    isLoading: loader.loadingStatus[vocapageId] ?? false,
+                    errorMessage: loader.errorMessages[vocapageId],
                     showBaseText: $showBaseText,
                     speechManager: speechManager,
                     onLoad: {
                         Task {
-                            await loader.loadPage(withId: allVocapageIds[index])
+                            await loader.loadPage(withId: vocapageId)
                         }
                     }
                 )
@@ -269,17 +293,16 @@ private struct VocapageContentListView: View {
             ScrollViewReader { proxy in
                 List {
                     Section(header: Color.clear.frame(height: 10)) {
-                        ForEach(sortedFlashcards.enumerated().map { (index, card) in (index, card) }, id: \.1.id) { index, card in
-                            HStack(spacing: 8) { // Adjusted spacing
-                                // ADDED: Tier icon is displayed here
+                        // --- FIX 3: Type-checking timeout ---
+                        // The ForEach loop is simplified to be more explicit.
+                        ForEach(Array(sortedFlashcards.enumerated()), id: \.element.id) { index, card in
+                            HStack(spacing: 8) {
                                 TierIconView(tier: card.reviewTire)
-
-                                Text(card.backContent)
+                                Text(card.backContent ?? "N/A")
                                     .font(.system(.title3, design: .serif))
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                
                                 if showBaseText {
-                                    Text(card.frontContent)
+                                    Text(card.frontContent ?? "N/A")
                                         .font(.system(.body, design: .serif))
                                         .foregroundColor(.secondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -294,7 +317,7 @@ private struct VocapageContentListView: View {
                 }
                 .listStyle(.plain)
                 .background(Color.clear)
-                .onChange(of: speechManager.currentIndex) { _, newIndex in
+                .onChange(of: speechManager.currentIndex) { newIndex in
                     if newIndex >= 0 && newIndex < sortedFlashcards.count {
                         let cardIdToScroll = sortedFlashcards[newIndex].id
                         withAnimation {

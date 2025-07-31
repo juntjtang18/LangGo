@@ -7,10 +7,20 @@ class ReviewSettingsManager: ObservableObject {
     @Published private(set) var masteryStreak: Int = 10 // Default value
     
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ReviewSettingsManager")
+    
+    // 1. Add a property to hold the StrapiService
+    private let strapiService: StrapiService
 
-    func loadSettings(strapiService: StrapiService) async {
+    // 2. Update the initializer to accept the service
+    init(strapiService: StrapiService) {
+        self.strapiService = strapiService
+    }
+
+    // 3. The load function no longer needs the strapiService passed in
+    func load() async {
         logger.info("Loading review tire settings from server.")
         do {
+            // It now uses the service that was provided during initialization
             let fetchedSettings = try await strapiService.fetchReviewTireSettings()
             var tempSettings: [String: ReviewTireAttributes] = [:]
             
