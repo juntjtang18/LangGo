@@ -16,6 +16,8 @@
 		<string>debug</string>
 		<key>SessionManager</key>
 		<string>info</string>
+		<key>VocabookPageRow</key>
+		<string>debug</string>
 	</dict>
 </dict>
 </plist>

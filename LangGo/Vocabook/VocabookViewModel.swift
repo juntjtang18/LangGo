@@ -39,6 +39,7 @@ struct Vocapage: Identifiable {
 // MARK: - VocabookViewModel
 
 // MODIFIED: Converted to ObservableObject for iOS 16 compatibility.
+@MainActor
 class VocabookViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
     private let strapiService: StrapiService
@@ -57,6 +58,7 @@ class VocabookViewModel: ObservableObject {
         self.strapiService = strapiService
     }
     
+    /*
     @MainActor
     func loadVocabookPages() async {
         isLoadingVocabooks = true
@@ -100,7 +102,59 @@ class VocabookViewModel: ObservableObject {
             self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
         }
     }
-    
+    */
+    // --- THIS IS THE FIX ---
+    func loadVocabookPages() async {
+        isLoadingVocabooks = true
+        defer { isLoadingVocabooks = false }
+
+        do {
+            // 1. Fetch the user's page size setting first.
+            let vbSetting = try await strapiService.fetchVBSetting()
+            let pageSize = vbSetting.attributes.wordsPerPage
+            
+            // 2. Fetch ALL flashcards at once. This is the crucial step
+            //    that restores the original data flow.
+            let allFlashcards = try await strapiService.fetchAllMyFlashcards()
+            
+            self.totalFlashcards = allFlashcards.count
+            
+            guard !allFlashcards.isEmpty else {
+                self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
+                return
+            }
+            
+            // 3. Calculate the total number of pages.
+            let totalPages = Int(ceil(Double(totalFlashcards) / Double(pageSize)))
+
+            // 4. Create Vocapage objects and populate each one with its slice of flashcards.
+            var pages: [Vocapage] = []
+            for pageNum in 1...totalPages {
+                let startIndex = (pageNum - 1) * pageSize
+                let endIndex = min(startIndex + pageSize, allFlashcards.count)
+                
+                // This slice contains the cards for the current page.
+                let pageCards = Array(allFlashcards[startIndex..<endIndex])
+                
+                // Create the page and assign its `flashcards` property.
+                // This is the step that fixes the bug.
+                var newPage = Vocapage(id: pageNum, title: "Page \(pageNum)", order: pageNum)
+                newPage.flashcards = pageCards
+                pages.append(newPage)
+            }
+            
+            // 5. Create the final Vocabook object with the fully-formed pages.
+            let book = Vocabook(id: 1, title: "All Flashcards", vocapages: pages)
+            
+            // 6. Update the UI. Your views will now receive the correct data.
+            self.vocabook = book
+            self.loadCycle += 1 // Trigger your autoscroll
+
+        } catch {
+            logger.error("loadVocabookPages failed: \(error.localizedDescription)")
+            self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
+        }
+    }
     func toggleVocabookExpansion(vocabookId: Int) {
         if expandedVocabooks.contains(vocabookId) {
             expandedVocabooks.remove(vocabookId)

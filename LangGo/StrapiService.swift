@@ -128,6 +128,30 @@ class StrapiService {
         return flashcard
     }
 
+    // Add this helper function to handle paginating through all flashcards.
+    func fetchAllMyFlashcards() async throws -> [Flashcard] {
+        var allCards: [Flashcard] = []
+        var currentPage = 1
+        let pageSize = 100 // Fetch in large chunks for efficiency
+        var hasMorePages = true
+
+        while hasMorePages {
+            // This assumes you have a `fetchFlashcards` function that can fetch one page at a time.
+            let (cards, pagination) = try await self.fetchFlashcards(page: currentPage, pageSize: pageSize)
+            
+            allCards.append(contentsOf: cards)
+            
+            // Check if there are more pages to fetch from the pagination info.
+            if let pag = pagination, pag.page < pag.pageCount {
+                currentPage += 1
+            } else {
+                hasMorePages = false
+            }
+        }
+        
+        return allCards
+    }
+    
     // MARK: - Flashcards Pagination
     func fetchFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize) from /api/flashcards/mine.")

@@ -2,10 +2,10 @@ import SwiftUI
 
 struct ExamView: View {
     @Environment(\.dismiss) var dismiss
-    @State var viewModel: ExamViewModel
+    @StateObject var viewModel: ExamViewModel
 
     init(flashcards: [Flashcard], strapiService: StrapiService) {
-        _viewModel = State(initialValue: ExamViewModel(flashcards: flashcards, strapiService: strapiService))
+        _viewModel = StateObject(wrappedValue: ExamViewModel(flashcards: flashcards, strapiService: strapiService))
     }
 
     var body: some View {

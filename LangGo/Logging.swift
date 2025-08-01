@@ -1,4 +1,3 @@
-/Users/James/develop/apple/GeniusParentingAISwift/GeniusParentingAISwift/Logging.plist// Logging.swift
 
 import Foundation
 import os
