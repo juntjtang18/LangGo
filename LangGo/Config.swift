@@ -16,7 +16,7 @@ struct Config {
                 return "http://localhost:1338"
             #endif
         #else
-            return "https://langgoens.geniusparentingai.ca"
+            return "https://langgo-en-strapi.geniusparentingai.ca"
         #endif
     }
     static let keychainService = "com.langGo.swift"

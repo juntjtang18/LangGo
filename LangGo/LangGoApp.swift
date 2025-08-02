@@ -38,7 +38,7 @@ struct LangGoApp: App {
             .environmentObject(languageSettings)
             .environmentObject(appEnvironment)
             .environmentObject(appEnvironment.reviewSettingsManager)
-            .environment(\.theme, themeManager.currentTheme) // ✅ Fix here
+            .environment(\.theme, themeManager.currentTheme)
         }
     }
 }

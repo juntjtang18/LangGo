@@ -89,7 +89,7 @@ struct AppLogger {
     /// - Parameters:
     ///   - category: The name of the category (e.g., "NetworkManager", "ProfileViewModel"). This should match the keys in Logging.plist.
     ///   - subsystem: The bundle identifier of the app.
-    init(category: String, subsystem: String = "com.geniusparentingai.GeniusParentingAISwift") {
+    init(category: String, subsystem: String = "LangGoSwiftApp") {
         self.logger = Logger(subsystem: subsystem, category: category)
         self.category = category
     }
