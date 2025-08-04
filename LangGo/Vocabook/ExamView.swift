@@ -28,7 +28,8 @@ struct ExamView: View {
                                         .foregroundColor(Color(UIColor.label))
                                     Spacer()
                                     if viewModel.isAnswerSubmitted {
-                                        if option.isCorrect {
+                                        // MODIFIED: Compare optional Bool to true
+                                        if option.isCorrect == true {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundColor(.green)
                                                 .font(.headline)

@@ -1,9 +1,6 @@
-// LangGo/Vocabook/TranslationView.swift
-
 import SwiftUI
 import os
 
-// New enum to manage the direction of translation input
 enum InputDirection: String, CaseIterable, Identifiable {
     case baseToTarget = "Base to Target"
     case targetToBase = "Target to Base"
@@ -12,13 +9,11 @@ enum InputDirection: String, CaseIterable, Identifiable {
 
 struct TranslationTabView: View {
     @Binding var isSideMenuShowing: Bool
-    // REMOVED: @Environment(\.modelContext) is no longer needed.
     @EnvironmentObject var languageSettings: LanguageSettings
     @EnvironmentObject var appEnvironment: AppEnvironment
 
     var body: some View {
         NavigationStack {
-            // MODIFIED: TranslationView is now initialized without a modelContext.
             TranslationView(strapiService: appEnvironment.strapiService)
                 .navigationTitle("Translation")
                 .navigationBarTitleDisplayMode(.inline)
@@ -49,7 +44,6 @@ struct TranslationView: View {
     @State private var lastTranslatedInput: String?
     @State private var lastTranslatedOutput: String?
 
-    // MODIFIED: The initializer no longer requires a ModelContext.
     init(strapiService: StrapiService) {
         _viewModel = State(initialValue: FlashcardViewModel(strapiService: strapiService))
     }
@@ -62,7 +56,6 @@ struct TranslationView: View {
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
                         .frame(minHeight: 80)
-                        // MODIFIED: The closure for onChange is updated for iOS 16 compatibility.
                         .onChange(of: inputText) { newText in
                             if newText == lastTranslatedInput {
                                 translatedText = lastTranslatedOutput ?? ""
@@ -100,9 +93,7 @@ struct TranslationView: View {
             HStack(spacing: 20) {
                 Button(action: translateContent) {
                     HStack {
-                        if isLoadingTranslation {
-                            ProgressView()
-                        }
+                        if isLoadingTranslation { ProgressView() }
                         Text(isLoadingTranslation ? "Translating..." : "Translate")
                     }
                     .frame(maxWidth: .infinity)
@@ -116,9 +107,7 @@ struct TranslationView: View {
 
                 Button(action: addWordToVocaBook) {
                     HStack {
-                        if isLoadingSave {
-                            ProgressView()
-                        }
+                        if isLoadingSave { ProgressView() }
                         Text(isLoadingSave ? "Adding..." : "Add to VocaBook")
                     }
                     .frame(maxWidth: .infinity)
@@ -155,9 +144,7 @@ struct TranslationView: View {
             }
             .frame(height: 50)
         }
-        .onAppear {
-            inputIsStale = true
-        }
+        .onAppear { inputIsStale = true }
     }
 
     private var inputLanguageCode: String {
@@ -227,27 +214,27 @@ struct TranslationView: View {
         errorMessageText = ""
         Task {
             do {
-                let baseLangContentForSave: String
-                let targetLangContentForSave: String
-                
-                let baseLocaleForSave: String = languageSettings.selectedLanguageCode
-                let targetLocaleForSave: String = learningTargetLanguageCode
+                // Map visible fields to invariant:
+                // target_text = LEARNING, base_text = NATIVE
+                let targetOut: String
+                let baseOut: String
 
                 if inputDirection == .baseToTarget {
-                    baseLangContentForSave = inputText
-                    targetLangContentForSave = translatedText
+                    // Base (input) = native; Target (translation) = learning
+                    baseOut   = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    targetOut = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
                 } else {
-                    baseLangContentForSave = translatedText
-                    targetLangContentForSave = inputText
+                    // Base (input) = native (English in your current setup); Target (translation) = learning
+                    baseOut   = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    targetOut = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
 
-                try await viewModel.saveNewUserWord(
-                    targetText: targetLangContentForSave,
-                    baseText: baseLangContentForSave,
-                    partOfSpeech: partOfSpeech.rawValue,
-                    baseLocale: baseLocaleForSave,
-                    targetLocale: targetLocaleForSave
+                try await viewModel.saveNewWord(
+                    targetText: targetOut,
+                    baseText: baseOut,
+                    partOfSpeech: partOfSpeech.rawValue
                 )
+
                 withAnimation { showSuccessMessage = true }
                 inputText = ""
                 translatedText = ""
@@ -263,9 +250,7 @@ struct TranslationView: View {
             }
             isLoadingSave = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                withAnimation {
-                    showErrorMessage = false
-                }
+                withAnimation { showErrorMessage = false }
             }
         }
     }

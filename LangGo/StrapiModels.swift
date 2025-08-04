@@ -2,12 +2,10 @@
 import Foundation
 
 // MARK: - Core Response Wrappers
-/// Represents a standard Strapi response for a collection, wrapped in a "data" key.
 struct StrapiResponse: Codable {
     let data: [StrapiFlashcard]
 }
 
-/// Represents a single flashcard object from the Strapi API.
 struct StrapiFlashcard: Codable {
     let id: Int
     let attributes: FlashcardAttributes
@@ -18,24 +16,56 @@ struct FlashcardAttributes: Codable {
     let updatedAt: String?
     let locale: String?
     let lastReviewedAt: Date?
-    let content: [StrapiComponent]?
-    
+    let wordDefinition: WordDefinitionRelation?
     let correctStreak: Int?
     let wrongStreak: Int?
     let isRemembered: Bool
-    let reviewTire: ReviewTireRelation? // NEW: Added for the new relation
+    let reviewTire: ReviewTireRelation?
 
     enum CodingKeys: String, CodingKey {
-        case createdAt, updatedAt, locale, content
+        case createdAt, updatedAt, locale
         case lastReviewedAt = "last_reviewed_at"
         case correctStreak = "correct_streak"
         case wrongStreak = "wrong_streak"
         case isRemembered = "is_remembered"
-        case reviewTire = "review_tire" // NEW: Coding key for review_tire
+        case wordDefinition = "word_definition"
+        case reviewTire = "review_tire"
     }
 }
 
-// MARK: - NEW: ReviewTire Models
+// MARK: - Word and WordDefinition Models
+struct WordAttributes: Codable {
+    let targetText: String?
+
+    enum CodingKeys: String, CodingKey {
+        case targetText = "target_text"
+    }
+}
+
+struct WordDefinitionAttributes: Codable {
+    let baseText: String?
+    let instruction: String?
+    let gender: String?
+    let article: String?
+    let tags: TagListComponent?
+    let exampleSentence: String?
+    let verbMeta: VerbMetaComponent?
+    let examBase: [ExamOption]?
+    let examTarget: [ExamOption]?
+    let register: String?
+    let word: WordRelation?
+
+    enum CodingKeys: String, CodingKey {
+        case instruction, gender, article, tags, register, word
+        case baseText = "base_text"
+        case exampleSentence = "example_sentence"
+        case verbMeta = "verb_meta"
+        case examBase = "exam_base"
+        case examTarget = "exam_target"
+    }
+}
+
+// MARK: - ReviewTire Models
 struct StrapiReviewTire: Codable {
     let id: Int
     let attributes: ReviewTireAttributes
@@ -176,24 +206,6 @@ struct ReviewLogData: Codable {
     }
 }
 
-// MARK: - Dynamic Zone Component
-struct StrapiComponent: Codable {
-    let id: Int
-    let componentIdentifier: String
-    let userWord: UserWordRelation?
-    let userSentence: UserSentenceRelation?
-    let word: WordRelation?
-    let sentence: SentenceRelation?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case componentIdentifier = "__component"
-        case userWord = "user_word"
-        case userSentence = "user_sentence"
-        case word, sentence
-    }
-}
-
 // MARK: - Generic Relation & Data Wrappers
 struct Relation<T: Codable>: Codable {
     let data: T?
@@ -209,14 +221,11 @@ struct StrapiData<T: Codable>: Codable {
 }
 
 // MARK: - Typealiases
-typealias UserWordRelation = Relation<StrapiData<UserWordAttributes>>
-typealias UserSentenceRelation = Relation<StrapiData<UserSentenceAttributes>>
+typealias WordDefinitionRelation = Relation<StrapiData<WordDefinitionAttributes>>
 typealias WordRelation = Relation<StrapiData<WordAttributes>>
-typealias SentenceRelation = Relation<StrapiData<SentenceAttributes>>
 typealias MediaRelation = Relation<StrapiData<MediaAttributes>>
-typealias ExampleSentencesRelation = ManyRelation<StrapiData<SentenceAttributes>>
-typealias WordsRelation = ManyRelation<StrapiData<WordAttributes>>
-typealias ReviewTireRelation = Relation<StrapiData<ReviewTireAttributes>> // NEW: Typealias for the review tire relation
+typealias ReviewTireRelation = Relation<StrapiData<ReviewTireAttributes>>
+typealias WordDefinitionResponse = StrapiSingleResponse<WordDefinitionAttributes>
 
 
 // MARK: - Component Schemas & Attributes
@@ -245,100 +254,10 @@ struct VerbMetaComponent: Codable {
 
 struct ExamOption: Codable {
     let text: String
-    let isCorrect: Bool
+    let isCorrect: Bool?
 
     enum CodingKeys: String, CodingKey {
         case text, isCorrect
-    }
-}
-
-struct UserWordAttributes: Codable {
-    let targetText: String?
-    let baseText: String?
-    let partOfSpeech: String?
-    let createdAt: String?
-    let updatedAt: String?
-    let locale: String?
-    let targetLocale: String?
-    let examBase: [ExamOption]?
-    let examTarget: [ExamOption]?
-
-    enum CodingKeys: String, CodingKey {
-        case locale, createdAt, updatedAt
-        case targetText = "target_text"
-        case baseText = "base_text"
-        case partOfSpeech = "part_of_speech"
-        case targetLocale = "target_locale"
-        case examBase = "exam_base"
-        case examTarget = "exam_target"
-    }
-}
-
-struct UserSentenceAttributes: Codable {
-    let targetText: String?
-    let baseText: String?
-    let createdAt: String?
-    let updatedAt: String?
-    let locale: String?
-
-    enum CodingKeys: String, CodingKey {
-        case createdAt, updatedAt, locale
-        case targetText = "target_text"
-        case baseText = "base_text"
-    }
-}
-
-struct WordAttributes: Codable {
-    let word: String?
-    let baseText: String?
-    let instruction: String?
-    let partOfSpeech: String?
-    let gender: String?
-    let article: String?
-    let createdAt: String?
-    let updatedAt: String?
-    let locale: String?
-    let audio: MediaRelation?
-    let tags: [TagListComponent]?
-    let exampleSentences: ExampleSentencesRelation?
-    let verbMeta: VerbMetaComponent?
-    let register: String?
-    let examBase: [ExamOption]?
-    let examTarget: [ExamOption]?
-
-    enum CodingKeys: String, CodingKey {
-        case word, instruction, gender, article, createdAt, updatedAt, locale, audio, tags, register
-        case baseText = "base_text"
-        case partOfSpeech = "part_of_speech"
-        case exampleSentences = "example_sentences"
-        case verbMeta = "verb_meta"
-        case examBase = "exam_base"
-        case examTarget = "exam_target"
-    }
-}
-
-struct SentenceAttributes: Codable {
-    let title: String?
-    let instruction: String?
-    let baseText: String?
-    let targetText: String?
-    let createdAt: String?
-    let updatedAt: String?
-    let locale: String?
-    let targetAudio: MediaRelation?
-    let tags: [TagListComponent]?
-    let words: WordsRelation?
-    let register: String?
-    let examBase: [ExamOption]?
-    let examTarget: [ExamOption]?
-    
-    enum CodingKeys: String, CodingKey {
-        case title, instruction, createdAt, updatedAt, locale, tags, words, register
-        case baseText = "base_text"
-        case targetText = "target_text"
-        case targetAudio = "target_audio"
-        case examBase = "exam_base"
-        case examTarget = "exam_target"
     }
 }
 
@@ -385,21 +304,21 @@ struct ReviewLogAttributes: Codable {
     }
 }
 
-// MARK: - User Word & Translation Models
-struct CreateUserWordRequest: Encodable {
-    let data: UserWordData
+// MARK: - Word Creation & Translation Models
+struct WordDefinitionCreationPayload: Encodable {
+    let targetText: String
+    let baseText: String
+    let partOfSpeech: String
+    
+    enum CodingKeys: String, CodingKey {
+        case targetText = "target_text"
+        case baseText = "base_text"
+        case partOfSpeech = "part_of_speech"
+    }
 }
 
-struct UserWordData: Encodable {
-    let target_text: String
-    let base_text: String
-    let part_of_speech: String
-    let base_locale: String
-    let target_locale: String
-}
-
-struct UserWordResponse: Decodable {
-    let data: StrapiData<UserWordAttributes>
+struct CreateWordDefinitionRequest: Encodable {
+    let data: WordDefinitionCreationPayload
 }
 
 struct TranslateWordRequest: Codable {
@@ -415,4 +334,3 @@ struct TranslateWordResponse: Decodable {
         case translatedText = "translation"
     }
 }
-

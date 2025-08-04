@@ -1,14 +1,12 @@
 // LangGo/Vocabook/ExamViewModel.swift
 
 import SwiftUI
-// import SwiftData // REMOVED: No longer needed.
 
 // Enum to define the direction of the exam
 enum ExamDirection {
     case baseToTarget, targetToBase
 }
 
-// MODIFIED: Changed from @Observable to conform to ObservableObject for iOS 16 compatibility.
 class ExamViewModel: ObservableObject {
     // These properties are not marked @Published because they are set once at initialization.
     var flashcards: [Flashcard]
@@ -21,15 +19,14 @@ class ExamViewModel: ObservableObject {
     @Published var direction: ExamDirection = .baseToTarget // Default direction
     
     init(flashcards: [Flashcard], strapiService: StrapiService) {
-        // Filter for cards that have exam data for BOTH directions
+        // MODIFIED: Filter for cards that have exam data via the new 'definition' property.
         self.flashcards = flashcards.filter { card in
-            let wordAttrs = card.wordAttributes
-            let userWordAttrs = card.userWordAttributes
+            guard let def = card.definition else { return false }
             
-            let hasWordExam = (wordAttrs?.examBase != nil && !wordAttrs!.examBase!.isEmpty) && (wordAttrs?.examTarget != nil && !wordAttrs!.examTarget!.isEmpty)
-            let hasUserWordExam = (userWordAttrs?.examBase != nil && !userWordAttrs!.examBase!.isEmpty) && (userWordAttrs?.examTarget != nil && !userWordAttrs!.examTarget!.isEmpty)
+            let hasExamBase = def.examBase != nil && !def.examBase!.isEmpty
+            let hasExamTarget = def.examTarget != nil && !def.examTarget!.isEmpty
             
-            return hasWordExam || hasUserWordExam
+            return hasExamBase && hasExamTarget
         }
         self.strapiService = strapiService
     }
@@ -47,13 +44,19 @@ class ExamViewModel: ObservableObject {
     }
 
     var examOptions: [ExamOption]? {
-        guard let card = currentCard else { return nil }
-        let options = direction == .baseToTarget ? card.wordAttributes?.examBase ?? card.userWordAttributes?.examBase : card.wordAttributes?.examTarget ?? card.userWordAttributes?.examTarget
-        return options
+        // MODIFIED: Get options from the 'definition' property.
+        guard let def = currentCard?.definition else { return nil }
+        
+        if direction == .baseToTarget {
+            return def.examBase
+        } else {
+            return def.examTarget
+        }
     }
 
     var correctAnswer: String? {
-        return examOptions?.first(where: { $0.isCorrect })?.text
+        // MODIFIED: Compare optional Bool to true
+        return examOptions?.first(where: { $0.isCorrect == true })?.text
     }
 
     func selectOption(_ option: ExamOption) {
@@ -63,7 +66,8 @@ class ExamViewModel: ObservableObject {
         
         // --- ADDED: Submit review to Strapi ---
         guard let card = currentCard else { return }
-        let result: ReviewResult = option.isCorrect ? .correct : .wrong
+        // MODIFIED: Compare optional Bool to true
+        let result: ReviewResult = option.isCorrect == true ? .correct : .wrong
         
         Task {
             do {
@@ -76,7 +80,8 @@ class ExamViewModel: ObservableObject {
         // --- END ADDED ---
 
         // If the answer is correct, wait one second then move to the next card.
-        if option.isCorrect {
+        // MODIFIED: Compare optional Bool to true
+        if option.isCorrect == true {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 self.goToNextCard()
             }

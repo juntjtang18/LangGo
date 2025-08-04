@@ -1,11 +1,12 @@
-// LangGo/NewWordInputView.swift
+// LangGo/Vocabook/NewWordInputView.swift
 import SwiftUI
 import os
-
 
 struct NewWordInputView: View {
     @Environment(\.dismiss) var dismiss
     let viewModel: FlashcardViewModel
+
+    // UPPER field is always `word`, LOWER field is always `baseText`
     @State private var word: String = ""
     @State private var baseText: String = ""
     @State private var partOfSpeech: PartOfSpeech = .noun
@@ -17,41 +18,59 @@ struct NewWordInputView: View {
     @State private var errorMessageText: String = ""
 
     enum InputDirection: String, CaseIterable, Identifiable {
-        case englishToLearning = "English to Learning Language"
-        case learningToEnglish = "Learning Language to English"
+        case baseToTarget = "Base → Target"
+        case targetToBase = "Target → Base"
         var id: String { self.rawValue }
     }
-    @State private var inputDirection: InputDirection = .englishToLearning
+    @State private var inputDirection: InputDirection = .baseToTarget
+
+    // MARK: - Language Codes & Names
+    private var baseLanguageCode: String {
+        // Base = user's profile locale
+        languageSettings.selectedLanguageCode
+    }
+    private var targetLanguageCode: String {
+        // Target = app's learning locale
+        Config.learningTargetLanguageCode
+    }
+    private func languageName(for code: String) -> String {
+        languageSettings.availableLanguages.first(where: { $0.id == code })?.name ?? code.uppercased()
+    }
+    private var baseLanguageName: String { languageName(for: baseLanguageCode) }
+    private var targetLanguageName: String { languageName(for: targetLanguageCode) }
 
     var body: some View {
         NavigationStack {
             VStack {
                 Form {
-                    if inputDirection == .englishToLearning {
-                        Section("English Word") {
-                            TextField("Enter English word", text: $word)
+                    if inputDirection == .baseToTarget {
+                        // Base → Target: UPPER = BASE, LOWER = TARGET
+                        Section("Base (\(baseLanguageName))") {
+                            TextField("Enter base word", text: $word)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         }
                         actionButtonsSection
-                        Section((languageSettings.availableLanguages.first(where: { $0.id == languageSettings.selectedLanguageCode })?.name ?? "Learning Language") + " Translation") {
-                            TextField("Translated text", text: $baseText)
+                        Section("Target (\(targetLanguageName))") {
+                            TextField("Enter target word", text: $baseText)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         }
                     } else {
-                        Section((languageSettings.availableLanguages.first(where: { $0.id == languageSettings.selectedLanguageCode })?.name ?? "Learning Language") + " Word") {
-                            TextField("Enter word in learning language", text: $word)
+                        // Target → Base: UPPER = TARGET, LOWER = BASE
+                        Section("Target (\(targetLanguageName))") {
+                            TextField("Enter target word", text: $word)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         }
                         actionButtonsSection
-                        Section("English Translation") {
-                            TextField("English translation", text: $baseText)
+                        Section("Base (\(baseLanguageName))") {
+                            TextField("Enter base word", text: $baseText)
                                 .autocapitalization(.none)
                                 .disableAutocorrection(true)
                         }
                     }
+
                     Section("Part of Speech") {
                         Picker("Select Part of Speech", selection: $partOfSpeech) {
                             ForEach(PartOfSpeech.allCases) { pos in
@@ -61,13 +80,11 @@ struct NewWordInputView: View {
                         .pickerStyle(.navigationLink)
                     }
                 }
-                .id(inputDirection) // <-- Add this modifier to fix the redraw issues
+                .id(inputDirection) // force redraw on swap
 
                 Button(action: saveWord) {
                     HStack {
-                        if isLoading {
-                            ProgressView()
-                        }
+                        if isLoading { ProgressView() }
                         Text(isLoading ? "Saving..." : "Save Word")
                     }
                     .frame(maxWidth: .infinity)
@@ -75,9 +92,14 @@ struct NewWordInputView: View {
                     .background(Capsule().fill(Color.accentColor))
                     .foregroundColor(.white)
                     .font(.headline)
-                    .opacity(word.isEmpty || baseText.isEmpty || isLoading || isTranslating ? 0.5 : 1.0)
+                    .opacity(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                             || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                             || isLoading || isTranslating ? 0.5 : 1.0)
                 }
-                .disabled(isLoading || word.isEmpty || baseText.isEmpty || isTranslating)
+                .disabled(isLoading
+                          || word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                          || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                          || isTranslating)
                 .padding(.horizontal)
 
                 VStack {
@@ -101,7 +123,7 @@ struct NewWordInputView: View {
                             .transition(.opacity)
                     }
                 }
-                .frame(height: 100) // Fixed space for messages
+                .frame(height: 100)
             }
             .padding(.bottom, 10)
             .navigationTitle("Add New Word")
@@ -124,7 +146,7 @@ struct NewWordInputView: View {
             Spacer()
             Button(action: {
                 withAnimation {
-                    inputDirection = (inputDirection == .englishToLearning) ? .learningToEnglish : .englishToLearning
+                    inputDirection = (inputDirection == .baseToTarget) ? .targetToBase : .baseToTarget
                     word = ""
                     baseText = ""
                 }
@@ -148,8 +170,7 @@ struct NewWordInputView: View {
             Button(action: { translateWord() }) {
                 VStack {
                     if isTranslating {
-                        ProgressView()
-                            .frame(width: 60, height: 60)
+                        ProgressView().frame(width: 60, height: 60)
                     } else {
                         Image(systemName: "wand.and.stars")
                             .font(.largeTitle)
@@ -166,45 +187,40 @@ struct NewWordInputView: View {
             }
             .contentShape(Rectangle())
             .buttonStyle(PlainButtonStyle())
-            .disabled(word.isEmpty || isTranslating || (languageSettings.selectedLanguageCode == "en"))
+            // Enabled as long as upper has text and we're not already translating
+            .disabled(isTranslating || word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Spacer()
         }
         .padding(.vertical, 10)
         .listRowBackground(Color.clear)
     }
 
+    // MARK: - Save
     private func saveWord() {
         isLoading = true
         Task {
             do {
-                let strapiWordFieldContent: String // This will be the English word
-                let strapiBaseTextFieldContent: String // This will be the Learning Language word
-                let baseLocale: String
-                let targetLocale: String
+                // Map by UI direction:
+                // Base → Target: UPPER=BASE(word), LOWER=TARGET(baseText)
+                // Target → Base: UPPER=TARGET(word), LOWER=BASE(baseText)
+                let targetOut: String
+                let baseOut: String
 
-                if inputDirection == .englishToLearning {
-                    // UI: "English Word" is $word, "Learning Language Translation" is $baseText
-                    // Desired Strapi: 'word' field = English, 'base_text' field = Learning Language
-                    strapiWordFieldContent = word // Content of UI's "English Word"
-                    strapiBaseTextFieldContent = baseText // Content of UI's "Learning Language Translation"
-                    baseLocale = "en"
-                    targetLocale = languageSettings.selectedLanguageCode
-                } else { // inputDirection == .learningToEnglish
-                    // UI: "Learning Language Word" is $word, "English Translation" is $baseText
-                    // Desired Strapi: 'word' field = English, 'base_text' field = Learning Language
-                    strapiWordFieldContent = baseText // Content of UI's "English Translation"
-                    strapiBaseTextFieldContent = word // Content of UI's "Learning Language Word"
-                    baseLocale = languageSettings.selectedLanguageCode
-                    targetLocale = "en"
+                if inputDirection == .baseToTarget {
+                    baseOut   = word.trimmingCharacters(in: .whitespacesAndNewlines)
+                    targetOut = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    targetOut = word.trimmingCharacters(in: .whitespacesAndNewlines)
+                    baseOut   = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-                
-                try await viewModel.saveNewUserWord(
-                    targetText: strapiWordFieldContent, // Renamed for clarity and correctness
-                    baseText: strapiBaseTextFieldContent, // Maps to Strapi 'base_text' field
-                    partOfSpeech: partOfSpeech.rawValue,
-                    baseLocale: baseLocale,
-                    targetLocale: targetLocale
+
+                try await viewModel.saveNewWord(
+                    targetText: targetOut,   // TARGET = learning (targetLanguageCode)
+                    baseText: baseOut,       // BASE   = profile locale (baseLanguageCode)
+                    partOfSpeech: partOfSpeech.rawValue
                 )
+
+                // reset UI
                 word = ""
                 baseText = ""
                 partOfSpeech = .noun
@@ -213,9 +229,7 @@ struct NewWordInputView: View {
                     showErrorMessage = false
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    withAnimation {
-                        showSuccessMessage = false
-                    }
+                    withAnimation { showSuccessMessage = false }
                 }
                 isLoading = false
             } catch {
@@ -225,39 +239,37 @@ struct NewWordInputView: View {
                     showSuccessMessage = false
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    withAnimation {
-                        showErrorMessage = false
-                    }
+                    withAnimation { showErrorMessage = false }
                 }
                 isLoading = false
             }
         }
     }
 
+    // MARK: - Translate (upper → lower)
     private func translateWord() {
         isTranslating = true
         Task {
             do {
-                let sourceLanguageCode: String
-                let targetLanguageCode: String
-                if inputDirection == .englishToLearning {
-                    sourceLanguageCode = "en"
-                    targetLanguageCode = languageSettings.selectedLanguageCode
-                } else {
-                    sourceLanguageCode = languageSettings.selectedLanguageCode
-                    targetLanguageCode = "en"
-                }
-                if word.isEmpty || sourceLanguageCode == targetLanguageCode {
-                    self.baseText = word
+                // Translate from UPPER (source) to LOWER (target) based on direction
+                let sourceCode = (inputDirection == .baseToTarget) ? baseLanguageCode : targetLanguageCode
+                let targetCode = (inputDirection == .baseToTarget) ? targetLanguageCode : baseLanguageCode
+                let sourceText = word.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if sourceText.isEmpty || sourceCode == targetCode {
+                    // Mirror when empty or same language
+                    baseText = word
                     isTranslating = false
                     return
                 }
-                let translatedText = try await viewModel.translateWord(
-                    word: word,
-                    source: sourceLanguageCode,
-                    target: targetLanguageCode
+
+                let translated = try await viewModel.translateWord(
+                    word: sourceText,
+                    source: sourceCode,
+                    target: targetCode
                 )
-                self.baseText = translatedText
+                // Always fill LOWER field with the translation
+                self.baseText = translated
             } catch {
                 errorMessageText = "Translation failed: \(error.localizedDescription)"
                 withAnimation {
@@ -265,9 +277,7 @@ struct NewWordInputView: View {
                     showSuccessMessage = false
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    withAnimation {
-                        showErrorMessage = false
-                    }
+                    withAnimation { showErrorMessage = false }
                 }
             }
             isTranslating = false

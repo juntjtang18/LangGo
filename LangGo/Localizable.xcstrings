@@ -77,6 +77,9 @@
         }
       }
     },
+    "Base (%@)" : {
+
+    },
     "by %@" : {
 
     },
@@ -348,19 +351,10 @@
         }
       }
     },
-    "English translation" : {
+    "Enter base word" : {
 
     },
-    "English Translation" : {
-
-    },
-    "English Word" : {
-
-    },
-    "Enter English word" : {
-
-    },
-    "Enter word in learning language" : {
+    "Enter target word" : {
 
     },
     "Enter word or sentence" : {
@@ -1057,6 +1051,9 @@
     "Swipe to load content." : {
 
     },
+    "Target (%@)" : {
+
+    },
     "The correct answer is: **%@**" : {
 
     },
@@ -1089,9 +1086,6 @@
       }
     },
     "Translate" : {
-
-    },
-    "Translated text" : {
 
     },
     "Translating..." : {

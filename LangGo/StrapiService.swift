@@ -3,17 +3,13 @@
 import Foundation
 import os
 
-/// A service layer for interacting with the Strapi backend API.
-/// This class now acts as a pure network service without any database persistence.
 class StrapiService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StrapiService")
 
-    /// The service no longer needs a ModelContext.
     init() {
     }
 
     // MARK: - Authentication & User Management
-    // (These methods remain unchanged as they don't use the database)
     func login(credentials: LoginCredentials) async throws -> AuthResponse {
         logger.debug("StrapiService: Attempting login.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local") else { throw URLError(.badURL) }
@@ -65,7 +61,6 @@ class StrapiService {
         return response.data ?? []
     }
 
-    /// Fetches a single page of review flashcards from the `/api/review-flashcards` endpoint.
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching review flashcards page \(page), size \(pageSize).")
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else {
@@ -73,7 +68,8 @@ class StrapiService {
         }
         urlComponents.queryItems = [
             URLQueryItem(name: "pagination[page]", value: "\(page)"),
-            URLQueryItem(name: "pagination[pageSize]", value: "\(pageSize)")
+            URLQueryItem(name: "pagination[pageSize]", value: "\(pageSize)"),
+            URLQueryItem(name: "populate[word_definition][populate]", value: "word")
         ]
         
         guard let url = urlComponents.url else {
@@ -82,12 +78,10 @@ class StrapiService {
 
         let response: StrapiListResponse<StrapiFlashcard> = try await NetworkManager.shared.fetchDirect(from: url)
         
-        // MODIFIED: Transform Strapi data into Flashcard models directly, without saving.
         let flashcards = (response.data ?? []).map(transformStrapiCard)
         return (flashcards, response.meta?.pagination)
     }
     
-    /// Fetches all available flashcards due for review by handling pagination internally.
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
         var allCards: [Flashcard] = []
         var currentPage = 1
@@ -123,25 +117,21 @@ class StrapiService {
             throw NSError(domain: "StrapiServiceError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server response was missing the 'data' object."])
         }
         
-        // MODIFIED: Transform the updated Strapi data into a Flashcard model.
         let flashcard = transformStrapiCard(updatedStrapiCard)
         return flashcard
     }
 
-    // Add this helper function to handle paginating through all flashcards.
     func fetchAllMyFlashcards() async throws -> [Flashcard] {
         var allCards: [Flashcard] = []
         var currentPage = 1
-        let pageSize = 100 // Fetch in large chunks for efficiency
+        let pageSize = 100
         var hasMorePages = true
 
         while hasMorePages {
-            // This assumes you have a `fetchFlashcards` function that can fetch one page at a time.
             let (cards, pagination) = try await self.fetchFlashcards(page: currentPage, pageSize: pageSize)
             
             allCards.append(contentsOf: cards)
             
-            // Check if there are more pages to fetch from the pagination info.
             if let pag = pagination, pag.page < pag.pageCount {
                 currentPage += 1
             } else {
@@ -156,24 +146,30 @@ class StrapiService {
     func fetchFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize) from /api/flashcards/mine.")
         guard let url = URL(string:
-            "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate=content,review_tire")
+            "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate[word_definition][populate]=word")
         else {
             throw URLError(.badURL)
         }
         let response: StrapiListResponse<StrapiFlashcard> = try await NetworkManager.shared.fetchDirect(from: url)
 
-        // MODIFIED: Transform Strapi data into Flashcard models directly.
         let flashcards = (response.data ?? []).map(transformStrapiCard)
         return (flashcards, response.meta?.pagination)
     }
     
-    // MARK: - User Words & Translation
-    // (These methods remain unchanged)
-    func saveNewUserWord(targetText: String, baseText: String, partOfSpeech: String, baseLocale: String, targetLocale: String) async throws -> UserWordResponse {
-        logger.debug("StrapiService: Saving new user word.")
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-words") else { throw URLError(.badURL) }
-        let newWordData = UserWordData(target_text: targetText, base_text: baseText, part_of_speech: partOfSpeech, base_locale: baseLocale, target_locale: targetLocale)
-        let requestBody = CreateUserWordRequest(data: newWordData)
+    // MARK: - Word Creation & Translation
+    
+    func saveNewWord(targetText: String, baseText: String, partOfSpeech: String) async throws -> WordDefinitionResponse {
+        logger.debug("StrapiService: Saving new word and definition.")
+        
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/word-definitions") else { throw URLError(.badURL) }
+        
+        let payload = WordDefinitionCreationPayload(
+            targetText: targetText,
+            baseText: baseText,
+            partOfSpeech: partOfSpeech
+        )
+        let requestBody = CreateWordDefinitionRequest(data: payload)
+        
         return try await NetworkManager.shared.post(to: url, body: requestBody)
     }
 
@@ -185,7 +181,6 @@ class StrapiService {
     }
     
     // MARK: - VBSetting Endpoints
-    // (These methods remain unchanged)
     func fetchVBSetting() async throws -> VBSetting {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/vbsettings/mine") else {
             throw URLError(.badURL)
@@ -204,45 +199,13 @@ class StrapiService {
     }
     
     // MARK: - Private Transformation Logic
-    
-    /// A simple transformation function that converts a `StrapiFlashcard` (network model)
-    /// into a `Flashcard` (app model).
     private func transformStrapiCard(_ strapiCard: StrapiFlashcard) -> Flashcard {
         let attributes = strapiCard.attributes
-        let contentComponent = attributes.content?.first
-        
-        var frontContent: String = "Missing Question"
-        var backContent: String = "Missing Answer"
-        var register: String? = nil
-        
-        switch contentComponent?.componentIdentifier {
-        case "a.user-word-ref":
-            frontContent = contentComponent?.userWord?.data?.attributes.baseText ?? "Missing Question"
-            backContent = contentComponent?.userWord?.data?.attributes.targetText ?? "Missing Answer"
-        case "a.word-ref":
-            frontContent = contentComponent?.word?.data?.attributes.baseText ?? "Missing Question"
-            backContent = contentComponent?.word?.data?.attributes.word ?? "Missing Answer"
-            register = contentComponent?.word?.data?.attributes.register
-        case "a.user-sent-ref":
-            frontContent = contentComponent?.userSentence?.data?.attributes.baseText ?? "Missing Question"
-            backContent = contentComponent?.userSentence?.data?.attributes.targetText ?? "Missing Answer"
-        case "a.sent-ref":
-            frontContent = contentComponent?.sentence?.data?.attributes.baseText ?? "Missing Question"
-            backContent = contentComponent?.sentence?.data?.attributes.targetText ?? "Missing Answer"
-            register = contentComponent?.sentence?.data?.attributes.register
-        default:
-            frontContent = "Unknown Content (Front)"
-            backContent = "Unknown Content (Back)"
-        }
+        let definition = attributes.wordDefinition?.data?.attributes
 
         return Flashcard(
             id: strapiCard.id,
-            frontContent: frontContent,
-            backContent: backContent,
-            register: register,
-            contentType: contentComponent?.componentIdentifier ?? "",
-            // Using try? as this transformation shouldn't fail the entire list.
-            rawComponentData: try? JSONEncoder().encode(contentComponent),
+            definition: definition,
             lastReviewedAt: attributes.lastReviewedAt,
             correctStreak: attributes.correctStreak ?? 0,
             wrongStreak: attributes.wrongStreak ?? 0,
