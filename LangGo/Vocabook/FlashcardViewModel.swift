@@ -5,6 +5,9 @@ class FlashcardViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardViewModel")
     private let strapiService: StrapiService
     
+    // This property holds all of the user's flashcards.
+    @Published var myCards: [Flashcard] = []
+    
     @Published var userReviewLogs: [StrapiReviewLog] = []
     @Published var totalCardCount: Int = 0
     @Published var rememberedCount: Int = 0
@@ -26,6 +29,19 @@ class FlashcardViewModel: ObservableObject {
 
     init(strapiService: StrapiService) {
         self.strapiService = strapiService
+    }
+    
+    // MARK: - Card Management
+    @MainActor
+    func fetchAllMyCards() async {
+        logger.info("Fetching all user flashcards.")
+        do {
+            self.myCards = try await strapiService.fetchAllMyFlashcards()
+            logger.info("Successfully fetched \(self.myCards.count) user flashcards.")
+        } catch {
+            logger.error("Failed to fetch user flashcards: \(error.localizedDescription)")
+            self.myCards = []
+        }
     }
 
     // MARK: - Statistics
@@ -91,6 +107,8 @@ class FlashcardViewModel: ObservableObject {
                 partOfSpeech: partOfSpeech
             )
             logger.info("Saved new word successfully.")
+            // Refresh user's cards and stats after saving a new one
+            await fetchAllMyCards()
             await loadStatistics()
         } catch {
             logger.error("Failed to save new word: \(error.localizedDescription)")
@@ -112,7 +130,6 @@ class FlashcardViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Word Search
     @MainActor
     func searchForWord(term: String, searchBase: Bool) async throws -> [SearchResult] {
         logger.info("Searching for term '\(term)', searchBase: \(searchBase)")
@@ -120,55 +137,46 @@ class FlashcardViewModel: ObservableObject {
         if searchBase {
             // Search by BASE language
             let definitions = try await strapiService.searchWordDefinitions(term: term)
-            return definitions.compactMap { definitionData in
+            let results = definitions.map { definitionData -> SearchResult in
                 let attributes = definitionData.attributes
-                guard let baseText = attributes.baseText,
-                      let targetText = attributes.word?.data?.attributes.targetText else {
-                    return nil
-                }
-                
-                let partOfSpeechText = attributes.partOfSpeech?.data?.attributes.name?.capitalized ?? "N/A"
+                // SIMPLIFIED LOGIC: Check if the now-standard flashcards array is empty.
+                let isAlreadyAdded = !(attributes.flashcards?.data.isEmpty ?? true)
                 
                 return SearchResult(
                     id: "def-\(definitionData.id)",
-                    word: baseText,
-                    definition: targetText,
-                    partOfSpeech: partOfSpeechText
+                    wordDefinitionId: definitionData.id,
+                    baseText: attributes.baseText ?? "",
+                    targetText: attributes.word?.data?.attributes.targetText ?? "",
+                    partOfSpeech: attributes.partOfSpeech?.data?.attributes.name ?? "N/A",
+                    isAlreadyAdded: isAlreadyAdded
                 )
             }
+            logger.debug("searchForWord (base) is returning \(results.count) results for term '\(term)'.")
+            return results
         } else {
             // Search by TARGET language
             let words = try await strapiService.searchWords(term: term)
-            
             var results: [SearchResult] = []
+            
             for wordData in words {
-                let wordAttributes = wordData.attributes
+                guard let definitions = wordData.attributes.word_definitions?.data else { continue }
                 
-                guard let targetText = wordAttributes.targetText,
-                      let definitionsResponse = wordAttributes.word_definitions else {
-                    continue
-                }
-                
-                // CORRECTED: The `data` property of `ManyRelation` is not optional,
-                // so we do not need to use optional binding (`let`).
-                let definitions = definitionsResponse.data
-
                 for definitionData in definitions {
-                    let definitionAttributes = definitionData.attributes
-                    guard let baseText = definitionAttributes.baseText else {
-                        continue
-                    }
-                    
-                    let partOfSpeechText = definitionAttributes.partOfSpeech?.data?.attributes.name?.capitalized ?? "N/A"
+                    let defAttributes = definitionData.attributes
+                    // SIMPLIFIED LOGIC: Check if the now-standard flashcards array is empty.
+                    let isAlreadyAdded = !(defAttributes.flashcards?.data.isEmpty ?? true)
                     
                     results.append(SearchResult(
                         id: "word-\(wordData.id)-def-\(definitionData.id)",
-                        word: baseText,
-                        definition: targetText,
-                        partOfSpeech: partOfSpeechText
+                        wordDefinitionId: definitionData.id,
+                        baseText: defAttributes.baseText ?? "",
+                        targetText: wordData.attributes.targetText ?? "",
+                        partOfSpeech: defAttributes.partOfSpeech?.data?.attributes.name ?? "N/A",
+                        isAlreadyAdded: isAlreadyAdded
                     ))
                 }
             }
+            logger.debug("searchForWord (target) is returning \(results.count) results for term '\(term)'.")
             return results
         }
     }

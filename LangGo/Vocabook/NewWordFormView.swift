@@ -1,11 +1,3 @@
-//
-//  NewWordFormView.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/8/4.
-//
-
-
 // LangGo/Vocabook/NewWordFormView.swift
 import SwiftUI
 
@@ -29,6 +21,7 @@ struct NewWordFormView: View {
     let onTranslate: () -> Void
     let onSwap: () -> Void
     let onSelectSearchResult: (SearchResult) -> Void
+    let onLearnThis: (SearchResult) -> Void
     
     // MARK: - Body
     var body: some View {
@@ -49,10 +42,15 @@ struct NewWordFormView: View {
             TextField("Enter base word", text: $word)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
-                .onChange(of: word) { newValue in onDebouncedSearch(newValue, true) }
+                .onChange(of: word) { onDebouncedSearch($0, true) }
             
-            if isSearching { ProgressView() }
-            else if !searchResults.isEmpty { searchResultsList }
+            if isSearching {
+                ProgressView()
+            }
+            
+            ForEach(searchResults) { result in
+                searchResultRow(for: result)
+            }
         }
         
         actionButtonsSection
@@ -61,7 +59,7 @@ struct NewWordFormView: View {
             TextField("Enter target word", text: $baseText)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
-                .onChange(of: baseText) { newValue in onDebouncedSearch(newValue, false) }
+                .onChange(of: baseText) { onDebouncedSearch($0, false) }
         }
     }
     
@@ -71,10 +69,15 @@ struct NewWordFormView: View {
             TextField("Enter target word", text: $word)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
-                .onChange(of: word) { newValue in onDebouncedSearch(newValue, false) }
+                .onChange(of: word) { onDebouncedSearch($0, false) }
             
-            if isSearching { ProgressView() }
-            else if !searchResults.isEmpty { searchResultsList }
+            if isSearching {
+                ProgressView()
+            }
+            
+            ForEach(searchResults) { result in
+                searchResultRow(for: result)
+            }
         }
         
         actionButtonsSection
@@ -83,7 +86,7 @@ struct NewWordFormView: View {
             TextField("Enter base word", text: $baseText)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
-                .onChange(of: baseText) { newValue in onDebouncedSearch(newValue, true) }
+                .onChange(of: baseText) { onDebouncedSearch($0, true) }
         }
     }
     
@@ -127,26 +130,33 @@ struct NewWordFormView: View {
         }
     }
     
-    private var searchResultsList: some View {
-        List(searchResults) { result in
-            HStack(spacing: 4) {
-                // Main text for the word and its definition
-                Text("\(result.word) -> \(result.definition)")
+    // This view now renders each row of the search results.
+    private func searchResultRow(for result: SearchResult) -> some View {
+        HStack {
+            let posText = (result.partOfSpeech != "N/A" && !result.partOfSpeech.isEmpty) ? "(\(result.partOfSpeech.lowercased()))" : ""
+            
+            // UPDATED: Layout is now (target_text) (part_of_speech) (base_text)
+            Text("\(result.targetText) ") + Text(posText).foregroundColor(.secondary) + Text(" \(result.baseText)")
+            
+            Spacer()
 
-                // Conditionally display the part of speech in parentheses
-                if result.partOfSpeech != "N/A" {
-                    Text("(\(result.partOfSpeech.lowercased()))")
-                        .foregroundColor(.secondary) // Use a secondary color for the POS
+            if result.isAlreadyAdded {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(.gray)
+            } else {
+                Button("Learn This") {
+                    onLearnThis(result)
                 }
-                
-                Spacer() // Pushes the content to the left
+                .font(.caption.weight(.bold))
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
             }
-            .font(.subheadline)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .onTapGesture { onSelectSearchResult(result) }
         }
-        .listStyle(.plain)
-        .frame(maxHeight: 200)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelectSearchResult(result)
+        }
     }
 }

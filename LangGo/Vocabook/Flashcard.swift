@@ -4,18 +4,18 @@ import Foundation
 struct Flashcard: Codable, Identifiable {
     let id: Int
     
-    // The complete definition data is now stored here.
-    let definition: WordDefinitionAttributes?
+    // This now holds the complete related WordDefinition object, including its ID and attributes.
+    let wordDefinition: StrapiWordDefinition?
     
-    // For immediate display, these are now computed properties.
+    // Computed properties are updated to access the nested attributes.
     var frontContent: String {
-        definition?.baseText ?? "Missing Question"
+        wordDefinition?.attributes.baseText ?? "Missing Question"
     }
     var backContent: String {
-        definition?.word?.data?.attributes.targetText ?? "Missing Answer"
+        wordDefinition?.attributes.word?.data?.attributes.targetText ?? "Missing Answer"
     }
     var register: String? {
-        definition?.register
+        wordDefinition?.attributes.register
     }
     
     var lastReviewedAt: Date?
@@ -24,9 +24,9 @@ struct Flashcard: Codable, Identifiable {
     var isRemembered: Bool
     var reviewTire: String?
 
-    init(id: Int, definition: WordDefinitionAttributes?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, reviewTire: String?) {
+    init(id: Int, wordDefinition: StrapiWordDefinition?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, reviewTire: String?) {
         self.id = id
-        self.definition = definition
+        self.wordDefinition = wordDefinition
         self.lastReviewedAt = lastReviewedAt
         self.correctStreak = correctStreak
         self.wrongStreak = wrongStreak

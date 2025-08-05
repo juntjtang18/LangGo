@@ -56,16 +56,18 @@ struct WordDefinitionAttributes: Codable {
     let examTarget: [ExamOption]?
     let register: String?
     let word: WordRelation?
-    let partOfSpeech: PartOfSpeechRelation? // <-- ADD THIS LINE
+    let partOfSpeech: PartOfSpeechRelation?
+    let flashcards: ManyRelation<StrapiFlashcard>?
 
     enum CodingKeys: String, CodingKey {
-        case instruction, gender, article, tags, register, word
+        // ADDED 'flashcards' to the list of coding keys.
+        case instruction, gender, article, tags, register, word, flashcards
         case baseText = "base_text"
         case exampleSentence = "example_sentence"
         case verbMeta = "verb_meta"
         case examBase = "exam_base"
         case examTarget = "exam_target"
-        case partOfSpeech = "part_of_speech" // <-- ADD THIS LINE
+        case partOfSpeech = "part_of_speech"
     }
 }
 

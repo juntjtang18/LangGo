@@ -177,7 +177,6 @@ class StrapiService {
         return try await NetworkManager.shared.post(to: url, body: requestBody)
     }
 
-    // --- REVISED: Using the new dedicated search endpoint for words ---
     func searchWords(term: String) async throws -> [StrapiWord] {
         logger.debug("StrapiService: Searching words with term: \(term).")
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/words/search") else {
@@ -191,6 +190,20 @@ class StrapiService {
         
         // The custom endpoint response should match the StrapiListResponse structure
         let response: StrapiListResponse<StrapiWord> = try await NetworkManager.shared.fetchDirect(from: url)
+        
+        // --- ADDED: Logging for the raw response ---
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let responseData = try encoder.encode(response)
+            if let jsonString = String(data: responseData, encoding: .utf8) {
+                logger.info("Response from searchWords for term '\(term, privacy: .public)':\n\(jsonString, privacy: .public)")
+            }
+        } catch {
+            logger.error("Failed to encode or log searchWords response: \(error.localizedDescription)")
+        }
+        // --- END ADDED ---
+        
         return response.data ?? []
     }
 
@@ -207,9 +220,22 @@ class StrapiService {
         guard let url = urlComponents.url else { throw URLError(.badURL) }
         
         let response: StrapiListResponse<StrapiWordDefinition> = try await NetworkManager.shared.fetchDirect(from: url)
+
+        // --- ADDED: Logging for the raw response ---
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let responseData = try encoder.encode(response)
+            if let jsonString = String(data: responseData, encoding: .utf8) {
+                logger.info("Response from searchWordDefinitions for term '\(term, privacy: .public)':\n\(jsonString, privacy: .public)")
+            }
+        } catch {
+            logger.error("Failed to encode or log searchWordDefinitions response: \(error.localizedDescription)")
+        }
+        // --- END ADDED ---
+        
         return response.data ?? []
     }
-    
     func translateWord(word: String, source: String, target: String) async throws -> TranslateWordResponse {
         logger.debug("StrapiService: Translating word '\(word)' from \(source) to \(target).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/translate-word") else { throw URLError(.badURL) }
@@ -238,11 +264,12 @@ class StrapiService {
     // MARK: - Private Transformation Logic
     private func transformStrapiCard(_ strapiCard: StrapiFlashcard) -> Flashcard {
         let attributes = strapiCard.attributes
-        let definition = attributes.wordDefinition?.data?.attributes
+        // Pass the entire wordDefinition data object, not just the attributes
+        let wordDefinitionData = attributes.wordDefinition?.data
 
         return Flashcard(
             id: strapiCard.id,
-            definition: definition,
+            wordDefinition: wordDefinitionData,
             lastReviewedAt: attributes.lastReviewedAt,
             correctStreak: attributes.correctStreak ?? 0,
             wrongStreak: attributes.wrongStreak ?? 0,

@@ -21,8 +21,8 @@ class ExamViewModel: ObservableObject {
     init(flashcards: [Flashcard], strapiService: StrapiService) {
         // MODIFIED: Filter for cards that have exam data via the new 'definition' property.
         self.flashcards = flashcards.filter { card in
-            guard let def = card.definition else { return false }
-            
+            guard let def = card.wordDefinition?.attributes else { return false }
+
             let hasExamBase = def.examBase != nil && !def.examBase!.isEmpty
             let hasExamTarget = def.examTarget != nil && !def.examTarget!.isEmpty
             
@@ -45,8 +45,8 @@ class ExamViewModel: ObservableObject {
 
     var examOptions: [ExamOption]? {
         // MODIFIED: Get options from the 'definition' property.
-        guard let def = currentCard?.definition else { return nil }
-        
+        guard let def = currentCard?.wordDefinition?.attributes else { return nil }
+
         if direction == .baseToTarget {
             return def.examBase
         } else {
