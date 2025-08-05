@@ -78,7 +78,6 @@ class FlashcardViewModel: ObservableObject {
     }
 
     // MARK: - New Word Logic
-    // Invariant: target_text = LEARNING language; base_text = USER'S NATIVE language
     @MainActor
     func saveNewWord(targetText: String, baseText: String, partOfSpeech: String) async throws {
         do {
@@ -87,8 +86,8 @@ class FlashcardViewModel: ObservableObject {
 
             logger.info("Saving new word -> target:'\(tgt, privacy: .public)' | base:'\(base, privacy: .public)' | pos:'\(partOfSpeech, privacy: .public)'")
             _ = try await strapiService.saveNewWord(
-                targetText: tgt,   // learning
-                baseText: base,    // native
+                targetText: tgt,
+                baseText: base,
                 partOfSpeech: partOfSpeech
             )
             logger.info("Saved new word successfully.")
@@ -110,6 +109,67 @@ class FlashcardViewModel: ObservableObject {
         } catch {
             logger.error("Failed to translate word '\(word, privacy: .public)': \(error.localizedDescription)")
             throw error
+        }
+    }
+    
+    // MARK: - Word Search
+    @MainActor
+    func searchForWord(term: String, searchBase: Bool) async throws -> [SearchResult] {
+        logger.info("Searching for term '\(term)', searchBase: \(searchBase)")
+        
+        if searchBase {
+            // Search by BASE language
+            let definitions = try await strapiService.searchWordDefinitions(term: term)
+            return definitions.compactMap { definitionData in
+                let attributes = definitionData.attributes
+                guard let baseText = attributes.baseText,
+                      let targetText = attributes.word?.data?.attributes.targetText else {
+                    return nil
+                }
+                
+                let partOfSpeechText = attributes.partOfSpeech?.data?.attributes.name?.capitalized ?? "N/A"
+                
+                return SearchResult(
+                    id: "def-\(definitionData.id)",
+                    word: baseText,
+                    definition: targetText,
+                    partOfSpeech: partOfSpeechText
+                )
+            }
+        } else {
+            // Search by TARGET language
+            let words = try await strapiService.searchWords(term: term)
+            
+            var results: [SearchResult] = []
+            for wordData in words {
+                let wordAttributes = wordData.attributes
+                
+                guard let targetText = wordAttributes.targetText,
+                      let definitionsResponse = wordAttributes.word_definitions else {
+                    continue
+                }
+                
+                // CORRECTED: The `data` property of `ManyRelation` is not optional,
+                // so we do not need to use optional binding (`let`).
+                let definitions = definitionsResponse.data
+
+                for definitionData in definitions {
+                    let definitionAttributes = definitionData.attributes
+                    guard let baseText = definitionAttributes.baseText else {
+                        continue
+                    }
+                    
+                    let partOfSpeechText = definitionAttributes.partOfSpeech?.data?.attributes.name?.capitalized ?? "N/A"
+                    
+                    results.append(SearchResult(
+                        id: "word-\(wordData.id)-def-\(definitionData.id)",
+                        word: baseText,
+                        definition: targetText,
+                        partOfSpeech: partOfSpeechText
+                    ))
+                }
+            }
+            return results
         }
     }
 }

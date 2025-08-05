@@ -3,6 +3,10 @@
 import Foundation
 import os
 
+// Define typealiases for Strapi data structures to improve clarity
+typealias StrapiWord = StrapiData<WordAttributes>
+typealias StrapiWordDefinition = StrapiData<WordDefinitionAttributes>
+
 class StrapiService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StrapiService")
 
@@ -156,7 +160,7 @@ class StrapiService {
         return (flashcards, response.meta?.pagination)
     }
     
-    // MARK: - Word Creation & Translation
+    // MARK: - Word Creation, Translation & Search
     
     func saveNewWord(targetText: String, baseText: String, partOfSpeech: String) async throws -> WordDefinitionResponse {
         logger.debug("StrapiService: Saving new word and definition.")
@@ -173,6 +177,39 @@ class StrapiService {
         return try await NetworkManager.shared.post(to: url, body: requestBody)
     }
 
+    // --- REVISED: Using the new dedicated search endpoint for words ---
+    func searchWords(term: String) async throws -> [StrapiWord] {
+        logger.debug("StrapiService: Searching words with term: \(term).")
+        guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/words/search") else {
+            throw URLError(.badURL)
+        }
+        urlComponents.queryItems = [
+            URLQueryItem(name: "term", value: term)
+        ]
+        
+        guard let url = urlComponents.url else { throw URLError(.badURL) }
+        
+        // The custom endpoint response should match the StrapiListResponse structure
+        let response: StrapiListResponse<StrapiWord> = try await NetworkManager.shared.fetchDirect(from: url)
+        return response.data ?? []
+    }
+
+    // --- REVISED: Using the new dedicated search endpoint for definitions ---
+    func searchWordDefinitions(term: String) async throws -> [StrapiWordDefinition] {
+        logger.debug("StrapiService: Searching word definitions with term: \(term).")
+        guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/word-definitions/search") else {
+            throw URLError(.badURL)
+        }
+        urlComponents.queryItems = [
+            URLQueryItem(name: "term", value: term)
+        ]
+        
+        guard let url = urlComponents.url else { throw URLError(.badURL) }
+        
+        let response: StrapiListResponse<StrapiWordDefinition> = try await NetworkManager.shared.fetchDirect(from: url)
+        return response.data ?? []
+    }
+    
     func translateWord(word: String, source: String, target: String) async throws -> TranslateWordResponse {
         logger.debug("StrapiService: Translating word '\(word)' from \(source) to \(target).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/translate-word") else { throw URLError(.badURL) }

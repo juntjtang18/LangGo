@@ -36,9 +36,11 @@ struct FlashcardAttributes: Codable {
 // MARK: - Word and WordDefinition Models
 struct WordAttributes: Codable {
     let targetText: String?
+    let word_definitions: ManyRelation<StrapiData<WordDefinitionAttributes>>?
 
     enum CodingKeys: String, CodingKey {
         case targetText = "target_text"
+        case word_definitions
     }
 }
 
@@ -54,6 +56,7 @@ struct WordDefinitionAttributes: Codable {
     let examTarget: [ExamOption]?
     let register: String?
     let word: WordRelation?
+    let partOfSpeech: PartOfSpeechRelation? // <-- ADD THIS LINE
 
     enum CodingKeys: String, CodingKey {
         case instruction, gender, article, tags, register, word
@@ -62,6 +65,7 @@ struct WordDefinitionAttributes: Codable {
         case verbMeta = "verb_meta"
         case examBase = "exam_base"
         case examTarget = "exam_target"
+        case partOfSpeech = "part_of_speech" // <-- ADD THIS LINE
     }
 }
 
@@ -316,6 +320,13 @@ struct WordDefinitionCreationPayload: Encodable {
         case partOfSpeech = "part_of_speech"
     }
 }
+// Add this struct to handle the attributes of a part of speech
+struct PartOfSpeechAttributes: Codable {
+    let name: String?
+}
+
+// Add this typealias for the relation
+typealias PartOfSpeechRelation = Relation<StrapiData<PartOfSpeechAttributes>>
 
 struct CreateWordDefinitionRequest: Encodable {
     let data: WordDefinitionCreationPayload
