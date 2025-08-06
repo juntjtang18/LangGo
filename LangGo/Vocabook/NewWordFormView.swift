@@ -12,6 +12,8 @@ struct NewWordFormView: View {
     @Binding var searchResults: [SearchResult]
     @Binding var isSearching: Bool
     
+    @FocusState.Binding var focusedField: NewWordInputView.Field?
+    
     // MARK: - View Configuration
     let baseLanguageName: String
     let targetLanguageName: String
@@ -20,7 +22,6 @@ struct NewWordFormView: View {
     let onDebouncedSearch: (String, Bool) -> Void
     let onTranslate: () -> Void
     let onSwap: () -> Void
-    let onSelectSearchResult: (SearchResult) -> Void
     let onLearnThis: (SearchResult) -> Void
     
     // MARK: - Body
@@ -42,10 +43,15 @@ struct NewWordFormView: View {
             TextField("Enter base word", text: $word)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
+                .focused($focusedField, equals: .top)
                 .onChange(of: word) { onDebouncedSearch($0, true) }
             
             if isSearching {
-                ProgressView()
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
             }
             
             ForEach(searchResults) { result in
@@ -59,6 +65,7 @@ struct NewWordFormView: View {
             TextField("Enter target word", text: $baseText)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
+                .focused($focusedField, equals: .bottom)
                 .onChange(of: baseText) { onDebouncedSearch($0, false) }
         }
     }
@@ -69,12 +76,17 @@ struct NewWordFormView: View {
             TextField("Enter target word", text: $word)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
+                .focused($focusedField, equals: .top)
                 .onChange(of: word) { onDebouncedSearch($0, false) }
             
             if isSearching {
-                ProgressView()
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
             }
-            
+
             ForEach(searchResults) { result in
                 searchResultRow(for: result)
             }
@@ -86,6 +98,7 @@ struct NewWordFormView: View {
             TextField("Enter base word", text: $baseText)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
+                .focused($focusedField, equals: .bottom)
                 .onChange(of: baseText) { onDebouncedSearch($0, true) }
         }
     }
@@ -130,12 +143,10 @@ struct NewWordFormView: View {
         }
     }
     
-    // This view now renders each row of the search results.
     private func searchResultRow(for result: SearchResult) -> some View {
         HStack {
             let posText = (result.partOfSpeech != "N/A" && !result.partOfSpeech.isEmpty) ? "(\(result.partOfSpeech.lowercased()))" : ""
             
-            // UPDATED: Layout is now (target_text) (part_of_speech) (base_text)
             Text("\(result.targetText) ") + Text(posText).foregroundColor(.secondary) + Text(" \(result.baseText)")
             
             Spacer()
@@ -154,9 +165,6 @@ struct NewWordFormView: View {
             }
         }
         .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelectSearchResult(result)
-        }
+        // REMOVED: .contentShape and .onTapGesture modifiers are no longer here.
     }
 }

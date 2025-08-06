@@ -30,6 +30,12 @@ struct NewWordInputView: View {
     @State private var showErrorMessage: Bool = false
     @State private var errorMessageText: String = ""
     
+    // Enum and State for managing focus
+    enum Field: Hashable {
+        case top, bottom
+    }
+    @FocusState private var focusedField: Field?
+
     // MARK: - Enums & Computed Properties
     enum InputDirection: String, CaseIterable, Identifiable {
         case baseToTarget = "Base → Target"
@@ -54,16 +60,20 @@ struct NewWordInputView: View {
                         inputDirection: $inputDirection,
                         searchResults: $searchResults,
                         isSearching: $isSearching,
+                        focusedField: $focusedField,
                         baseLanguageName: baseLanguageName,
                         targetLanguageName: targetLanguageName,
                         onDebouncedSearch: debouncedSearch,
                         onTranslate: translateWord,
                         onSwap: swapLanguages,
-                        onSelectSearchResult: handleResultSelection,
+                        // REMOVED: onSelectSearchResult is no longer passed.
                         onLearnThis: learnThisWord
                     )
                 }
                 .id(inputDirection)
+                .onAppear {
+                    focusedField = .top
+                }
                 
                 saveButton
                 userFeedbackMessages
@@ -77,6 +87,17 @@ struct NewWordInputView: View {
                         HStack { Image(systemName: "chevron.left"); Text("Back") }
                     }
                 }
+            }
+            .sheet(isPresented: $isLearningWord) {
+                VStack(spacing: 20) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                    Text("Saving...")
+                        .font(.headline)
+                }
+                // Make the sheet a small, non-dismissable pop-up
+                .presentationDetents([.height(150)])
+                .interactiveDismissDisabled(true)
             }
         }
     }
@@ -120,6 +141,36 @@ struct NewWordInputView: View {
     }
     
     // MARK: - Logic & Actions
+    private func learnThisWord(result: SearchResult) {
+        guard !isLearningWord else { return }
+        isLearningWord = true
+        
+        Task {
+            do {
+                let posRawValue = PartOfSpeech.allCases.first(where: { $0.displayName == result.partOfSpeech })?.rawValue ?? "noun"
+                
+                try await viewModel.saveNewWord(
+                    targetText: result.targetText,
+                    baseText: result.baseText,
+                    partOfSpeech: posRawValue
+                )
+                
+                word = ""
+                baseText = ""
+                searchResults = []
+                focusedField = .top
+                
+            } catch {
+                errorMessageText = "Failed to add word: \(error.localizedDescription)"
+                withAnimation { showErrorMessage = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation { showErrorMessage = false }
+                }
+            }
+            isLearningWord = false
+        }
+    }
+
     private func languageName(for code: String) -> String {
         languageSettings.availableLanguages.first(where: { $0.id == code })?.name ?? code.uppercased()
     }
@@ -131,19 +182,7 @@ struct NewWordInputView: View {
         }
     }
     
-    private func handleResultSelection(_ result: SearchResult) {
-        if inputDirection == .baseToTarget {
-            self.word = result.baseText
-            self.baseText = result.targetText
-        } else {
-            self.word = result.targetText
-            self.baseText = result.baseText
-        }
-        if let selectedPos = PartOfSpeech.allCases.first(where: { $0.displayName == result.partOfSpeech }) {
-            self.partOfSpeech = selectedPos
-        }
-        self.searchResults = []; self.searchTask?.cancel()
-    }
+    // REMOVED: The handleResultSelection function is no longer needed.
     
     private func debouncedSearch(term: String, searchBase: Bool) {
         searchTask?.cancel()
@@ -162,7 +201,6 @@ struct NewWordInputView: View {
             do {
                 try await Task.sleep(nanoseconds: 500_000_000)
                 
-                // The ViewModel now performs the search and checks against existing cards.
                 let results = try await viewModel.searchForWord(term: trimmedTerm, searchBase: searchBase)
                 await MainActor.run { self.searchResults = results; self.isSearching = false }
             } catch {
@@ -225,42 +263,6 @@ struct NewWordInputView: View {
         }
     }
     
-    private func learnThisWord(result: SearchResult) {
-        guard !isLearningWord else { return }
-        isLearningWord = true
-        
-        Task {
-            do {
-                let posRawValue = PartOfSpeech.allCases.first(where: { $0.displayName == result.partOfSpeech })?.rawValue ?? "noun"
-                
-                try await viewModel.saveNewWord(
-                    targetText: result.targetText,
-                    baseText: result.baseText,
-                    partOfSpeech: posRawValue
-                )
-                
-                // Update the specific item in searchResults to reflect it's been added
-                if let index = searchResults.firstIndex(where: { $0.id == result.id }) {
-                    searchResults[index] = SearchResult(
-                        id: result.id,
-                        wordDefinitionId: result.wordDefinitionId,
-                        baseText: result.baseText,
-                        targetText: result.targetText,
-                        partOfSpeech: result.partOfSpeech,
-                        isAlreadyAdded: true
-                    )
-                }
-            } catch {
-                errorMessageText = "Failed to add word: \(error.localizedDescription)"
-                withAnimation { showErrorMessage = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    withAnimation { showErrorMessage = false }
-                }
-            }
-            isLearningWord = false
-        }
-    }
-
     private func translateWord() {
         isTranslating = true
         Task {
@@ -283,7 +285,10 @@ struct NewWordInputView: View {
                 self.baseText = translated
             } catch {
                 errorMessageText = "Translation failed: \(error.localizedDescription)"
-                withAnimation { showErrorMessage = true }
+                withAnimation {
+                    showErrorMessage = true
+                    showSuccessMessage = false
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     withAnimation { showErrorMessage = false }
                 }
@@ -293,7 +298,6 @@ struct NewWordInputView: View {
     }
 }
 
-// The SearchResult struct is now canonical, making it easier to handle in the view.
 struct SearchResult: Identifiable, Hashable {
     let id: String
     let wordDefinitionId: Int
