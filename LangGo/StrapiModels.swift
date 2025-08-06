@@ -187,6 +187,7 @@ struct StrapiStatistics: Codable {
     let weekly: Int
     let monthly: Int
     let hardToRemember: Int
+    let dueForReview: Int // ADDED: New property for due cards
 }
 
 // MARK: - Review Models

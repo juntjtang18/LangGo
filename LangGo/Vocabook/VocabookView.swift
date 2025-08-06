@@ -1,3 +1,4 @@
+// VocabookView.swift
 import SwiftUI
 import os
 
@@ -76,7 +77,7 @@ private struct OverallProgressView: View {
             VStack(alignment: .leading, spacing: 8) {
                 StatRow(label: "Total Words", value: "\(viewModel.totalCardCount)")
                 StatRow(label: "Remembered", value: "\(viewModel.rememberedCount)")
-                StatRow(label: "In Progress", value: "\(viewModel.inProgressCount)")
+                StatRow(label: "Due for Review", value: "\(viewModel.dueForReviewCount)")
                 StatRow(label: "New Words", value: "\(viewModel.newCardCount)")
             }
             .font(.body)
@@ -145,11 +146,14 @@ private struct ActionButtonsGrid: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            VocabookActionButton(title: "Flashcard Review", icon: "square.stack.3d.up.fill") { isReviewing = true }
+            // MODIFIED: Title changed from "Flashcard Review" to "Card Review"
+            VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill") { isReviewing = true }
             VocabookActionButton(title: "Listen", icon: "headphones") { isListening = true }
             VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill") { isQuizzing = true }
             VocabookActionButton(title: "Add Word", icon: "plus.app.fill") { isAddingNewWord = true }
         }
+        // MODIFIED: A fixed height is applied to the container, forcing all buttons to be the same size.
+        .frame(height: 80)
     }
 }
 
@@ -171,7 +175,7 @@ private struct VocabookActionButton: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, minHeight: 50)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(4)
             .background(theme.secondary.opacity(0.1))
             .cornerRadius(12)
@@ -223,4 +227,3 @@ private struct PagesListView: View {
         }
     }
 }
-
