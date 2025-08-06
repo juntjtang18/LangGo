@@ -7,8 +7,8 @@ enum StoryViewStyle {
     case cardAuthor
     case cardBrief
     case readButton
-    case justifiedBody // ADDED: New style for justified text
-    case translationBubble // ADD THIS
+    case justifiedBody
+    case translationBubble
 }
 
 /// A view modifier that applies story-specific styles based on the current theme.
@@ -43,8 +43,7 @@ struct StoryStyleModifier: ViewModifier {
             content
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.8))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(3) // Increased to 3
 
         case .readButton:
             content
@@ -54,12 +53,12 @@ struct StoryStyleModifier: ViewModifier {
                 .background(Color.white)
                 .foregroundColor(.black)
                 .clipShape(Capsule())
-        case .justifiedBody: // ADDED: Definition for the new style
+        case .justifiedBody:
             content
                 .font(.body)
                 .lineSpacing(5)
-                //.multilineTextAlignment(.justified)
-        case .translationBubble: // ADD THIS
+                
+        case .translationBubble:
             content
                 .padding()
                 .background(theme.accent.opacity(0.95))
@@ -71,8 +70,6 @@ struct StoryStyleModifier: ViewModifier {
                 )
                 .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
         }
-        
-        
     }
 }
 
@@ -80,5 +77,30 @@ struct StoryStyleModifier: ViewModifier {
 extension View {
     func storyStyle(_ style: StoryViewStyle) -> some View {
         self.modifier(StoryStyleModifier(style: style))
+    }
+}
+
+// A helper for applying corner radius to specific corners
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
+    }
+}
+
+// This style now only applies the shadow, as corner rounding is handled directly.
+struct StoryCardStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+    }
+}
+
+extension View {
+    func storyCardStyle() -> some View {
+        self.modifier(StoryCardStyle())
     }
 }

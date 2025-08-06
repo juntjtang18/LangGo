@@ -147,12 +147,13 @@ struct RecommendedStoryCardView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            imageSection(height: 120)
-            textSection(height: 130, briefLineLimit: 1)
+            imageSection(height: 124)
+                .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
+            textSection(height: 150, briefLineLimit: 3)
+                .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
         }
         .frame(width: 250)
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+        .storyCardStyle()
     }
     
     private func imageSection(height: CGFloat) -> some View {
@@ -166,7 +167,6 @@ struct RecommendedStoryCardView: View {
                 }
             }
             .frame(height: height)
-            .clipped()
 
             LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.8)]), startPoint: .center, endPoint: .bottom)
 
@@ -178,20 +178,24 @@ struct RecommendedStoryCardView: View {
     }
     
     private func textSection(height: CGFloat, briefLineLimit: Int) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
-            Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(briefLineLimit)
-            Spacer(minLength: 0)
-            HStack {
-                Spacer()
+        ZStack {
+            cardGradient
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
+                Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(briefLineLimit)
+                Spacer(minLength: 0)
                 HStack {
-                    Image(systemName: "play.fill"); Text("Read")
-                }.storyStyle(.readButton)
+                    Spacer()
+                    HStack {
+                        Image(systemName: "play.fill"); Text("Read")
+                    }.storyStyle(.readButton)
+                }
             }
+            .padding()
         }
-        .padding()
+        .frame(maxWidth: .infinity)
         .frame(height: height)
-        .background(cardGradient)
     }
 }
 
@@ -221,12 +225,14 @@ struct StoryRowView: View {
                 if let story1 = row.stories[safe: 0] {
                     Button(action: { onSelectStory(story1) }) {
                         StoryCardView(story: story1, style: .half)
+                            .aspectRatio(3/4, contentMode: .fit)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
                 if let story2 = row.stories[safe: 1] {
                     Button(action: { onSelectStory(story2) }) {
                         StoryCardView(story: story2, style: .half)
+                            .aspectRatio(3/4, contentMode: .fit)
                     }
                     .buttonStyle(PlainButtonStyle())
                 } else {
@@ -296,29 +302,69 @@ private struct StoryCardView: View {
 
     private var fullWidthCard: some View {
         VStack(spacing: 0) {
-            imageSection(height: 210)
-            textSection(height: 140, briefLineLimit: 2)
+            imageSection(height: 232)
+                .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
+            textSection(height: 160, briefLineLimit: 3)
+                .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
         }
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+        .storyCardStyle()
     }
 
     private var halfWidthCard: some View {
-        VStack(spacing: 0) {
-            imageSection(height: 120)
-            textSection(height: 130, briefLineLimit: 1)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                // Image Section
+                ZStack(alignment: .bottomLeading) {
+                    AsyncImage(url: story.attributes.coverImageURL) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Rectangle().fill(theme.secondary.opacity(0.2))
+                    }
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height * 0.5)
+                .overlay(
+                    LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.8)]), startPoint: .center, endPoint: .bottom)
+                )
+                .overlay(
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(story.attributes.difficultyName.uppercased()).storyStyle(.cardSubtitle)
+                        Text(story.attributes.title).storyStyle(.cardTitle)
+                        Spacer()
+                    }.padding()
+                )
+                .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
+
+                // Text Section
+                ZStack {
+                    cardGradient
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
+                        Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(3)
+                        Spacer(minLength: 0)
+                        HStack {
+                            Spacer()
+                            HStack {
+                                Image(systemName: "play.fill"); Text("Read")
+                            }.storyStyle(.readButton)
+                        }
+                    }
+                    .padding()
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height * 0.5)
+                .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
+            }
         }
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+        .storyCardStyle()
     }
     
     private var landscapeCard: some View {
         HStack(spacing: 0) {
-            imageSection(height: 150)
-            textSection(height: 150, briefLineLimit: 2)
+            imageSection(height: 180)
+                .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .bottomLeft]))
+            textSection(height: 180, briefLineLimit: 3)
+                .clipShape(RoundedCorner(radius: 20, corners: [.topRight, .bottomRight]))
         }
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.2), radius: 5, y: 2)
+        .storyCardStyle()
     }
     
     private func imageSection(height: CGFloat) -> some View {
@@ -332,7 +378,6 @@ private struct StoryCardView: View {
                 }
             }
             .frame(height: height)
-            .clipped()
 
             LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.8)]), startPoint: .center, endPoint: .bottom)
 
@@ -344,19 +389,23 @@ private struct StoryCardView: View {
     }
     
     private func textSection(height: CGFloat, briefLineLimit: Int) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
-            Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(briefLineLimit)
-            Spacer(minLength: 0)
-            HStack {
-                Spacer()
+        ZStack {
+            cardGradient
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
+                Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(briefLineLimit)
+                Spacer(minLength: 0)
                 HStack {
-                    Image(systemName: "play.fill"); Text("Read")
-                }.storyStyle(.readButton)
+                    Spacer()
+                    HStack {
+                        Image(systemName: "play.fill"); Text("Read")
+                    }.storyStyle(.readButton)
+                }
             }
+            .padding()
         }
-        .padding()
+        .frame(maxWidth: .infinity)
         .frame(height: height)
-        .background(cardGradient)
     }
 }
