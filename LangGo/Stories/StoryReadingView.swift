@@ -12,6 +12,7 @@ struct StoryReadingView: View {
     @State private var selectedWord: String = ""
     @State private var showTranslationPopover: Bool = false
     @State private var wordFrame: CGRect = .zero
+    @State private var selectedWordRange: NSRange?
 
     // --- State for user feedback (toast messages) ---
     @State private var showSaveSuccess: Bool = false
@@ -67,9 +68,14 @@ struct StoryReadingView: View {
 
                             ForEach(storyContent.indices, id: \.self) { index in
                                 let content = storyContent[index]
-                                SelectableTextView(text: content.paragraph, fontSize: fontSize) { word, sentence, frame in
+                                SelectableTextView(
+                                    text: content.paragraph,
+                                    fontSize: fontSize,
+                                    selectedWordRange: selectedWordRange
+                                ) { word, sentence, frame, range in
                                     self.selectedWord = word
                                     self.wordFrame = frame
+                                    self.selectedWordRange = range
                                     self.showTranslationPopover = true
                                     Task {
                                         await viewModel.translateInContext(word: word, sentence: sentence)
@@ -93,10 +99,11 @@ struct StoryReadingView: View {
                                 .ignoresSafeArea()
                                 .onTapGesture {
                                     showTranslationPopover = false
+                                    selectedWordRange = nil
                                 }
 
                             TranslationPopover(
-                                originalWord: selectedWord, // Pass the original word
+                                originalWord: selectedWord,
                                 translationData: viewModel.contextualTranslation,
                                 isLoading: viewModel.isTranslating,
                                 onSave: saveToVocabook
@@ -179,6 +186,7 @@ struct StoryReadingView: View {
                 showFeedback(message: "Already in Vocabook or failed to save.", isError: true)
             }
             showTranslationPopover = false
+            selectedWordRange = nil
         }
     }
 
@@ -203,19 +211,27 @@ struct StoryReadingView: View {
 struct SelectableTextView: View {
     let text: String
     let fontSize: Double
-    let onSelectWord: (String, String, CGRect) -> Void
+    let selectedWordRange: NSRange?
+    let onSelectWord: (String, String, CGRect, NSRange) -> Void
 
     @State private var height: CGFloat = .zero
 
     var body: some View {
-        InternalSelectableTextView(text: text, fontSize: fontSize, onSelectWord: onSelectWord, dynamicHeight: $height)
-            .frame(height: height)
+        InternalSelectableTextView(
+            text: text,
+            fontSize: fontSize,
+            selectedWordRange: selectedWordRange,
+            onSelectWord: onSelectWord,
+            dynamicHeight: $height
+        )
+        .frame(height: height)
     }
 
     struct InternalSelectableTextView: UIViewRepresentable {
         let text: String
         let fontSize: Double
-        let onSelectWord: (String, String, CGRect) -> Void
+        let selectedWordRange: NSRange?
+        let onSelectWord: (String, String, CGRect, NSRange) -> Void
         @Binding var dynamicHeight: CGFloat
 
         func makeUIView(context: Context) -> UITextView {
@@ -233,25 +249,45 @@ struct SelectableTextView: View {
         }
 
         func updateUIView(_ uiView: UITextView, context: Context) {
-            let font = UIFont.systemFont(ofSize: CGFloat(fontSize))
-            uiView.attributedText = NSAttributedString(string: text, attributes: [.font: font])
             context.coordinator.parent = self
             Task {
-                let attributedString = NSMutableAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.label])
-                let paragraphStyle = NSMutableParagraphStyle()
-                paragraphStyle.lineSpacing = 5
-                attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: attributedString.length))
-                text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .byWords) { (substring, substringRange, _, _) in
-                    guard let substring = substring else { return }
-                    attributedString.addAttribute(.link, value: URL(string: "word-select://\(substring)")!, range: NSRange(substringRange, in: text))
-                }
+                let attributedString = createAttributedString()
+                
                 await MainActor.run {
                     uiView.attributedText = attributedString
                     uiView.linkTextAttributes = [:]
+                    
                     let newHeight = uiView.sizeThatFits(CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)).height
-                    if abs(dynamicHeight - newHeight) > 1 { dynamicHeight = newHeight }
+                    if abs(dynamicHeight - newHeight) > 1 {
+                        dynamicHeight = newHeight
+                    }
                 }
             }
+        }
+        
+        private func createAttributedString() -> NSAttributedString {
+            let font = UIFont.systemFont(ofSize: CGFloat(fontSize))
+            let attributedString = NSMutableAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.label])
+            
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.lineSpacing = 5
+            attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: attributedString.length))
+            
+            text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .byWords) { (substring, substringRange, _, _) in
+                guard let substring = substring else { return }
+                attributedString.addAttribute(.link, value: URL(string: "word-select://\(substring)")!, range: NSRange(substringRange, in: text))
+            }
+            
+            if let range = selectedWordRange {
+                // FIXED: Add a safety check to prevent applying an out-of-bounds range.
+                let stringRange = NSRange(location: 0, length: attributedString.length)
+                if NSIntersectionRange(stringRange, range).length == range.length {
+                    attributedString.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.4), range: range)
+                    attributedString.addAttribute(.foregroundColor, value: UIColor.black, range: range)
+                }
+            }
+            
+            return attributedString
         }
 
         func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
@@ -291,7 +327,7 @@ struct SelectableTextView: View {
                 
                 guard let globalRect = textView.superview?.convert(wordRect, to: nil) else { return }
                 
-                parent.onSelectWord(selectedWord, containingSentence, globalRect)
+                parent.onSelectWord(selectedWord, containingSentence, globalRect, effectiveRange)
             }
         }
     }
@@ -302,7 +338,6 @@ struct PopoverPositioner: ViewModifier {
     let wordFrame: CGRect
     
     private let popoverHeight: CGFloat = 180
-    // Widened the popover slightly
     private let popoverWidth: CGFloat = 300
     private let spacing: CGFloat = 10
 
