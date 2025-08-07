@@ -41,12 +41,11 @@ struct StoryReadingView: View {
         GeometryReader { screenGeometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    AsyncImage(url: story.attributes.coverImageURL) { image in
-                        image.resizable()
-                            .aspectRatio(contentMode: .fit) // <-- FIX 1: Image is no longer cropped
-                            .frame(maxWidth: .infinity) // Allow it to span the width
-                            .clipped()
-                    } placeholder: {
+                    // MODIFIED: Use CachedAsyncImage
+                    if let url = story.attributes.coverImageURL {
+                        CachedAsyncImage(url: url, contentMode: .fit)
+                            .frame(maxWidth: .infinity)
+                    } else {
                         Rectangle()
                             .fill(theme.secondary.opacity(0.2))
                             .frame(height: 250)
@@ -74,15 +73,11 @@ struct StoryReadingView: View {
                                 }
                             }
 
+                            // MODIFIED: Use CachedAsyncImage for inline illustrations
                             if let imageURL = content.imageURL {
-                                AsyncImage(url: imageURL) { image in
-                                    image.resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .cornerRadius(12)
-                                } placeholder: {
-                                    ProgressView()
-                                }
-                                .padding(.vertical)
+                                CachedAsyncImage(url: imageURL, contentMode: .fit)
+                                    .cornerRadius(12)
+                                    .padding(.vertical)
                             }
                         }
                     }

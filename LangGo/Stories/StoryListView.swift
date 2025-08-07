@@ -45,10 +45,11 @@ struct StoryListView: View {
         .task {
             await viewModel.initialLoad()
         }
-        // The .fullScreenCover has been removed from here.
+        .navigationDestination(for: Story.self) { story in
+            StoryCoverView(story: story, viewModel: viewModel)
+        }
     }
 }
-
 
 // MARK: - Subviews
 private struct StoryListScrollView: View {
@@ -75,7 +76,6 @@ private struct StoryListScrollView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 16) {
                             ForEach(viewModel.recommendedStories) { story in
-                                // Use NavigationLink to push to the destination
                                 NavigationLink(value: story) {
                                     RecommendedStoryCardView(story: story)
                                 }
@@ -150,23 +150,28 @@ struct RecommendedStoryCardView: View {
     
     private func imageSection(height: CGFloat) -> some View {
         ZStack(alignment: .bottomLeading) {
-            AsyncImage(url: story.attributes.coverImageURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
+            if let url = story.attributes.coverImageURL {
+                CachedAsyncImage(url: url, contentMode: .fill)
+            } else {
                 ZStack {
                     Rectangle().fill(theme.secondary.opacity(0.2))
                     Image(systemName: "book.closed").font(.largeTitle).foregroundColor(theme.text.opacity(0.5))
                 }
             }
-            .frame(height: height)
-
+        }
+        .frame(height: height)
+        .overlay(
             LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.8)]), startPoint: .center, endPoint: .bottom)
-
+        )
+        .overlay(
             VStack(alignment: .leading, spacing: 4) {
+                Spacer()
                 Text(story.attributes.difficultyName.uppercased()).storyStyle(.cardSubtitle)
                 Text(story.attributes.title).storyStyle(.cardTitle)
-            }.padding()
-        }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading) // Ensures the VStack expands
+            .padding(EdgeInsets(top: 0, leading: 16, bottom: 12, trailing: 16)) // Precise padding
+        )
     }
     
     private func textSection(height: CGFloat, briefLineLimit: Int) -> some View {
@@ -304,10 +309,12 @@ private struct StoryCardView: View {
     private var halfWidthCard: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
+                // --- 1. Image Section ---
                 ZStack(alignment: .bottomLeading) {
-                    AsyncImage(url: story.attributes.coverImageURL) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
+                    // CORRECTED: This now uses the caching component
+                    if let url = story.attributes.coverImageURL {
+                        CachedAsyncImage(url: url, contentMode: .fill)
+                    } else {
                         Rectangle().fill(theme.secondary.opacity(0.2))
                     }
                     LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.7)]), startPoint: .center, endPoint: .bottom)
@@ -319,6 +326,7 @@ private struct StoryCardView: View {
                 .frame(height: geometry.size.height * 0.45)
                 .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
 
+                // --- 2. Title Section ---
                 ZStack {
                     Color(.systemBackground)
                     Text(story.attributes.title)
@@ -329,6 +337,7 @@ private struct StoryCardView: View {
                 }
                 .frame(height: geometry.size.height * 0.20)
                 
+                // --- 3. Text Section ---
                 ZStack {
                     cardGradient
                     VStack(alignment: .leading, spacing: 4) {
@@ -363,23 +372,28 @@ private struct StoryCardView: View {
     
     private func imageSection(height: CGFloat) -> some View {
         ZStack(alignment: .bottomLeading) {
-            AsyncImage(url: story.attributes.coverImageURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
+            if let url = story.attributes.coverImageURL {
+                CachedAsyncImage(url: url, contentMode: .fill)
+            } else {
                 ZStack {
                     Rectangle().fill(theme.secondary.opacity(0.2))
                     Image(systemName: "book.closed").font(.largeTitle).foregroundColor(theme.text.opacity(0.5))
                 }
             }
-            .frame(height: height)
-
-            LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.8)]), startPoint: .center, endPoint: .bottom)
-
+        }
+        .frame(height: height)
+        .overlay(
+             LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.8)]), startPoint: .center, endPoint: .bottom)
+        )
+        .overlay(
             VStack(alignment: .leading, spacing: 4) {
+                Spacer()
                 Text(story.attributes.difficultyName.uppercased()).storyStyle(.cardSubtitle)
                 Text(story.attributes.title).storyStyle(.cardTitle)
-            }.padding()
-        }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading) // Ensures the VStack expands
+            .padding(EdgeInsets(top: 0, leading: 16, bottom: 12, trailing: 16)) // Precise padding
+        )
     }
     
     private func textSection(height: CGFloat, briefLineLimit: Int) -> some View {

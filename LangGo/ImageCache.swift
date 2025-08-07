@@ -31,13 +31,21 @@ class ImageLoader: ObservableObject {
 
 struct CachedAsyncImage: View {
     @StateObject private var loader: ImageLoader
-    init(url: URL) { _loader = StateObject(wrappedValue: ImageLoader(url: url)) }
+    let contentMode: ContentMode
+
+    init(url: URL, contentMode: ContentMode = .fill) {
+        _loader = StateObject(wrappedValue: ImageLoader(url: url))
+        self.contentMode = contentMode
+    }
+    
     var body: some View {
         Group {
             if let image = loader.image {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
             } else {
-                Color(UIColor.secondarySystemBackground)
+                ProgressView()
             }
         }.onAppear { loader.load() }
     }
