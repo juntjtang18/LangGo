@@ -306,8 +306,9 @@ struct SelectableTextView: View {
                 guard let link = textView.attributedText.attribute(.link, at: characterIndex, effectiveRange: &effectiveRange) as? URL,
                       link.scheme == "word-select" else { return }
                 
-                let selectedWord = link.absoluteString.replacingOccurrences(of: "word-select://", with: "")
-                
+                //let selectedWord = link.absoluteString.replacingOccurrences(of: "word-select://", with: "")
+                let selectedWord = (textView.text as NSString).substring(with: effectiveRange)
+
                 let paragraphText = parent.text
                 var containingSentence = ""
                 paragraphText.enumerateSubstrings(in: paragraphText.startIndex..<paragraphText.endIndex, options: .bySentences) { (sentence, sentenceRange, _, stop) in
