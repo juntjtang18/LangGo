@@ -1,8 +1,12 @@
 import Foundation
 import SwiftUI
+import os
 
 @MainActor
 class StoryViewModel: ObservableObject {
+    // Added a logger for better debugging
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "StoryViewModel")
+
     // MARK: - Published Properties
     @Published var stories: [Story] = []
     @Published var recommendedStories: [Story] = []
@@ -14,7 +18,6 @@ class StoryViewModel: ObservableObject {
     @Published var isFetchingMore: Bool = false
     @Published var errorMessage: String?
     
-    // --- NEW: Properties for Contextual Translation ---
     struct ContextualTranslation {
         let translatedWord: String
         let translatedSentence: String
@@ -120,16 +123,14 @@ class StoryViewModel: ObservableObject {
         }
     }
     
-    // --- NEW: Contextual Translation Function ---
     func translateInContext(word: String, sentence: String) async {
         isTranslating = true
-        contextualTranslation = nil // Clear previous result
+        contextualTranslation = nil
         
         do {
             let learningLanguage = Config.learningTargetLanguageCode
             let baseLanguage = languageSettings.selectedLanguageCode
             
-            // If languages are the same, no need to call the API
             guard learningLanguage != baseLanguage else {
                 contextualTranslation = ContextualTranslation(
                     translatedWord: word,
@@ -140,7 +141,6 @@ class StoryViewModel: ObservableObject {
                 return
             }
 
-            // Call the new service function
             let response = try await strapiService.translateWordInContext(
                 word: word,
                 sentence: sentence,
@@ -148,7 +148,6 @@ class StoryViewModel: ObservableObject {
                 targetLang: baseLanguage
             )
             
-            // Store the rich response
             contextualTranslation = ContextualTranslation(
                 translatedWord: response.translation,
                 translatedSentence: response.sentence,
@@ -159,6 +158,26 @@ class StoryViewModel: ObservableObject {
         }
         
         isTranslating = false
+    }
+
+    // --- NEW: Function to save a word to the vocabook ---
+    @MainActor
+    func saveWordToVocabook(targetText: String, baseText: String, partOfSpeech: String) async throws {
+        do {
+            let tgt = targetText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let base = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            logger.info("Saving new word from story -> target:'\(tgt, privacy: .public)' | base:'\(base, privacy: .public)' | pos:'\(partOfSpeech, privacy: .public)'")
+            _ = try await strapiService.saveNewWord(
+                targetText: tgt,
+                baseText: base,
+                partOfSpeech: partOfSpeech
+            )
+            logger.info("Saved new word successfully from story view.")
+        } catch {
+            logger.error("Failed to save new word from story view: \(error.localizedDescription)")
+            throw error
+        }
     }
 
     func toggleLike(for story: Story) async {

@@ -8,10 +8,16 @@ struct StoryReadingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.theme) var theme: Theme
     
+    // --- State for translation popover ---
     @State private var selectedWord: String = ""
     @State private var showTranslationPopover: Bool = false
     @State private var wordFrame: CGRect = .zero
 
+    // --- State for user feedback (toast messages) ---
+    @State private var showSaveSuccess: Bool = false
+    @State private var showSaveError: Bool = false
+    @State private var feedbackMessage: String = ""
+    
     @AppStorage("storyFontSize") private var fontSize: Double = 17.0
 
     private var storyContent: [(paragraph: String, imageURL: URL?)] {
@@ -39,71 +45,81 @@ struct StoryReadingView: View {
 
     var body: some View {
         GeometryReader { screenGeometry in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let url = story.attributes.coverImageURL {
-                        CachedAsyncImage(url: url, contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Rectangle()
-                            .fill(theme.secondary.opacity(0.2))
-                            .frame(height: 250)
-                    }
+            ZStack(alignment: .bottom) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if let url = story.attributes.coverImageURL {
+                            CachedAsyncImage(url: url, contentMode: .fit)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Rectangle()
+                                .fill(theme.secondary.opacity(0.2))
+                                .frame(height: 250)
+                        }
 
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(story.attributes.title)
-                            .font(.largeTitle).bold()
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(story.attributes.title)
+                                .font(.largeTitle).bold()
+                            Text("by \(story.attributes.author)")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                            Divider()
 
-                        Text("by \(story.attributes.author)")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-
-                        Divider()
-
-                        ForEach(storyContent.indices, id: \.self) { index in
-                            let content = storyContent[index]
-
-                            SelectableTextView(text: content.paragraph, fontSize: fontSize) { word, sentence, frame in
-                                self.selectedWord = word
-                                self.wordFrame = frame
-                                self.showTranslationPopover = true
-                                Task {
-                                    await viewModel.translateInContext(word: word, sentence: sentence)
+                            ForEach(storyContent.indices, id: \.self) { index in
+                                let content = storyContent[index]
+                                SelectableTextView(text: content.paragraph, fontSize: fontSize) { word, sentence, frame in
+                                    self.selectedWord = word
+                                    self.wordFrame = frame
+                                    self.showTranslationPopover = true
+                                    Task {
+                                        await viewModel.translateInContext(word: word, sentence: sentence)
+                                    }
+                                }
+                                if let imageURL = content.imageURL {
+                                    CachedAsyncImage(url: imageURL, contentMode: .fit)
+                                        .cornerRadius(12)
+                                        .padding(.vertical)
                                 }
                             }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .overlay(
+                    ZStack {
+                        if showTranslationPopover {
+                            Color.black.opacity(0.001)
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    showTranslationPopover = false
+                                }
 
-                            if let imageURL = content.imageURL {
-                                CachedAsyncImage(url: imageURL, contentMode: .fit)
-                                    .cornerRadius(12)
-                                    .padding(.vertical)
-                            }
+                            TranslationPopover(
+                                originalWord: selectedWord, // Pass the original word
+                                translationData: viewModel.contextualTranslation,
+                                isLoading: viewModel.isTranslating,
+                                onSave: saveToVocabook
+                            )
+                            .modifier(PopoverPositioner(wordFrame: wordFrame))
+                            .transition(.scale.combined(with: .opacity))
                         }
                     }
-                    .padding(.horizontal)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .overlay(
-                ZStack {
-                    if showTranslationPopover {
-                        Color.black.opacity(0.001)
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                showTranslationPopover = false
-                            }
+                    .frame(width: screenGeometry.size.width, height: screenGeometry.size.height)
+                    .allowsHitTesting(showTranslationPopover)
+                )
 
-                        // UPDATED: Call to the revised TranslationPopover
-                        TranslationPopover(
-                            translationData: viewModel.contextualTranslation,
-                            isLoading: viewModel.isTranslating
-                        )
-                        .modifier(PopoverPositioner(wordFrame: wordFrame))
-                        .transition(.scale.combined(with: .opacity))
-                    }
+                if showSaveSuccess || showSaveError {
+                    Text(feedbackMessage)
+                        .padding()
+                        .background(showSaveSuccess ? Color.green : Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                        .shadow(radius: 5)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, 50)
                 }
-                .frame(width: screenGeometry.size.width, height: screenGeometry.size.height)
-                .allowsHitTesting(showTranslationPopover)
-            )
+            }
         }
         .background(theme.background.ignoresSafeArea())
         .navigationTitle(story.attributes.title)
@@ -118,7 +134,6 @@ struct StoryReadingView: View {
                     }
                 }
             }
-
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     isLiked.toggle()
@@ -129,7 +144,6 @@ struct StoryReadingView: View {
                 }
             }
         }
-
         .toolbar {
             ToolbarItemGroup(placement: .bottomBar) {
                 Button(action: { if fontSize > 12 { fontSize -= 1 } }) { Image(systemName: "minus") }
@@ -144,6 +158,43 @@ struct StoryReadingView: View {
         }
         .onAppear {
             viewModel.selectedStory = self.story
+        }
+    }
+    
+    private func saveToVocabook() {
+        guard let translation = viewModel.contextualTranslation else { return }
+        let targetText = selectedWord
+        let baseText = translation.translatedWord
+        let pos = translation.partOfSpeech
+
+        Task {
+            do {
+                try await viewModel.saveWordToVocabook(
+                    targetText: targetText,
+                    baseText: baseText,
+                    partOfSpeech: pos
+                )
+                showFeedback(message: "Saved to Vocabook!", isError: false)
+            } catch {
+                showFeedback(message: "Already in Vocabook or failed to save.", isError: true)
+            }
+            showTranslationPopover = false
+        }
+    }
+
+    private func showFeedback(message: String, isError: Bool) {
+        feedbackMessage = message
+        if isError {
+            withAnimation { showSaveError = true }
+        } else {
+            withAnimation { showSaveSuccess = true }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            withAnimation {
+                showSaveSuccess = false
+                showSaveError = false
+            }
         }
     }
 }
@@ -250,8 +301,9 @@ struct SelectableTextView: View {
 struct PopoverPositioner: ViewModifier {
     let wordFrame: CGRect
     
-    private let popoverHeight: CGFloat = 160 // Adjusted for more content
-    private let popoverWidth: CGFloat = 280 // Adjusted for more content
+    private let popoverHeight: CGFloat = 180
+    // Widened the popover slightly
+    private let popoverWidth: CGFloat = 300
     private let spacing: CGFloat = 10
 
     func body(content: Content) -> some View {
@@ -267,13 +319,15 @@ struct PopoverPositioner: ViewModifier {
             )
             let hasRoomAbove = (wordFrame.minY - popoverHeight - spacing) > screenGeometry.safeAreaInsets.top
             let yPosition = hasRoomAbove
-                ? wordFrame.minY - spacing - (popoverHeight / 2)
-                : wordFrame.maxY + spacing + (popoverHeight / 2)
+                ? wordFrame.minY - spacing
+                : wordFrame.maxY + spacing
 
             content
-                // Removed fixed frame to allow popover to size intrinsically
                 .frame(width: popoverWidth)
                 .position(x: clampedX, y: yPosition)
+                .alignmentGuide(.top) { d in
+                    hasRoomAbove ? d[.bottom] - popoverHeight : d[.top]
+                }
         }
     }
 }
