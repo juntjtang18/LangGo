@@ -45,9 +45,9 @@ struct StoryListView: View {
         .task {
             await viewModel.initialLoad()
         }
-        .navigationDestination(for: Story.self) { story in
-            StoryCoverView(story: story, viewModel: viewModel)
-        }
+        //.navigationDestination(for: Story.self) { story in
+        //    StoryCoverView(story: story, viewModel: viewModel)
+        //}
     }
 }
 
