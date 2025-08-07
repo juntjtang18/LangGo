@@ -43,8 +43,8 @@ struct StoryReadingView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     AsyncImage(url: story.attributes.coverImageURL) { image in
                         image.resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 250)
+                            .aspectRatio(contentMode: .fit) // <-- FIX 1: Image is no longer cropped
+                            .frame(maxWidth: .infinity) // Allow it to span the width
                             .clipped()
                     } placeholder: {
                         Rectangle()
@@ -205,30 +205,43 @@ struct SelectableTextView: View {
             return textView
         }
 
+        // <-- FIX 2: Text processing is now done in a background task
         func updateUIView(_ uiView: UITextView, context: Context) {
-            let attributedString = NSMutableAttributedString(string: text)
-            let fullRange = NSRange(location: 0, length: attributedString.length)
-            
-            attributedString.addAttribute(.font, value: UIFont.systemFont(ofSize: CGFloat(fontSize)), range: fullRange)
-            attributedString.addAttribute(.foregroundColor, value: UIColor.label, range: fullRange)
-            
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.lineSpacing = 5
-            attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
-
-            text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .byWords) { (substring, substringRange, _, _) in
-                guard let substring = substring else { return }
-                let range = NSRange(substringRange, in: text)
-                let url = URL(string: "word-select://\(substring)")!
-                attributedString.addAttribute(.link, value: url, range: range)
-            }
-            
-            uiView.attributedText = attributedString
-            uiView.linkTextAttributes = [:]
+            let placeholderFont = UIFont.systemFont(ofSize: CGFloat(fontSize))
+            let placeholderAttributes: [NSAttributedString.Key: Any] = [
+                .font: placeholderFont,
+                .foregroundColor: UIColor.label
+            ]
+            uiView.attributedText = NSAttributedString(string: text, attributes: placeholderAttributes)
             context.coordinator.parent = self
-            
-            DispatchQueue.main.async {
-                dynamicHeight = uiView.sizeThatFits(CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)).height
+
+            Task(priority: .userInitiated) {
+                let attributedString = NSMutableAttributedString(string: text)
+                let fullRange = NSRange(location: 0, length: attributedString.length)
+                
+                attributedString.addAttribute(.font, value: UIFont.systemFont(ofSize: CGFloat(fontSize)), range: fullRange)
+                attributedString.addAttribute(.foregroundColor, value: UIColor.label, range: fullRange)
+                
+                let paragraphStyle = NSMutableParagraphStyle()
+                paragraphStyle.lineSpacing = 5
+                attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
+
+                text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .byWords) { (substring, substringRange, _, _) in
+                    guard let substring = substring else { return }
+                    let range = NSRange(substringRange, in: text)
+                    let url = URL(string: "word-select://\(substring)")!
+                    attributedString.addAttribute(.link, value: url, range: range)
+                }
+                
+                await MainActor.run {
+                    uiView.attributedText = attributedString
+                    uiView.linkTextAttributes = [:]
+                    
+                    let newHeight = uiView.sizeThatFits(CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)).height
+                    if abs(dynamicHeight - newHeight) > 1 {
+                        dynamicHeight = newHeight
+                    }
+                }
             }
         }
 

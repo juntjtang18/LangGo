@@ -6,17 +6,17 @@ struct StoriesTabView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     @EnvironmentObject var languageSettings: LanguageSettings
 
-    // This initializer is now updated to pass all required services
     init(isSideMenuShowing: Binding<Bool>, appEnvironment: AppEnvironment, languageSettings: LanguageSettings) {
         _isSideMenuShowing = isSideMenuShowing
         _viewModel = StateObject(wrappedValue: StoryViewModel(
             storyService: appEnvironment.storyService,
-            strapiService: appEnvironment.strapiService, // PASS THE SERVICE
-            languageSettings: languageSettings // PASS THE SETTINGS
+            strapiService: appEnvironment.strapiService,
+            languageSettings: languageSettings
         ))
     }
     
     var body: some View {
+        // The entire tab is now wrapped in a single, persistent NavigationStack.
         NavigationStack {
             StoryListView(viewModel: viewModel)
                 .navigationTitle("Stories")
@@ -28,6 +28,10 @@ struct StoriesTabView: View {
                         }
                     }
                     MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
+                }
+                // This defines where to go when a NavigationLink passes a Story object.
+                .navigationDestination(for: Story.self) { story in
+                    StoryCoverView(story: story, viewModel: viewModel)
                 }
         }
     }

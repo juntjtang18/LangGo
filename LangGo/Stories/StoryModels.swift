@@ -6,9 +6,17 @@ import Foundation
 typealias StrapiStoryResponse = StrapiSingleResponse<Story>
 
 /// Represents a story object from the Strapi API.
-struct Story: Codable, Identifiable, Equatable {
+struct Story: Codable, Identifiable, Hashable {
     let id: Int
     var attributes: StoryAttributes
+
+    static func == (lhs: Story, rhs: Story) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }
 
 /// Represents the attributes of a story.
@@ -52,10 +60,21 @@ struct StoryAttributes: Codable, Equatable {
     }
     
     var coverImageURL: URL? {
-        guard let urlString = self.illustrations?.first?.media?.data?.attributes.formats?["thumbnail"]?.url else {
+        // This now uses the MediaAttributes struct from StrapiModels.swift
+        guard let mediaAttributes = self.illustrations?.first?.media?.data?.attributes else {
             return nil
         }
-        return URL(string: urlString)
+        
+        // Prioritize the full URL, and fall back to the thumbnail.
+        if let urlString = mediaAttributes.url, let url = URL(string: urlString) {
+            return url
+        }
+        
+        if let thumbnailUrlString = mediaAttributes.formats?["thumbnail"]?.url, let url = URL(string: thumbnailUrlString) {
+            return url
+        }
+        
+        return nil
     }
 }
 
@@ -85,9 +104,7 @@ struct IllustrationComponent: Codable, Identifiable, Equatable {
     let paragraph: Int?
     let media: MediaRelation?
 
-    // ADDED: Manual implementation of Equatable for this specific struct.
     static func == (lhs: IllustrationComponent, rhs: IllustrationComponent) -> Bool {
-        // We only need to compare the unique IDs for the purpose of SwiftUI list updates.
         return lhs.id == rhs.id
     }
 }
@@ -100,3 +117,6 @@ struct StoryLikeData: Codable {
     let id: Int
     let like_count: Int
 }
+
+// REMOVED: The duplicate MediaAttributes and MediaFormat structs have been deleted from this file.
+// They are now correctly sourced from StrapiModels.swift.

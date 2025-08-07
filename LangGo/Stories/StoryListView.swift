@@ -21,8 +21,6 @@ struct StoryListView: View {
     @ObservedObject var viewModel: StoryViewModel
     @Environment(\.theme) var theme: Theme
 
-    @State private var storyToPresent: Story?
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             DifficultyFilterView(
@@ -40,18 +38,14 @@ struct StoryListView: View {
                 Text(errorMessage)
                     .style(.errorText)
             } else {
-                StoryListScrollView(viewModel: viewModel, storyToPresent: $storyToPresent)
+                StoryListScrollView(viewModel: viewModel)
             }
         }
         .background(theme.background.ignoresSafeArea())
         .task {
             await viewModel.initialLoad()
         }
-        .fullScreenCover(item: $storyToPresent) { story in
-            NavigationStack {
-                StoryReadingView(story: story, viewModel: viewModel)
-            }
-        }
+        // The .fullScreenCover has been removed from here.
     }
 }
 
@@ -59,7 +53,6 @@ struct StoryListView: View {
 // MARK: - Subviews
 private struct StoryListScrollView: View {
     @ObservedObject var viewModel: StoryViewModel
-    @Binding var storyToPresent: Story?
 
     private var storiesSectionTitle: String {
         if let selectedId = viewModel.selectedDifficultyID,
@@ -82,7 +75,8 @@ private struct StoryListScrollView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 16) {
                             ForEach(viewModel.recommendedStories) { story in
-                                Button(action: { storyToPresent = story }) {
+                                // Use NavigationLink to push to the destination
+                                NavigationLink(value: story) {
                                     RecommendedStoryCardView(story: story)
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -95,9 +89,7 @@ private struct StoryListScrollView: View {
                 // Section for All Other Stories
                 Section(header: StorySectionHeader(title: storiesSectionTitle)) {
                     ForEach(viewModel.storyRows) { row in
-                        StoryRowView(row: row, onSelectStory: { story in
-                            storyToPresent = story
-                        })
+                        StoryRowView(row: row)
                         .task {
                             if row.id == viewModel.storyRows.last?.id {
                                 await viewModel.loadMoreStoriesIfNeeded(currentItem: row.stories.last)
@@ -202,20 +194,19 @@ struct RecommendedStoryCardView: View {
 
 struct StoryRowView: View {
     let row: StoryRow
-    let onSelectStory: (Story) -> Void
     
     var body: some View {
         switch row.style {
         case .full:
             if let story = row.stories.first {
-                Button(action: { onSelectStory(story) }) {
+                NavigationLink(value: story) {
                     StoryCardView(story: story, style: .full)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
         case .landscape:
             if let story = row.stories.first {
-                Button(action: { onSelectStory(story) }) {
+                NavigationLink(value: story) {
                     StoryCardView(story: story, style: .landscape)
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -223,16 +214,16 @@ struct StoryRowView: View {
         case .half:
             HStack(spacing: 16) {
                 if let story1 = row.stories[safe: 0] {
-                    Button(action: { onSelectStory(story1) }) {
+                    NavigationLink(value: story1) {
                         StoryCardView(story: story1, style: .half)
-                            .aspectRatio(3/4, contentMode: .fit)
+                            .aspectRatio(2/3, contentMode: .fit)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
                 if let story2 = row.stories[safe: 1] {
-                    Button(action: { onSelectStory(story2) }) {
+                    NavigationLink(value: story2) {
                         StoryCardView(story: story2, style: .half)
-                            .aspectRatio(3/4, contentMode: .fit)
+                            .aspectRatio(2/3, contentMode: .fit)
                     }
                     .buttonStyle(PlainButtonStyle())
                 } else {
@@ -313,33 +304,36 @@ private struct StoryCardView: View {
     private var halfWidthCard: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                // Image Section
                 ZStack(alignment: .bottomLeading) {
                     AsyncImage(url: story.attributes.coverImageURL) { image in
                         image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Rectangle().fill(theme.secondary.opacity(0.2))
                     }
-                }
-                .frame(width: geometry.size.width, height: geometry.size.height * 0.5)
-                .overlay(
-                    LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.8)]), startPoint: .center, endPoint: .bottom)
-                )
-                .overlay(
-                    VStack(alignment: .leading, spacing: 4) {
+                    LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.7)]), startPoint: .center, endPoint: .bottom)
+                    VStack(alignment: .leading) {
                         Text(story.attributes.difficultyName.uppercased()).storyStyle(.cardSubtitle)
-                        Text(story.attributes.title).storyStyle(.cardTitle)
                         Spacer()
                     }.padding()
-                )
+                }
+                .frame(height: geometry.size.height * 0.45)
                 .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
 
-                // Text Section
+                ZStack {
+                    Color(.systemBackground)
+                    Text(story.attributes.title)
+                        .font(.headline)
+                        .foregroundColor(theme.text)
+                        .lineLimit(2)
+                        .padding(.horizontal)
+                }
+                .frame(height: geometry.size.height * 0.20)
+                
                 ZStack {
                     cardGradient
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
-                        Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(3)
+                        Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(2)
                         Spacer(minLength: 0)
                         HStack {
                             Spacer()
@@ -350,7 +344,7 @@ private struct StoryCardView: View {
                     }
                     .padding()
                 }
-                .frame(width: geometry.size.width, height: geometry.size.height * 0.5)
+                .frame(height: geometry.size.height * 0.35)
                 .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
             }
         }
