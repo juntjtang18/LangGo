@@ -124,8 +124,9 @@ class FlashcardViewModel: ObservableObject {
         do {
             logger.info("Attempting to translate word '\(word, privacy: .public)' from \(source, privacy: .public) to \(target, privacy: .public)")
             let response: TranslateWordResponse = try await strapiService.translateWord(word: word, source: source, target: target)
-            logger.info("Successfully translated word: \(response.translatedText, privacy: .public)")
-            return response.translatedText
+            // FIXED: Used .translation instead of .translatedText
+            logger.info("Successfully translated word: \(response.translation, privacy: .public)")
+            return response.translation
         } catch {
             logger.error("Failed to translate word '\(word, privacy: .public)': \(error.localizedDescription)")
             throw error

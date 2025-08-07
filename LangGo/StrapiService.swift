@@ -242,6 +242,14 @@ class StrapiService {
         let requestBody = TranslateWordRequest(word: word, source: source, target: target)
         return try await NetworkManager.shared.post(to: url, body: requestBody)
     }
+
+    // --- NEWLY ADDED: Function to translate a word within its sentence context ---
+    func translateWordInContext(word: String, sentence: String, sourceLang: String, targetLang: String) async throws -> TranslateWordInContextResponse {
+        logger.debug("StrapiService: Translating word '\(word)' in context from \(sourceLang) to \(targetLang).")
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/translate-word-context") else { throw URLError(.badURL) }
+        let requestBody = TranslateWordInContextRequest(word: word, sentence: sentence, sourceLang: sourceLang, targetLang: targetLang)
+        return try await NetworkManager.shared.post(to: url, body: requestBody)
+    }
     
     // MARK: - VBSetting Endpoints
     func fetchVBSetting() async throws -> VBSetting {

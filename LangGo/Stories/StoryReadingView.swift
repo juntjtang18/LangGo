@@ -41,7 +41,6 @@ struct StoryReadingView: View {
         GeometryReader { screenGeometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // MODIFIED: Use CachedAsyncImage
                     if let url = story.attributes.coverImageURL {
                         CachedAsyncImage(url: url, contentMode: .fit)
                             .frame(maxWidth: .infinity)
@@ -64,16 +63,15 @@ struct StoryReadingView: View {
                         ForEach(storyContent.indices, id: \.self) { index in
                             let content = storyContent[index]
 
-                            SelectableTextView(text: content.paragraph, fontSize: fontSize) { word, frame in
+                            SelectableTextView(text: content.paragraph, fontSize: fontSize) { word, sentence, frame in
                                 self.selectedWord = word
                                 self.wordFrame = frame
                                 self.showTranslationPopover = true
                                 Task {
-                                    await viewModel.translate(word: word)
+                                    await viewModel.translateInContext(word: word, sentence: sentence)
                                 }
                             }
 
-                            // MODIFIED: Use CachedAsyncImage for inline illustrations
                             if let imageURL = content.imageURL {
                                 CachedAsyncImage(url: imageURL, contentMode: .fit)
                                     .cornerRadius(12)
@@ -94,11 +92,10 @@ struct StoryReadingView: View {
                                 showTranslationPopover = false
                             }
 
+                        // UPDATED: Call to the revised TranslationPopover
                         TranslationPopover(
-                            originalWord: selectedWord,
-                            translation: viewModel.translationResult ?? "",
-                            isLoading: viewModel.isTranslating,
-                            fontSize: fontSize
+                            translationData: viewModel.contextualTranslation,
+                            isLoading: viewModel.isTranslating
                         )
                         .modifier(PopoverPositioner(wordFrame: wordFrame))
                         .transition(.scale.combined(with: .opacity))
@@ -111,7 +108,6 @@ struct StoryReadingView: View {
         .background(theme.background.ignoresSafeArea())
         .navigationTitle(story.attributes.title)
         .navigationBarTitleDisplayMode(.inline)
-        // This line hides the automatic back button, fixing the double-chevron issue
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -136,20 +132,9 @@ struct StoryReadingView: View {
 
         .toolbar {
             ToolbarItemGroup(placement: .bottomBar) {
-                Button(action: {
-                    if fontSize > 12 { fontSize -= 1 }
-                }) {
-                    Image(systemName: "minus")
-                }
-
-                Text("Font Size")
-                    .font(.caption)
-
-                Button(action: {
-                    if fontSize < 28 { fontSize += 1 }
-                }) {
-                    Image(systemName: "plus")
-                }
+                Button(action: { if fontSize > 12 { fontSize -= 1 } }) { Image(systemName: "minus") }
+                Text("Font Size").font(.caption)
+                Button(action: { if fontSize < 28 { fontSize += 1 } }) { Image(systemName: "plus") }
             }
         }
         .onChange(of: viewModel.selectedStory) { newStory in
@@ -157,7 +142,6 @@ struct StoryReadingView: View {
                 isLiked = (newStory.attributes.like_count ?? 0) > 0
             }
         }
-
         .onAppear {
             viewModel.selectedStory = self.story
         }
@@ -168,7 +152,7 @@ struct StoryReadingView: View {
 struct SelectableTextView: View {
     let text: String
     let fontSize: Double
-    let onSelectWord: (String, CGRect) -> Void
+    let onSelectWord: (String, String, CGRect) -> Void
 
     @State private var height: CGFloat = .zero
 
@@ -180,7 +164,7 @@ struct SelectableTextView: View {
     struct InternalSelectableTextView: UIViewRepresentable {
         let text: String
         let fontSize: Double
-        let onSelectWord: (String, CGRect) -> Void
+        let onSelectWord: (String, String, CGRect) -> Void
         @Binding var dynamicHeight: CGFloat
 
         func makeUIView(context: Context) -> UITextView {
@@ -191,73 +175,44 @@ struct SelectableTextView: View {
             textView.backgroundColor = .clear
             textView.textContainerInset = .zero
             textView.textContainer.lineFragmentPadding = 0
-            
             let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
             textView.addGestureRecognizer(tapGesture)
-            
             textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            
             return textView
         }
 
-        // <-- FIX 2: Text processing is now done in a background task
         func updateUIView(_ uiView: UITextView, context: Context) {
-            let placeholderFont = UIFont.systemFont(ofSize: CGFloat(fontSize))
-            let placeholderAttributes: [NSAttributedString.Key: Any] = [
-                .font: placeholderFont,
-                .foregroundColor: UIColor.label
-            ]
-            uiView.attributedText = NSAttributedString(string: text, attributes: placeholderAttributes)
+            let font = UIFont.systemFont(ofSize: CGFloat(fontSize))
+            uiView.attributedText = NSAttributedString(string: text, attributes: [.font: font])
             context.coordinator.parent = self
-
-            Task(priority: .userInitiated) {
-                let attributedString = NSMutableAttributedString(string: text)
-                let fullRange = NSRange(location: 0, length: attributedString.length)
-                
-                attributedString.addAttribute(.font, value: UIFont.systemFont(ofSize: CGFloat(fontSize)), range: fullRange)
-                attributedString.addAttribute(.foregroundColor, value: UIColor.label, range: fullRange)
-                
+            Task {
+                let attributedString = NSMutableAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.label])
                 let paragraphStyle = NSMutableParagraphStyle()
                 paragraphStyle.lineSpacing = 5
-                attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
-
+                attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: attributedString.length))
                 text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .byWords) { (substring, substringRange, _, _) in
                     guard let substring = substring else { return }
-                    let range = NSRange(substringRange, in: text)
-                    let url = URL(string: "word-select://\(substring)")!
-                    attributedString.addAttribute(.link, value: url, range: range)
+                    attributedString.addAttribute(.link, value: URL(string: "word-select://\(substring)")!, range: NSRange(substringRange, in: text))
                 }
-                
                 await MainActor.run {
                     uiView.attributedText = attributedString
                     uiView.linkTextAttributes = [:]
-                    
                     let newHeight = uiView.sizeThatFits(CGSize(width: uiView.bounds.width, height: .greatestFiniteMagnitude)).height
-                    if abs(dynamicHeight - newHeight) > 1 {
-                        dynamicHeight = newHeight
-                    }
+                    if abs(dynamicHeight - newHeight) > 1 { dynamicHeight = newHeight }
                 }
             }
         }
 
-        func makeCoordinator() -> Coordinator {
-            Coordinator(parent: self)
-        }
+        func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
         class Coordinator: NSObject {
             var parent: InternalSelectableTextView
-
-            init(parent: InternalSelectableTextView) {
-                self.parent = parent
-            }
+            init(parent: InternalSelectableTextView) { self.parent = parent }
 
             @objc func handleTap(_ gesture: UITapGestureRecognizer) {
                 guard let textView = gesture.view as? UITextView else { return }
                 let tapLocation = gesture.location(in: textView)
-
-                let layoutManager = textView.layoutManager
-                let characterIndex = layoutManager.characterIndex(for: tapLocation, in: textView.textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
-
+                let characterIndex = textView.layoutManager.characterIndex(for: tapLocation, in: textView.textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
                 guard characterIndex < textView.textStorage.length else { return }
                 
                 var effectiveRange = NSRange()
@@ -266,15 +221,26 @@ struct SelectableTextView: View {
                 
                 let selectedWord = link.absoluteString.replacingOccurrences(of: "word-select://", with: "")
                 
-                let glyphRange = layoutManager.glyphRange(forCharacterRange: effectiveRange, actualCharacterRange: nil)
-                var wordRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textView.textContainer)
-                
+                let paragraphText = parent.text
+                var containingSentence = ""
+                paragraphText.enumerateSubstrings(in: paragraphText.startIndex..<paragraphText.endIndex, options: .bySentences) { (sentence, sentenceRange, _, stop) in
+                    guard let sentence = sentence else { return }
+                    let nsSentenceRange = NSRange(sentenceRange, in: paragraphText)
+                    if NSIntersectionRange(nsSentenceRange, effectiveRange).length == effectiveRange.length {
+                        containingSentence = sentence
+                        stop = true
+                    }
+                }
+                if containingSentence.isEmpty { containingSentence = paragraphText }
+
+                let glyphRange = textView.layoutManager.glyphRange(forCharacterRange: effectiveRange, actualCharacterRange: nil)
+                var wordRect = textView.layoutManager.boundingRect(forGlyphRange: glyphRange, in: textView.textContainer)
                 wordRect.origin.x += textView.textContainerInset.left
                 wordRect.origin.y += textView.textContainerInset.top
                 
                 guard let globalRect = textView.superview?.convert(wordRect, to: nil) else { return }
                 
-                parent.onSelectWord(selectedWord, globalRect)
+                parent.onSelectWord(selectedWord, containingSentence, globalRect)
             }
         }
     }
@@ -284,8 +250,8 @@ struct SelectableTextView: View {
 struct PopoverPositioner: ViewModifier {
     let wordFrame: CGRect
     
-    private let popoverHeight: CGFloat = 80
-    private let popoverWidth: CGFloat = 200
+    private let popoverHeight: CGFloat = 160 // Adjusted for more content
+    private let popoverWidth: CGFloat = 280 // Adjusted for more content
     private let spacing: CGFloat = 10
 
     func body(content: Content) -> some View {
@@ -299,15 +265,14 @@ struct PopoverPositioner: ViewModifier {
                     screenWidth - (popoverWidth / 2) - screenGeometry.safeAreaInsets.trailing - 10
                 )
             )
-
             let hasRoomAbove = (wordFrame.minY - popoverHeight - spacing) > screenGeometry.safeAreaInsets.top
-            
             let yPosition = hasRoomAbove
                 ? wordFrame.minY - spacing - (popoverHeight / 2)
                 : wordFrame.maxY + spacing + (popoverHeight / 2)
 
             content
-                .frame(width: popoverWidth, height: popoverHeight, alignment: .center)
+                // Removed fixed frame to allow popover to size intrinsically
+                .frame(width: popoverWidth)
                 .position(x: clampedX, y: yPosition)
         }
     }

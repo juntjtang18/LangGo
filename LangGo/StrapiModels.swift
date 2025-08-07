@@ -341,10 +341,23 @@ struct TranslateWordRequest: Codable {
     let target: String
 }
 
+// --- MODIFIED ---
 struct TranslateWordResponse: Decodable {
-    let translatedText: String
+    let translation: String
+    let partOfSpeech: String
+}
 
-    enum CodingKeys: String, CodingKey {
-        case translatedText = "translation"
-    }
+// MARK: - Contextual Translation Models
+struct TranslateWordInContextRequest: Codable {
+    let word: String
+    let sentence: String
+    let sourceLang: String
+    let targetLang: String
+}
+
+// --- MODIFIED ---
+struct TranslateWordInContextResponse: Decodable {
+    let translation: String
+    let sentence: String
+    let partOfSpeech: String
 }

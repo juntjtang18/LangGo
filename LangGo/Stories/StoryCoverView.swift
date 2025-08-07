@@ -23,40 +23,38 @@ struct StoryCoverView: View {
                 
                 // --- Content VStack with Spacing ---
                 VStack(alignment: .leading, spacing: 24) {
-                    // --- 2. Title and Author ---
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(story.attributes.title)
-                            .font(.largeTitle.weight(.bold))
-                            .foregroundColor(.primary)
-                        
+                    // --- 2. Title ---
+                    Text(story.attributes.title)
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundColor(.primary)
+
+                    // --- 3. Author and Button Row ---
+                    HStack(alignment: .center) {
                         Text("by \(story.attributes.author)")
                             .font(.headline)
                             .foregroundColor(.secondary)
-                    }
 
-                    // --- 3. Brief ---
-                    if let brief = story.attributes.brief {
-                        Text(brief)
-                            .font(.body)
-                            .foregroundColor(.primary.opacity(0.8))
-                    }
-
-                    // --- 4. Button ---
-                    HStack {
                         Spacer()
-                        // This NavigationLink will now work correctly.
+
                         NavigationLink(destination: StoryReadingView(story: story, viewModel: viewModel)) {
                             HStack {
                                 Text("Start Reading")
                                 Image(systemName: "play.fill")
                             }
-                            .font(.headline)
+                            .font(.subheadline) // Smaller font
                             .foregroundColor(.white)
-                            .padding(.horizontal, 30)
-                            .padding(.vertical, 16)
+                            .padding(.horizontal, 20) // Reduced padding
+                            .padding(.vertical, 12)   // Reduced padding
                             .background(theme.accent)
                             .clipShape(Capsule())
                         }
+                    }
+
+                    // --- 4. Brief ---
+                    if let brief = story.attributes.brief {
+                        Text(brief)
+                            .font(.body)
+                            .foregroundColor(.primary.opacity(0.8))
                     }
                 }
                 .padding(24)

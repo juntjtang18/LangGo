@@ -3,21 +3,24 @@ import SwiftUI
 
 @MainActor
 class StoryViewModel: ObservableObject {
+    // MARK: - Published Properties
     @Published var stories: [Story] = []
     @Published var recommendedStories: [Story] = []
-    
-    // These now drive the UI
     @Published var storyRows: [StoryRow] = []
     @Published var recommendedStoryRows: [StoryRow] = []
-
     @Published var difficultyLevels: [DifficultyLevel] = []
     @Published var selectedStory: Story?
-    
     @Published var isLoading: Bool = false
     @Published var isFetchingMore: Bool = false
     @Published var errorMessage: String?
-
-    @Published var translationResult: String?
+    
+    // --- NEW: Properties for Contextual Translation ---
+    struct ContextualTranslation {
+        let translatedWord: String
+        let translatedSentence: String
+        let partOfSpeech: String
+    }
+    @Published var contextualTranslation: ContextualTranslation?
     @Published var isTranslating: Bool = false
     
     @Published var selectedDifficultyID: Int? = 0 {
@@ -28,18 +31,21 @@ class StoryViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Private Properties
     private var currentPage = 1
     private var totalPages: Int?
     private let storyService: StoryService
     private let strapiService: StrapiService
     private let languageSettings: LanguageSettings
 
+    // MARK: - Initialization
     init(storyService: StoryService, strapiService: StrapiService, languageSettings: LanguageSettings) {
         self.storyService = storyService
         self.strapiService = strapiService
         self.languageSettings = languageSettings
     }
     
+    // MARK: - Public Methods
     func initialLoad() async {
         guard stories.isEmpty else { return }
         isLoading = true
@@ -94,43 +100,6 @@ class StoryViewModel: ObservableObject {
         isFetchingMore = false
     }
 
-    private func resetAndLoadStories() {
-        stories.removeAll()
-        storyRows.removeAll()
-        currentPage = 1
-        totalPages = nil
-        Task {
-            await loadMoreStoriesIfNeeded(currentItem: nil)
-        }
-    }
-    
-    // --- THIS IS THE NEW, DETERMINISTIC LAYOUT LOGIC ---
-    private func generateLayout(for stories: [Story]) -> [StoryRow] {
-        var rows: [StoryRow] = []
-        var index = 0
-
-        while index < stories.count {
-            let story = stories[index]
-            
-            // Determine the style based on the story's ID. This is always the same.
-            let styleId = story.id % 4
-            
-            // Rule: If the ID is divisible by 4 and there's another story available,
-            // create a paired half-width row.
-            if styleId == 0 && index + 1 < stories.count {
-                let pair = [story, stories[index + 1]]
-                rows.append(StoryRow(stories: pair, style: .half))
-                index += 2 // Advance the index by 2
-            } else {
-                // Otherwise, use a full or landscape card for a single-story row.
-                let style: CardStyle = (styleId == 2) ? .landscape : .full
-                rows.append(StoryRow(stories: [story], style: style))
-                index += 1 // Advance the index by 1
-            }
-        }
-        return rows
-    }
-    
     func fetchStoryDetails(id: Int) async {
         if let story = recommendedStories.first(where: { $0.id == id }) ?? stories.first(where: { $0.id == id }) {
             self.selectedStory = story
@@ -151,29 +120,42 @@ class StoryViewModel: ObservableObject {
         }
     }
     
-    func translate(word: String) async {
+    // --- NEW: Contextual Translation Function ---
+    func translateInContext(word: String, sentence: String) async {
         isTranslating = true
-        translationResult = ""
+        contextualTranslation = nil // Clear previous result
         
         do {
             let learningLanguage = Config.learningTargetLanguageCode
             let baseLanguage = languageSettings.selectedLanguageCode
             
+            // If languages are the same, no need to call the API
             guard learningLanguage != baseLanguage else {
-                translationResult = word
+                contextualTranslation = ContextualTranslation(
+                    translatedWord: word,
+                    translatedSentence: sentence,
+                    partOfSpeech: "N/A"
+                )
                 isTranslating = false
                 return
             }
 
-            let response = try await strapiService.translateWord(
+            // Call the new service function
+            let response = try await strapiService.translateWordInContext(
                 word: word,
-                source: learningLanguage,
-                target: baseLanguage
+                sentence: sentence,
+                sourceLang: learningLanguage,
+                targetLang: baseLanguage
             )
-            translationResult = response.translatedText
+            
+            // Store the rich response
+            contextualTranslation = ContextualTranslation(
+                translatedWord: response.translation,
+                translatedSentence: response.sentence,
+                partOfSpeech: response.partOfSpeech
+            )
         } catch {
-            translationResult = "Translation failed."
-            errorMessage = error.localizedDescription
+            errorMessage = "Context translation failed: \(error.localizedDescription)"
         }
         
         isTranslating = false
@@ -186,6 +168,38 @@ class StoryViewModel: ObservableObject {
         } catch {
             errorMessage = "Failed to update like status: \(error.localizedDescription)"
         }
+    }
+    
+    // MARK: - Private Methods
+    private func resetAndLoadStories() {
+        stories.removeAll()
+        storyRows.removeAll()
+        currentPage = 1
+        totalPages = nil
+        Task {
+            await loadMoreStoriesIfNeeded(currentItem: nil)
+        }
+    }
+    
+    private func generateLayout(for stories: [Story]) -> [StoryRow] {
+        var rows: [StoryRow] = []
+        var index = 0
+
+        while index < stories.count {
+            let story = stories[index]
+            let styleId = story.id % 4
+            
+            if styleId == 0 && index + 1 < stories.count {
+                let pair = [story, stories[index + 1]]
+                rows.append(StoryRow(stories: pair, style: .half))
+                index += 2
+            } else {
+                let style: CardStyle = (styleId == 2) ? .landscape : .full
+                rows.append(StoryRow(stories: [story], style: style))
+                index += 1
+            }
+        }
+        return rows
     }
 
     private func updateStoryLikeCount(storyId: Int, newLikeCount: Int?) {
