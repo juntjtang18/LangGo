@@ -1,0 +1,4 @@
+sips -Z 40 notebook1.png --out notebook1.png       # 1x (e.g., 40x40)
+sips -Z 80 notebook1.png --out notebook1@2x.png    # 2x (80x80)
+sips -Z 120 notebook1.png --out notebook1@3x.png   # 3x (120x120)
+

@@ -34,7 +34,7 @@ struct VocabookPageRow: View {
         // --- END OF THE FIX ---
 
         // Log the desired flashcard details only when the guard passes.
-        let cardDetails = cards.map { "frontContent: \($0.frontContent), correctStreak: \($0.correctStreak), reviewTire: \($0.reviewTire)" }
+        let cardDetails = cards.map { "frontContent: \($0.frontContent), correctStreak: \($0.correctStreak), reviewTire: \(String(describing: $0.reviewTire))" }
         logger.log("Flashcards for vocapage \(self.vocapage.order): \(cardDetails)")
 
         let promotionBonus = 2.0
