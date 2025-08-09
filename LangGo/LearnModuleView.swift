@@ -31,7 +31,7 @@ struct LearnView: View {
     // MODIFIED: The initializer no longer takes a ModelContext. It now requires the StrapiService,
     // which is consistent with the refactored VocabookViewModel.
     init(strapiService: StrapiService) {
-        _viewModel = State(initialValue: VocabookViewModel(strapiService: strapiService))
+        _viewModel = State(initialValue: VocabookViewModel())
     }
     
     var body: some View {

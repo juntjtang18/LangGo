@@ -4,7 +4,6 @@ import os
 
 @MainActor
 class StoryViewModel: ObservableObject {
-    // Added a logger for better debugging
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StoryViewModel")
 
     // MARK: - Published Properties
@@ -37,14 +36,17 @@ class StoryViewModel: ObservableObject {
     // MARK: - Private Properties
     private var currentPage = 1
     private var totalPages: Int?
-    private let storyService: StoryService
-    private let strapiService: StrapiService
+    
+    // Services are now fetched directly from the DataServices singleton.
+    private let storyService = DataServices.shared.storyService
+    private let strapiService = DataServices.shared.strapiService
+    
+    // This dependency is passed in, as it's a shared UI state object.
     private let languageSettings: LanguageSettings
 
     // MARK: - Initialization
-    init(storyService: StoryService, strapiService: StrapiService, languageSettings: LanguageSettings) {
-        self.storyService = storyService
-        self.strapiService = strapiService
+    // The initializer is now clean and only takes the dependencies it can't get globally.
+    init(languageSettings: LanguageSettings) {
         self.languageSettings = languageSettings
     }
     
@@ -160,7 +162,6 @@ class StoryViewModel: ObservableObject {
         isTranslating = false
     }
 
-    // --- NEW: Function to save a word to the vocabook ---
     @MainActor
     func saveWordToVocabook(targetText: String, baseText: String, partOfSpeech: String) async throws {
         do {

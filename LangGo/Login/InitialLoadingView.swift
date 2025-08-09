@@ -4,9 +4,12 @@ import os
 
 struct InitialLoadingView: View {
     @Binding var authState: AuthState
-    @EnvironmentObject var appEnvironment: AppEnvironment
-
-    let keychain = Keychain(service: Config.keychainService)
+    
+    // The services are now accessed directly from the singleton
+    private let strapiService = DataServices.shared.strapiService
+    private let reviewSettingsManager = DataServices.shared.reviewSettingsManager
+    
+    private let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "InitialLoadingView")
 
     var body: some View {
@@ -30,15 +33,17 @@ struct InitialLoadingView: View {
         // 2. If a token exists, validate it by fetching the user profile
         Task {
             do {
-                // Use the injected StrapiService instance
-                let user = try await appEnvironment.strapiService.fetchCurrentUser()
+                // Use the service from the singleton
+                let user = try await strapiService.fetchCurrentUser()
+                
                 // SUCCESS: Token is valid. Refresh user details.
                 UserDefaults.standard.set(user.username, forKey: "username")
                 UserDefaults.standard.set(user.email, forKey: "email")
-                UserDefaults.standard.set(user.id, forKey: "userId") // Ensure user ID is also saved
+                UserDefaults.standard.set(user.id, forKey: "userId")
                 
-                // Load critical app settings after validation
-                await appEnvironment.reviewSettingsManager.loadSettings(strapiService: appEnvironment.strapiService)
+                // Load critical app settings. The manager can now access
+                // the Strapi service internally via the singleton.
+                await reviewSettingsManager.loadSettings()
                 
                 authState = .loggedIn
                 logger.info("JWT validated. User \(user.username, privacy: .public) logged in.")

@@ -14,7 +14,10 @@ struct VocabookSettingView: View {
     @State private var initialInterval3: Double? = nil
 
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appEnvironment: AppEnvironment
+    
+    // The view now gets its service dependency directly from the singleton
+    private let strapiService = DataServices.shared.strapiService
+    
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookSettingView")
 
     var body: some View {
@@ -59,7 +62,6 @@ struct VocabookSettingView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         Task {
-                            // Only save if something changed
                             if initialWordCountPerPage == wordCountPerPage &&
                                initialInterval1 == interval1 &&
                                initialInterval2 == interval2 &&
@@ -68,18 +70,18 @@ struct VocabookSettingView: View {
                                 return
                             }
                             do {
-                                let updated = try await appEnvironment.strapiService.updateVBSetting(
+                                // Use the internally resolved service
+                                let updated = try await strapiService.updateVBSetting(
                                     wordsPerPage: Int(wordCountPerPage),
                                     interval1: interval1,
                                     interval2: interval2,
                                     interval3: interval3
                                 )
-                                // Update local AppStorage to reflect saved values
                                 wordCountPerPage = Double(updated.attributes.wordsPerPage)
                                 interval1 = updated.attributes.interval1
                                 interval2 = updated.attributes.interval2
                                 interval3 = updated.attributes.interval3
-                                // Reset initial markers
+                                
                                 initialWordCountPerPage = wordCountPerPage
                                 initialInterval1 = interval1
                                 initialInterval2 = interval2
@@ -95,12 +97,14 @@ struct VocabookSettingView: View {
             }
             .task {
                 do {
-                    let vbSetting = try await appEnvironment.strapiService.fetchVBSetting()
-                    // Load into UI and initial trackers
+                    // Use the internally resolved service
+                    let vbSetting = try await strapiService.fetchVBSetting()
+                    
                     wordCountPerPage = Double(vbSetting.attributes.wordsPerPage)
                     interval1 = vbSetting.attributes.interval1
                     interval2 = vbSetting.attributes.interval2
                     interval3 = vbSetting.attributes.interval3
+                    
                     initialWordCountPerPage = wordCountPerPage
                     initialInterval1 = interval1
                     initialInterval2 = interval2
@@ -113,7 +117,6 @@ struct VocabookSettingView: View {
         }
     }
 
-    // Helper for Double sliders
     private func settingSlider(
         title: String,
         value: Binding<Double>,

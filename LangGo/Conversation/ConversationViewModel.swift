@@ -11,7 +11,9 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     @Published var isListening = false
     @Published var isMouthAnimating = false
     
-    private let conversationService: ConversationService
+    // The service is now fetched directly from the DataServices singleton.
+    private let conversationService = DataServices.shared.conversationService
+    
     private let speechManager = SpeechSynthesizerManager()
     private let speechRecognizer = SpeechRecognizer()
     private var currentTopic: String?
@@ -19,9 +21,9 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     
     private let audioSession = AVAudioSession.sharedInstance()
 
-    init(conversationService: ConversationService) {
-        self.conversationService = conversationService
-        super.init() // Required for NSObject subclasses
+    // The initializer is now clean, parameter-less, and marked with 'override'.
+    override init() {
+        super.init() // This must be called first in an NSObject subclass initializer.
         
         self.speechManager.delegate = self
         
@@ -41,7 +43,6 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         }
     }
     
-    // UPDATED: This method now also sets the session active.
     private func prepareSessionForRecording() {
          do {
             try audioSession.setCategory(.record, mode: .measurement, options: [.duckOthers])
@@ -101,19 +102,11 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
         }
     }
 
-    // UPDATED: This function now orchestrates the audio session handoff.
     func startListening() {
-        // 1. Immediately stop any ongoing speech.
         speechManager.stop()
-    
-        // 2. Explicitly prepare the audio session for recording.
-        // This is the crucial step that prevents the crash.
         prepareSessionForRecording()
-    
-        // 3. Start the recognizer, which now assumes the session is ready.
         speechRecognizer.start()
     }
-
 
     func stopListening() {
         speechRecognizer.stop()
@@ -141,13 +134,8 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, willSpeakRangeOfSpeechString characterRange: NSRange, utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            // Open the mouth for each word
             isMouthAnimating = true
-            
-            // Schedule the mouth to close after a short duration
-            // This creates the rhythmic open/close effect
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                // Check if we are still supposed to be animating before closing
                 if self.isMouthAnimating {
                     self.isMouthAnimating = false
                 }
@@ -157,7 +145,6 @@ class ConversationViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDele
     
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            // Ensure mouth is closed and audio session is ready for recording
             self.isMouthAnimating = false
             self.prepareSessionForRecording()
         }

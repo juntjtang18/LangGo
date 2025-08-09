@@ -6,7 +6,7 @@ struct VocabookView: View {
     @ObservedObject var flashcardViewModel: FlashcardViewModel
     @ObservedObject var vocabookViewModel: VocabookViewModel
     
-    @EnvironmentObject var appEnvironment: AppEnvironment
+    // REMOVED: The AppEnvironment is no longer needed.
     @EnvironmentObject var languageSettings: LanguageSettings
     @Environment(\.theme) var theme: Theme
 
@@ -23,7 +23,7 @@ struct VocabookView: View {
             ActionButtonsGrid(
                 isReviewing: $isReviewing,
                 isListening: $isListening,
-                isQuizzing: $isQuizzing,
+isQuizzing: $isQuizzing,
                 isAddingNewWord: $isAddingNewWord
             )
             .padding(.horizontal)
@@ -39,11 +39,13 @@ struct VocabookView: View {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isListening) {
-             ReadFlashcardView(languageSettings: languageSettings, strapiService: appEnvironment.strapiService)
+             // MODIFIED: ReadFlashcardView no longer needs strapiService passed in.
+             ReadFlashcardView(languageSettings: languageSettings)
         }
         .sheet(isPresented: $isQuizzing) {
             if !flashcardViewModel.reviewCards.isEmpty {
-                ExamView(flashcards: flashcardViewModel.reviewCards, strapiService: appEnvironment.strapiService)
+                // MODIFIED: ExamView no longer needs strapiService passed in.
+                ExamView(flashcards: flashcardViewModel.reviewCards)
             } else {
                 VStack(spacing: 16) {
                     Text("No Cards for Quiz")

@@ -7,20 +7,22 @@ enum ExamDirection {
     case baseToTarget, targetToBase
 }
 
+@MainActor
 class ExamViewModel: ObservableObject {
-    // These properties are not marked @Published because they are set once at initialization.
     var flashcards: [Flashcard]
-    private let strapiService: StrapiService
+    
+    // The service is now fetched directly from the DataServices singleton.
+    private let strapiService = DataServices.shared.strapiService
 
-    // MODIFIED: Properties that change and should update the UI are marked with @Published.
     @Published var currentCardIndex: Int = 0
     @Published var selectedOption: ExamOption?
     @Published var isAnswerSubmitted = false
-    @Published var direction: ExamDirection = .baseToTarget // Default direction
+    @Published var direction: ExamDirection = .baseToTarget
     
-    init(flashcards: [Flashcard], strapiService: StrapiService) {
-        // MODIFIED: Filter for cards that have exam data via the new 'definition' property.
+    // The initializer now only takes the data it needs to display.
+    init(flashcards: [Flashcard]) {
         self.flashcards = flashcards.filter { card in
+            // CORRECTED: Access attributes directly from the wordDefinition.
             guard let def = card.wordDefinition?.attributes else { return false }
 
             let hasExamBase = def.examBase != nil && !def.examBase!.isEmpty
@@ -28,11 +30,8 @@ class ExamViewModel: ObservableObject {
             
             return hasExamBase && hasExamTarget
         }
-        self.strapiService = strapiService
     }
 
-    // Computed properties do not need to be @Published.
-    // They will automatically update when their dependent @Published properties change.
     var currentCard: Flashcard? {
         guard !flashcards.isEmpty else { return nil }
         return flashcards[safe: currentCardIndex]
@@ -40,22 +39,21 @@ class ExamViewModel: ObservableObject {
     
     var questionText: String? {
         guard let card = currentCard else { return nil }
-        return direction == .baseToTarget ? card.backContent : card.frontContent
+        return direction == .baseToTarget ? card.frontContent : card.backContent
     }
 
     var examOptions: [ExamOption]? {
-        // MODIFIED: Get options from the 'definition' property.
+        // CORRECTED: Access attributes directly from the wordDefinition.
         guard let def = currentCard?.wordDefinition?.attributes else { return nil }
 
         if direction == .baseToTarget {
-            return def.examBase
-        } else {
             return def.examTarget
+        } else {
+            return def.examBase
         }
     }
 
     var correctAnswer: String? {
-        // MODIFIED: Compare optional Bool to true
         return examOptions?.first(where: { $0.isCorrect == true })?.text
     }
 
@@ -64,9 +62,7 @@ class ExamViewModel: ObservableObject {
         selectedOption = option
         isAnswerSubmitted = true
         
-        // --- ADDED: Submit review to Strapi ---
         guard let card = currentCard else { return }
-        // MODIFIED: Compare optional Bool to true
         let result: ReviewResult = option.isCorrect == true ? .correct : .wrong
         
         Task {
@@ -77,10 +73,7 @@ class ExamViewModel: ObservableObject {
                 print("Error submitting review from ExamView: \(error.localizedDescription)")
             }
         }
-        // --- END ADDED ---
 
-        // If the answer is correct, wait one second then move to the next card.
-        // MODIFIED: Compare optional Bool to true
         if option.isCorrect == true {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 self.goToNextCard()
@@ -88,7 +81,6 @@ class ExamViewModel: ObservableObject {
         }
     }
     
-    // Toggles the exam direction and resets the state
     func swapDirection() {
         direction = (direction == .baseToTarget) ? .targetToBase : .baseToTarget
         resetForNewCard()

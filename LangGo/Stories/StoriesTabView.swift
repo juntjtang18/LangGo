@@ -2,21 +2,21 @@ import SwiftUI
 
 struct StoriesTabView: View {
     @Binding var isSideMenuShowing: Bool
+    
+    // The ViewModel is now the only state object owned by this view.
     @StateObject private var viewModel: StoryViewModel
-    @EnvironmentObject var appEnvironment: AppEnvironment
-    @EnvironmentObject var languageSettings: LanguageSettings
 
-    init(isSideMenuShowing: Binding<Bool>, appEnvironment: AppEnvironment, languageSettings: LanguageSettings) {
+    // The initializer is now clean. It receives the languageSettings
+    // state object from its parent view (MainView).
+    init(isSideMenuShowing: Binding<Bool>, languageSettings: LanguageSettings) {
         _isSideMenuShowing = isSideMenuShowing
-        _viewModel = StateObject(wrappedValue: StoryViewModel(
-            storyService: appEnvironment.storyService,
-            strapiService: appEnvironment.strapiService,
-            languageSettings: languageSettings
-        ))
+        
+        // The ViewModel is initialized here, once, when the TabView is created.
+        // It will get its other service dependencies from the DataServices singleton.
+        _viewModel = StateObject(wrappedValue: StoryViewModel(languageSettings: languageSettings))
     }
     
     var body: some View {
-        // The entire tab is now wrapped in a single, persistent NavigationStack.
         NavigationStack {
             StoryListView(viewModel: viewModel)
                 .navigationTitle("Stories")
@@ -27,9 +27,17 @@ struct StoriesTabView: View {
                             Image(systemName: "magnifyingglass")
                         }
                     }
-                    MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
+                    // Using the direct implementation for the toolbar to prevent compiler errors.
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            withAnimation(.easeInOut) {
+                                isSideMenuShowing.toggle()
+                            }
+                        }) {
+                            Image(systemName: "line.3.horizontal")
+                        }
+                    }
                 }
-                // This defines where to go when a NavigationLink passes a Story object.
                 .navigationDestination(for: Story.self) { story in
                     StoryCoverView(story: story, viewModel: viewModel)
                 }

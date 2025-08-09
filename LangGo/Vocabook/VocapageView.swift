@@ -2,11 +2,12 @@ import SwiftUI
 import AVFoundation
 import os // For logging
 
-// MARK: - VocapageHostView (REVISED)
+// MARK: - VocapageHostView
 struct VocapageHostView: View {
     @Environment(\.dismiss) var dismiss
     
-    @StateObject private var loader: VocapageLoader
+    // The loader is now initialized cleanly without parameters.
+    @StateObject private var loader = VocapageLoader()
     
     @AppStorage("showBaseTextInVocapage") private var showBaseText: Bool = true
     
@@ -18,14 +19,13 @@ struct VocapageHostView: View {
 
     let flashcardViewModel: FlashcardViewModel
     @State private var isShowingReviewView: Bool = false
-    private let strapiService: StrapiService // Add strapiService as a property
+    // REMOVED: strapiService property is no longer needed.
 
-    init(allVocapageIds: [Int], selectedVocapageId: Int, strapiService: StrapiService, flashcardViewModel: FlashcardViewModel) {
+    // MODIFIED: The initializer is simplified and no longer requires strapiService.
+    init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
         self.allVocapageIds = allVocapageIds
         _currentPageIndex = State(initialValue: allVocapageIds.firstIndex(of: selectedVocapageId) ?? 0)
-        _loader = StateObject(wrappedValue: VocapageLoader(strapiService: strapiService))
         self.flashcardViewModel = flashcardViewModel
-        self.strapiService = strapiService // Store strapiService
     }
 
     private var currentVocapage: Vocapage? {
@@ -65,7 +65,8 @@ struct VocapageHostView: View {
         }
         .sheet(isPresented: $isShowingExamView) {
             if let vocapage = currentVocapage, let flashcards = vocapage.flashcards, !flashcards.isEmpty {
-                ExamView(flashcards: flashcards, strapiService: strapiService) // Pass strapiService here
+                // MODIFIED: ExamView is now initialized without strapiService.
+                ExamView(flashcards: flashcards)
             }
         }
         .fullScreenCover(isPresented: $isShowingReviewView) {
@@ -104,7 +105,10 @@ private struct VocapageActionButtons: View {
     @ObservedObject var speechManager: SpeechManager
     
     @EnvironmentObject var languageSettings: LanguageSettings
-    @EnvironmentObject var appEnvironment: AppEnvironment
+    // REMOVED: AppEnvironment is no longer needed.
+    
+    // The view now gets its own service dependency from the singleton.
+    private let strapiService = DataServices.shared.strapiService
 
     var body: some View {
         HStack(spacing: 12) {
@@ -118,7 +122,8 @@ private struct VocapageActionButtons: View {
                 } else {
                     Task {
                         do {
-                            let settings = try await appEnvironment.strapiService.fetchVBSetting()
+                            // MODIFIED: The call now uses the internal strapiService property.
+                            let settings = try await strapiService.fetchVBSetting()
                             if !sortedFlashcards.isEmpty {
                                 speechManager.startReadingSession(
                                     flashcards: sortedFlashcards,
@@ -142,6 +147,7 @@ private struct VocapageActionButtons: View {
         .padding(.bottom, 8)
     }
 }
+
 
 private struct VocapagePagingView: View {
     @Binding var currentPageIndex: Int

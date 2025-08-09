@@ -1,9 +1,12 @@
 import SwiftUI
 import os
 
+@MainActor
 class FlashcardViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardViewModel")
-    private let strapiService: StrapiService
+    
+    // The service is now fetched directly from the DataServices singleton.
+    private let strapiService = DataServices.shared.strapiService
     
     // This property holds all of the user's flashcards.
     @Published var myCards: [Flashcard] = []
@@ -17,7 +20,7 @@ class FlashcardViewModel: ObservableObject {
     @Published var weeklyReviewCardCount: Int = 0
     @Published var monthlyCardCount: Int = 0
     @Published var hardToRememberCount: Int = 0
-    @Published var dueForReviewCount: Int = 0 // ADDED: New property for due cards
+    @Published var dueForReviewCount: Int = 0
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
@@ -28,12 +31,11 @@ class FlashcardViewModel: ObservableObject {
         return max(0, count)
     }
 
-    init(strapiService: StrapiService) {
-        self.strapiService = strapiService
-    }
+    // The initializer is now clean and parameter-less.
+    init() {}
     
     // MARK: - Card Management
-    @MainActor
+    
     func fetchAllMyCards() async {
         logger.info("Fetching all user flashcards.")
         do {
@@ -46,7 +48,7 @@ class FlashcardViewModel: ObservableObject {
     }
 
     // MARK: - Statistics
-    @MainActor
+    
     func loadStatistics() async {
         logger.info("Attempting to fetch statistics from server.")
         do {
@@ -58,7 +60,7 @@ class FlashcardViewModel: ObservableObject {
             self.weeklyReviewCardCount = stats.weekly
             self.monthlyCardCount = stats.monthly
             self.hardToRememberCount = stats.hardToRemember
-            self.dueForReviewCount = stats.dueForReview // ADDED: Populate the new property
+            self.dueForReviewCount = stats.dueForReview
             logger.info("Successfully loaded statistics from the server.")
         } catch {
             logger.error("Failed to fetch statistics from server: \(error.localizedDescription).")
@@ -66,7 +68,7 @@ class FlashcardViewModel: ObservableObject {
     }
 
     // MARK: - Review Session
-    @MainActor
+    
     func prepareReviewSession() async {
         logger.info("Attempting to fetch review session from server.")
         do {
@@ -84,7 +86,7 @@ class FlashcardViewModel: ObservableObject {
         Task { await submitReview(for: card, result: result) }
     }
 
-    @MainActor
+    
     private func submitReview(for card: Flashcard, result: ReviewResult) async {
         do {
             logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)'")
@@ -96,7 +98,7 @@ class FlashcardViewModel: ObservableObject {
     }
 
     // MARK: - New Word Logic
-    @MainActor
+    
     func saveNewWord(targetText: String, baseText: String, partOfSpeech: String) async throws {
         do {
             let tgt = targetText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -119,12 +121,11 @@ class FlashcardViewModel: ObservableObject {
     }
 
     // MARK: - Translation
-    @MainActor
+    
     func translateWord(word: String, source: String, target: String) async throws -> String {
         do {
             logger.info("Attempting to translate word '\(word, privacy: .public)' from \(source, privacy: .public) to \(target, privacy: .public)")
             let response: TranslateWordResponse = try await strapiService.translateWord(word: word, source: source, target: target)
-            // FIXED: Used .translation instead of .translatedText
             logger.info("Successfully translated word: \(response.translation, privacy: .public)")
             return response.translation
         } catch {
@@ -133,7 +134,7 @@ class FlashcardViewModel: ObservableObject {
         }
     }
     
-    @MainActor
+    
     func searchForWord(term: String, searchBase: Bool) async throws -> [SearchResult] {
         logger.info("Searching for term '\(term)', searchBase: \(searchBase)")
         
@@ -142,7 +143,6 @@ class FlashcardViewModel: ObservableObject {
             let definitions = try await strapiService.searchWordDefinitions(term: term)
             let results = definitions.map { definitionData -> SearchResult in
                 let attributes = definitionData.attributes
-                // SIMPLIFIED LOGIC: Check if the now-standard flashcards array is empty.
                 let isAlreadyAdded = !(attributes.flashcards?.data.isEmpty ?? true)
                 
                 return SearchResult(
@@ -166,7 +166,6 @@ class FlashcardViewModel: ObservableObject {
                 
                 for definitionData in definitions {
                     let defAttributes = definitionData.attributes
-                    // SIMPLIFIED LOGIC: Check if the now-standard flashcards array is empty.
                     let isAlreadyAdded = !(defAttributes.flashcards?.data.isEmpty ?? true)
                     
                     results.append(SearchResult(

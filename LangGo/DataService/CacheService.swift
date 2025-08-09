@@ -7,6 +7,7 @@
 
 
 import Foundation
+import os
 
 class CacheService {
     // A shared instance for easy access, following the Singleton pattern.

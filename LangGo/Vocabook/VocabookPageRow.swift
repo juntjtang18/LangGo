@@ -1,15 +1,9 @@
-//
-//  VocabookPageRow.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/8/1.
-//
 import SwiftUI
 import os
 
 @MainActor
 struct VocabookPageRow: View {
-    @EnvironmentObject var appEnvironment: AppEnvironment
+    // REMOVED: The AppEnvironment is no longer needed.
     @Environment(\.theme) var theme: Theme
     @EnvironmentObject var reviewSettings: ReviewSettingsManager
 
@@ -17,23 +11,17 @@ struct VocabookPageRow: View {
     let vocapage: Vocapage
     let allVocapageIds: [Int]
 
-    // Create a logger instance for cleaner logs
     private let logger = Logger(subsystem: "com.yourapp.langgo", category: "VocabookPageRow")
 
     private var weightedProgress: WeightedProgress {
-        // --- START OF THE FIX ---
-        // Log the state *before* the guard statement to see why it might be failing.
         let cardCount = vocapage.flashcards?.count ?? 0
         logger.log("Checking weightedProgress for vocapage \(self.vocapage.order). Flashcard count: \(cardCount), Review settings empty: \(self.reviewSettings.settings.isEmpty)")
 
         guard let cards = vocapage.flashcards, !cards.isEmpty, !reviewSettings.settings.isEmpty else {
-            // Also log when the guard fails
             logger.log("Guard failed for vocapage \(self.vocapage.order). Returning zero progress.")
             return WeightedProgress(progress: 0.0, isComplete: false)
         }
-        // --- END OF THE FIX ---
 
-        // Log the desired flashcard details only when the guard passes.
         let cardDetails = cards.map { "frontContent: \($0.frontContent), correctStreak: \($0.correctStreak), reviewTire: \(String(describing: $0.reviewTire))" }
         logger.log("Flashcards for vocapage \(self.vocapage.order): \(cardDetails)")
 
@@ -75,10 +63,10 @@ struct VocabookPageRow: View {
     }
 
     var body: some View {
+        // MODIFIED: VocapageHostView no longer needs strapiService passed in.
         NavigationLink(destination: VocapageHostView(
             allVocapageIds: allVocapageIds,
             selectedVocapageId: vocapage.id,
-            strapiService: appEnvironment.strapiService,
             flashcardViewModel: flashcardViewModel
         )) {
             HStack(spacing: 15) {

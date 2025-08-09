@@ -4,56 +4,60 @@ import SwiftUI
 struct FlashcardTabView: View {
     @Binding var isSideMenuShowing: Bool
     
-    // REMOVED: @Environment(\.modelContext) private var modelContext
-    @EnvironmentObject var appEnvironment: AppEnvironment
-    
-    @State private var viewModel: FlashcardViewModel?
+    // @StateObject is the correct property wrapper for creating and owning an
+    // ObservableObject instance. It ensures the ViewModel is created once
+    // and its lifecycle is managed correctly by SwiftUI.
+    @StateObject private var viewModel = FlashcardViewModel()
 
     @State private var isReviewing: Bool = false
     @State private var isAddingNewWord: Bool = false
     
     var body: some View {
         NavigationStack {
-            if let viewModel = viewModel {
-                VStack(spacing: 30) {
-                    FlashcardProgressCircleView(viewModel: viewModel)
-                        .padding(.top)
-                    
-                    ActionButtonsView(viewModel: viewModel, isReviewing: $isReviewing, isAddingNewWord: $isAddingNewWord)
-                    
-                    StatisticsView(viewModel: viewModel)
-                    Spacer()
-                }
-                .padding()
-                .navigationTitle("Flashcard")
-                .navigationBarTitleDisplayMode(.inline)
-                .fullScreenCover(isPresented: $isAddingNewWord) {
-                    NewWordInputView(viewModel: viewModel)
-                }
-                .fullScreenCover(isPresented: $isReviewing) {
-                    FlashcardReviewView(viewModel: viewModel)
-                }
-                .toolbar {
-                    MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
-                }
-                .task {
-                    await viewModel.loadStatistics()
-                }
-            } else {
-                ProgressView()
-                    .onAppear {
-                        if viewModel == nil {
-                            // MODIFIED: viewModel is now initialized without modelContext.
-                            viewModel = FlashcardViewModel(strapiService: appEnvironment.strapiService)
+            VStack(spacing: 30) {
+                FlashcardProgressCircleView(viewModel: viewModel)
+                    .padding(.top)
+                
+                ActionButtonsView(viewModel: viewModel, isReviewing: $isReviewing, isAddingNewWord: $isAddingNewWord)
+                
+                StatisticsView(viewModel: viewModel)
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Flashcard")
+            .navigationBarTitleDisplayMode(.inline)
+            .fullScreenCover(isPresented: $isAddingNewWord) {
+                // Assuming NewWordInputView is also updated to use the new pattern
+                NewWordInputView(viewModel: viewModel)
+            }
+            .fullScreenCover(isPresented: $isReviewing) {
+                // Assuming FlashcardReviewView is also updated
+                FlashcardReviewView(viewModel: viewModel)
+            }
+            .toolbar {
+                 // Using the direct toolbar implementation that is known to work.
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        withAnimation(.easeInOut) {
+                            isSideMenuShowing.toggle()
                         }
+                    }) {
+                        Image(systemName: "line.3.horizontal")
                     }
+                }
+            }
+            .task {
+                // Load initial data when the view first appears.
+                await viewModel.loadStatistics()
             }
         }
     }
 }
 
+// NOTE: All private subviews (FlashcardProgressCircleView, ActionButtonsView, StatisticsView, etc.)
+// remain exactly the same as they were already correctly using @ObservedObject.
+
 private struct FlashcardProgressCircleView: View {
-    // This view takes an ObservedObject now, which is best practice for subviews.
     @ObservedObject var viewModel: FlashcardViewModel
 
     private var progress: Double {

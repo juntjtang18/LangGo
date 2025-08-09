@@ -1,12 +1,12 @@
 import SwiftUI
 import KeychainAccess
-// REMOVED: import SwiftData is no longer needed.
 
 // MARK: - Main Container View
 
 struct MainView: View {
     @Binding var authState: AuthState
-    @EnvironmentObject var appEnvironment: AppEnvironment
+    // REMOVED: The AppEnvironment is no longer needed here.
+    // @EnvironmentObject var appEnvironment: AppEnvironment
     @EnvironmentObject var languageSettings: LanguageSettings
 
     @State private var selectedTab = 0
@@ -39,11 +39,13 @@ struct MainView: View {
                     .tabItem { Label("Vocabulary Book", systemImage: "square.stack.3d.up.fill") }
                     .tag(1)
 
-                ConversationTabView(isSideMenuShowing: $isSideMenuShowing, appEnvironment: appEnvironment)
+                // The appEnvironment parameter is no longer passed
+                ConversationTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("AI Conversation", systemImage: "message.fill") }
                     .tag(2)
                 
-                StoriesTabView(isSideMenuShowing: $isSideMenuShowing, appEnvironment: appEnvironment, languageSettings: languageSettings)
+                // The appEnvironment parameter is no longer passed
+                StoriesTabView(isSideMenuShowing: $isSideMenuShowing, languageSettings: languageSettings)
                     .tabItem { Label("Stories", systemImage: "book.fill") }
                     .tag(3)
 
@@ -86,38 +88,12 @@ struct MainView: View {
 }
 
 
-// MARK: - Placeholder Tab Views
-
-/*
-struct TranslationTabView: View {
-    @Binding var isSideMenuShowing: Bool
-    var body: some View { NavigationStack { Text("Translation View").navigationTitle("Translation").toolbar { MenuToolbar(isSideMenuShowing: $isSideMenuShowing) } } }
-}
-*/
-
-struct MenuToolbar: ToolbarContent {
-    @Binding var isSideMenuShowing: Bool
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
-            Button(action: {
-                withAnimation(.easeInOut) {
-                    isSideMenuShowing.toggle()
-                }
-            }) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.title3)
-                    .foregroundColor(.primary)
-            }
-        }
-    }
-}
-
-
 // MARK: - Preview
 #Preview {
-    // MODIFIED: The AppEnvironment is now initialized without any arguments.
-    // This removes the dependency on ModelContainer and fixes all errors.
+    // MODIFIED: The old AppEnvironment is removed.
+    // We add the ReviewSettingsManager from our singleton so child views
+    // that depend on it can access it in the preview.
     MainView(authState: .constant(.loggedIn))
         .environmentObject(LanguageSettings())
-        .environmentObject(AppEnvironment())
+        .environmentObject(DataServices.shared.reviewSettingsManager)
 }

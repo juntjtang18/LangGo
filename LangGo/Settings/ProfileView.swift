@@ -4,7 +4,9 @@ import os
 
 struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
-    @EnvironmentObject var appEnvironment: AppEnvironment
+    
+    // The view now gets its service dependency directly from the singleton
+    private let strapiService = DataServices.shared.strapiService
     
     @State private var username: String = ""
     @State private var email: String = ""
@@ -80,7 +82,6 @@ struct ProfileView: View {
         isLoading = true
         defer { isLoading = false }
         
-        // Ensure we have the user ID before proceeding.
         let userId = UserDefaults.standard.integer(forKey: "userId")
         guard userId != 0 else {
             alertMessage = "Could not find user ID. Please log in again."
@@ -90,18 +91,15 @@ struct ProfileView: View {
         
         var messages: [String] = []
 
-        // --- Update Username if it has been changed ---
         let originalUsername = UserDefaults.standard.string(forKey: "username") ?? ""
         if !username.isEmpty && username != originalUsername {
             await updateUsername(userId: userId, messages: &messages)
         }
         
-        // --- Change Password if a new password is provided ---
         if !newPassword.isEmpty {
             await changePassword(messages: &messages)
         }
         
-        // Show a combined alert message with the results.
         if !messages.isEmpty {
             alertMessage = messages.joined(separator: "\n")
         } else {
@@ -113,7 +111,8 @@ struct ProfileView: View {
     /// Handles the network request to update the username.
     private func updateUsername(userId: Int, messages: inout [String]) async {
         do {
-            let updatedUser = try await appEnvironment.strapiService.updateUsername(userId: userId, username: username)
+            // Use the internally resolved service
+            let updatedUser = try await strapiService.updateUsername(userId: userId, username: username)
             UserDefaults.standard.set(updatedUser.username, forKey: "username")
             messages.append("Username updated successfully!")
             logger.info("Username updated to \(updatedUser.username, privacy: .public)")
@@ -138,9 +137,9 @@ struct ProfileView: View {
         }
         
         do {
-            let _: EmptyResponse = try await appEnvironment.strapiService.changePassword(currentPassword: currentPassword, newPassword: newPassword, confirmNewPassword: confirmNewPassword)
+            // Use the internally resolved service
+            let _: EmptyResponse = try await strapiService.changePassword(currentPassword: currentPassword, newPassword: newPassword, confirmNewPassword: confirmNewPassword)
             messages.append("Password changed successfully!")
-            // Clear password fields after successful change
             currentPassword = ""
             newPassword = ""
             confirmNewPassword = ""

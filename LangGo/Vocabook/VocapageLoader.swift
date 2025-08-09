@@ -5,7 +5,9 @@ import os
 // This ObservableObject class now handles loading and caching Vocapage data from the network.
 @MainActor
 class VocapageLoader: ObservableObject {
-    private let strapiService: StrapiService
+    // The service is now fetched directly from the DataServices singleton.
+    private let strapiService = DataServices.shared.strapiService
+    
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageLoader")
 
     // State properties to hold the data and loading status for each page
@@ -13,10 +15,8 @@ class VocapageLoader: ObservableObject {
     @Published var loadingStatus: [Int: Bool] = [:]
     @Published var errorMessages: [Int: String] = [:]
 
-    // MODIFIED: The initializer no longer requires a ModelContext.
-    init(strapiService: StrapiService) {
-        self.strapiService = strapiService
-    }
+    // The initializer is now clean and parameter-less.
+    init() {}
 
     func loadPage(withId vocapageId: Int) async {
         // Don't re-load if already loading or if the page's flashcards are already loaded.

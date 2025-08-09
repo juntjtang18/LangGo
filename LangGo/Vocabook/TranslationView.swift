@@ -7,26 +7,41 @@ enum InputDirection: String, CaseIterable, Identifiable {
     var id: String { self.rawValue }
 }
 
+// MARK: - Tab View
 struct TranslationTabView: View {
     @Binding var isSideMenuShowing: Bool
-    @EnvironmentObject var languageSettings: LanguageSettings
-    @EnvironmentObject var appEnvironment: AppEnvironment
+    // Note: AppEnvironment is no longer needed here.
 
     var body: some View {
         NavigationStack {
-            TranslationView(strapiService: appEnvironment.strapiService)
+            // The TranslationView is now self-sufficient and doesn't need any parameters.
+            TranslationView()
                 .navigationTitle("Translation")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
+                    // Using the direct toolbar implementation that is known to work.
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            withAnimation(.easeInOut) {
+                                isSideMenuShowing.toggle()
+                            }
+                        }) {
+                            Image(systemName: "line.3.horizontal")
+                        }
+                    }
                 }
         }
     }
 }
 
+// MARK: - Main Translation View
 struct TranslationView: View {
     @EnvironmentObject var languageSettings: LanguageSettings
-    @State private var viewModel: FlashcardViewModel
+
+    // @StateObject is the correct property wrapper for creating and owning an
+    // ObservableObject instance within a view. It ensures the ViewModel's
+    // lifecycle is managed correctly by SwiftUI.
+    @StateObject private var viewModel = FlashcardViewModel()
 
     @State private var inputText: String = ""
     @State private var translatedText: String = ""
@@ -38,15 +53,13 @@ struct TranslationView: View {
 
     private let learningTargetLanguageCode: String = Config.learningTargetLanguageCode
     
+    // Note: The custom init has been removed.
+    // The rest of your view's state and logic remains the same.
     @State private var partOfSpeech: PartOfSpeech = .noun
     @State private var inputDirection: InputDirection = .baseToTarget
     @State private var inputIsStale: Bool = true
     @State private var lastTranslatedInput: String?
     @State private var lastTranslatedOutput: String?
-
-    init(strapiService: StrapiService) {
-        _viewModel = State(initialValue: FlashcardViewModel(strapiService: strapiService))
-    }
 
     var body: some View {
         VStack {
@@ -214,17 +227,13 @@ struct TranslationView: View {
         errorMessageText = ""
         Task {
             do {
-                // Map visible fields to invariant:
-                // target_text = LEARNING, base_text = NATIVE
                 let targetOut: String
                 let baseOut: String
 
                 if inputDirection == .baseToTarget {
-                    // Base (input) = native; Target (translation) = learning
                     baseOut   = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
                     targetOut = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
                 } else {
-                    // Base (input) = native (English in your current setup); Target (translation) = learning
                     baseOut   = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
                     targetOut = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
                 }

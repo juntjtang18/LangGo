@@ -10,10 +10,11 @@ struct LoginView: View {
     @State private var errorMessage = ""
     
     @EnvironmentObject var languageSettings: LanguageSettings
-    @EnvironmentObject var appEnvironment: AppEnvironment
 
-    let keychain = Keychain(service: Config.keychainService)
+    // The view now gets the service it needs directly from the singleton
+    private let strapiService = DataServices.shared.strapiService
     
+    private let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "LoginView")
 
     enum ViewState {
@@ -104,14 +105,16 @@ struct LoginView: View {
         Task {
             do {
                 let credentials = LoginCredentials(identifier: email, password: password)
-                let authResponse = try await appEnvironment.strapiService.login(credentials: credentials)
+                // Use the service resolved at the top of the struct
+                let authResponse = try await strapiService.login(credentials: credentials)
                 
                 keychain["jwt"] = authResponse.jwt
                 UserDefaults.standard.set(authResponse.user.username, forKey: "username")
                 UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
                 UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
 
-                let vbSetting = try await appEnvironment.strapiService.fetchVBSetting()
+                // Use the service resolved at the top of the struct
+                let vbSetting = try await strapiService.fetchVBSetting()
                 UserDefaults.standard.set(Double(vbSetting.attributes.wordsPerPage), forKey: "wordCountPerPage")
                 UserDefaults.standard.set(vbSetting.attributes.interval1, forKey: "interval1")
                 UserDefaults.standard.set(vbSetting.attributes.interval2, forKey: "interval2")

@@ -2,30 +2,32 @@ import SwiftUI
 import os
 
 @MainActor
-class ReviewSettingsManager: ObservableObject {
+final class ReviewSettingsManager: ObservableObject {
     @Published private(set) var settings: [String: ReviewTireAttributes] = [:]
-    @Published private(set) var masteryStreak: Int = 10 // Default value
-    
+    @Published private(set) var masteryStreak: Int = 10
+
+    private let strapiService: StrapiService
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ReviewSettingsManager")
 
-    func loadSettings(strapiService: StrapiService) async {
+    init(strapiService: StrapiService) {
+        self.strapiService = strapiService
+    }
+
+    func loadSettings() async {
         logger.info("Loading review tire settings from server.")
         do {
             let fetchedSettings = try await strapiService.fetchReviewTireSettings()
-            var tempSettings: [String: ReviewTireAttributes] = [:]
-            
+            var temp: [String: ReviewTireAttributes] = [:]
             for setting in fetchedSettings {
-                tempSettings[setting.attributes.tier] = setting.attributes
+                temp[setting.attributes.tier] = setting.attributes
             }
-            
-            self.settings = tempSettings
-            
-            // Find and store the mastery streak requirement
-            if let rememberedTier = tempSettings["remembered"] {
-                self.masteryStreak = rememberedTier.min_streak
+            self.settings = temp
+
+            if let remembered = temp["remembered"] {
+                self.masteryStreak = remembered.min_streak
                 logger.info("Review settings loaded. Mastery streak set to: \(self.masteryStreak)")
             } else {
-                logger.warning("Could not find 'remembered' tier in settings. Using default mastery streak of \(self.masteryStreak).")
+                logger.warning("Missing 'remembered' tier; using default mastery streak \(self.masteryStreak).")
             }
         } catch {
             logger.error("Failed to load review tire settings: \(error.localizedDescription)")

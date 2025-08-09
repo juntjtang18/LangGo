@@ -2,18 +2,27 @@ import SwiftUI
 
 struct ReadFlashcardTabView: View {
     @Binding var isSideMenuShowing: Bool
-    // REMOVED: The modelContext environment variable is gone.
     @EnvironmentObject var languageSettings: LanguageSettings
-    @EnvironmentObject var appEnvironment: AppEnvironment
+    // REMOVED: The AppEnvironment is no longer needed.
 
     var body: some View {
         NavigationStack {
-            // MODIFIED: ReadFlashcardView is now initialized without modelContext.
-            ReadFlashcardView(languageSettings: languageSettings, strapiService: appEnvironment.strapiService)
+            // MODIFIED: ReadFlashcardView is now initialized without strapiService.
+            // It will get the service from the DataServices singleton internally.
+            ReadFlashcardView(languageSettings: languageSettings)
                 .navigationTitle("Read Flashcards")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    MenuToolbar(isSideMenuShowing: $isSideMenuShowing)
+                    // Using the direct toolbar implementation to prevent potential errors.
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            withAnimation(.easeInOut) {
+                                isSideMenuShowing.toggle()
+                            }
+                        }) {
+                            Image(systemName: "line.3.horizontal")
+                        }
+                    }
                 }
         }
     }

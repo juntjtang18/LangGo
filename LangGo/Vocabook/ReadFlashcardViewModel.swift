@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import os
 
+@MainActor
 class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     // MARK: - Public Properties
     @Published var flashcards: [Flashcard] = []
@@ -17,9 +18,11 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     // MARK: - Private Properties
     private let synthesizer = AVSpeechSynthesizer()
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ReadFlashcardViewModel")
-    // REMOVED: The modelContext property is no longer needed.
+    
+    // The service is now fetched directly from the DataServices singleton.
+    private let strapiService = DataServices.shared.strapiService
+    
     private var languageSettings: LanguageSettings
-    private let strapiService: StrapiService
     private var showBaseTextBinding: Binding<Bool>?
     
     private enum ReadingStep {
@@ -28,16 +31,14 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     private var currentStep: ReadingStep = .firstWord
 
     // MARK: - Initialization
-    // MODIFIED: The initializer no longer requires a ModelContext.
-    init(languageSettings: LanguageSettings, strapiService: StrapiService) {
+    // The initializer now only takes dependencies it can't get globally.
+    init(languageSettings: LanguageSettings) {
         self.languageSettings = languageSettings
-        self.strapiService = strapiService
         super.init()
         synthesizer.delegate = self
     }
 
     // MARK: - Public Methods
-    @MainActor
     func fetchReviewFlashcards() async {
         isLoading = true
         do {
@@ -50,7 +51,6 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
         isLoading = false
     }
 
-    @MainActor
     func startReadingSession(showBaseTextBinding: Binding<Bool>) {
         guard !flashcards.isEmpty else {
             logger.warning("No flashcards to read.")
@@ -69,13 +69,11 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
         showBaseTextBinding = nil
     }
 
-    @MainActor
     func skipToNextCard() {
         synthesizer.stopSpeaking(at: .immediate)
         goToNextCard(animate: false)
     }
     
-    @MainActor
     func setInitialCardIndex(_ index: Int) {
         guard index >= 0 && index < flashcards.count else {
             self.currentCardIndex = 0
@@ -113,7 +111,6 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     }
 
     // MARK: - Private Methods
-    @MainActor
     private func readCurrentCard() {
         guard isReading, let card = flashcards[safe: currentCardIndex] else {
             stopReading()
@@ -145,7 +142,6 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
         synthesizer.speak(utterance)
     }
     
-    @MainActor
     private func goToNextCard(animate: Bool = true) {
         if currentCardIndex >= flashcards.count - 1 {
             currentCardIndex = 0

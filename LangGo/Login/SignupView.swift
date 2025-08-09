@@ -6,9 +6,11 @@ import os
 
 struct SignupView: View {
     @EnvironmentObject var languageSettings: LanguageSettings
-    @EnvironmentObject var appEnvironment: AppEnvironment
     @Binding var currentView: LoginView.ViewState
     @Binding var authState: AuthState
+
+    // The view now gets its service dependency directly from the singleton.
+    private let strapiService = DataServices.shared.strapiService
 
     @State private var email = ""
     @State private var password = ""
@@ -99,10 +101,11 @@ struct SignupView: View {
                     password: password,
                     username: email,
                     baseLanguage: languageSettings.selectedLanguageCode,
-                    telephone: nil    // always nil for now
+                    telephone: nil
                 )
 
-                let authResponse = try await appEnvironment.strapiService.signup(payload: payload)
+                // Use the internally resolved service.
+                let authResponse = try await strapiService.signup(payload: payload)
                 keychain["jwt"] = authResponse.jwt
                 UserDefaults.standard.set(authResponse.user.username, forKey: "username")
                 UserDefaults.standard.set(authResponse.user.email,    forKey: "email")

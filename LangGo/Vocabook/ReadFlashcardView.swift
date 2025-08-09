@@ -16,10 +16,11 @@ struct ReadFlashcardView: View {
         case list
     }
 
-    // MODIFIED: The initializer no longer requires a ModelContext.
-    init(languageSettings: LanguageSettings, strapiService: StrapiService) {
-        // MODIFIED: The ViewModel is now initialized without a modelContext.
-        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel(languageSettings: languageSettings, strapiService: strapiService))
+    // MODIFIED: The initializer no longer requires strapiService.
+    init(languageSettings: LanguageSettings) {
+        // MODIFIED: The ViewModel is now initialized without strapiService.
+        // It will get the service from the DataServices singleton internally.
+        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel(languageSettings: languageSettings))
     }
 
     var body: some View {
@@ -71,7 +72,7 @@ struct ReadFlashcardView: View {
             .onDisappear {
                 saveSettings()
             }
-            .onChange(of: viewModel.currentCardIndex) { _ in // The parameter name can be _ if not used
+            .onChange(of: viewModel.currentCardIndex) { _ in
                 guard viewMode == .card else { return }
                 cardOffset = 0
                 cardOpacity = 1

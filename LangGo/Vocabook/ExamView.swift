@@ -4,8 +4,11 @@ struct ExamView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject var viewModel: ExamViewModel
 
-    init(flashcards: [Flashcard], strapiService: StrapiService) {
-        _viewModel = StateObject(wrappedValue: ExamViewModel(flashcards: flashcards, strapiService: strapiService))
+    // MODIFIED: The initializer no longer requires strapiService.
+    init(flashcards: [Flashcard]) {
+        // MODIFIED: The ViewModel is now initialized without strapiService.
+        // It will get the service from the DataServices singleton internally.
+        _viewModel = StateObject(wrappedValue: ExamViewModel(flashcards: flashcards))
     }
 
     var body: some View {
@@ -28,7 +31,6 @@ struct ExamView: View {
                                         .foregroundColor(Color(UIColor.label))
                                     Spacer()
                                     if viewModel.isAnswerSubmitted {
-                                        // MODIFIED: Compare optional Bool to true
                                         if option.isCorrect == true {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundColor(.green)
