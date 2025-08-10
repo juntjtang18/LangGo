@@ -1,4 +1,3 @@
-// VocabookView.swift
 import SwiftUI
 import os
 
@@ -6,7 +5,6 @@ struct VocabookView: View {
     @ObservedObject var flashcardViewModel: FlashcardViewModel
     @ObservedObject var vocabookViewModel: VocabookViewModel
     
-    // REMOVED: The AppEnvironment is no longer needed.
     @EnvironmentObject var languageSettings: LanguageSettings
     @Environment(\.theme) var theme: Theme
 
@@ -16,21 +14,37 @@ struct VocabookView: View {
     @State private var isQuizzing: Bool = false
 
     var body: some View {
-        VStack(spacing: 20) {
-            OverallProgressView(viewModel: flashcardViewModel)
+        ZStack(alignment: .bottomTrailing) {
+            VStack(spacing: 30) {
+                // The HeaderTitleView is now updated to match the image exactly.
+                HeaderTitleView()
+                
+                OverallProgressView(viewModel: flashcardViewModel)
+                    .padding(.horizontal)
+
+                ActionButtonsGrid(
+                    isReviewing: $isReviewing,
+                    isListening: $isListening,
+                    isQuizzing: $isQuizzing,
+                    isAddingNewWord: $isAddingNewWord
+                )
                 .padding(.horizontal)
+                
+                Spacer()
+            }
+            .padding(.top)
 
-            ActionButtonsGrid(
-                isReviewing: $isReviewing,
-                isListening: $isListening,
-isQuizzing: $isQuizzing,
-                isAddingNewWord: $isAddingNewWord
-            )
-            .padding(.horizontal)
-
-            PagesListView(viewModel: vocabookViewModel, flashcardViewModel: flashcardViewModel)
+            NavigationLink(destination: PagesListView(viewModel: vocabookViewModel, flashcardViewModel: flashcardViewModel)) {
+                Text("Open Book")
+                    .font(.headline)
+                    .padding()
+                    .background(theme.accent)
+                    .foregroundColor(Color.white)
+                    .clipShape(Capsule())
+                    .shadow(radius: 5, y: 3)
+            }
+            .padding()
         }
-        .padding(.top)
         .background(theme.background.ignoresSafeArea())
         .fullScreenCover(isPresented: $isAddingNewWord) {
             NewWordInputView(viewModel: flashcardViewModel)
@@ -39,12 +53,10 @@ isQuizzing: $isQuizzing,
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isListening) {
-             // MODIFIED: ReadFlashcardView no longer needs strapiService passed in.
              ReadFlashcardView(languageSettings: languageSettings)
         }
         .sheet(isPresented: $isQuizzing) {
             if !flashcardViewModel.reviewCards.isEmpty {
-                // MODIFIED: ExamView no longer needs strapiService passed in.
                 ExamView(flashcards: flashcardViewModel.reviewCards)
             } else {
                 VStack(spacing: 16) {
@@ -66,6 +78,67 @@ isQuizzing: $isQuizzing,
 }
 
 // MARK: - Components
+
+// A custom shape to round only the right-side corners of a rectangle.
+private struct RightRoundedRectangle: Shape {
+    var radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+
+        // Start at top left (sharp corner)
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        
+        // Line to top right before the curve
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+        
+        // Top-right arc
+        path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.minY + radius),
+                    radius: radius,
+                    startAngle: Angle(degrees: -90),
+                    endAngle: Angle(degrees: 0),
+                    clockwise: false)
+        
+        // Line to bottom right before the curve
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
+
+        // Bottom-right arc
+        path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.maxY - radius),
+                    radius: radius,
+                    startAngle: Angle(degrees: 0),
+                    endAngle: Angle(degrees: 90),
+                    clockwise: false)
+        
+        // Line to bottom left (sharp corner)
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MODIFIED: HeaderTitleView now uses the custom shape and layout.
+private struct HeaderTitleView: View {
+    var body: some View {
+        HStack {
+            Text("My Vocabulary\nNote Book")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(.vertical, 20)
+                .padding(.leading, 30)
+                .padding(.trailing, 40) // More padding on the right for the curve
+                .background(
+                    RightRoundedRectangle(radius: 30)
+                        .fill(Color(red: 0.29, green: 0.82, blue: 0.4))
+                )
+                .shadow(color: .black.opacity(0.2), radius: 5, x: 2, y: 2)
+
+            // Spacer pushes the title to the left edge of the screen.
+            Spacer()
+        }
+    }
+}
 
 private struct OverallProgressView: View {
     @ObservedObject var viewModel: FlashcardViewModel
@@ -105,7 +178,6 @@ private struct StatRow: View {
         }
     }
 }
-
 
 private struct VocabookProgressCircleView: View {
     @ObservedObject var viewModel: FlashcardViewModel
@@ -147,15 +219,16 @@ private struct ActionButtonsGrid: View {
     @Binding var isAddingNewWord: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            // MODIFIED: Title changed from "Flashcard Review" to "Card Review"
-            VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill") { isReviewing = true }
-            VocabookActionButton(title: "Listen", icon: "headphones") { isListening = true }
-            VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill") { isQuizzing = true }
-            VocabookActionButton(title: "Add Word", icon: "plus.app.fill") { isAddingNewWord = true }
+        VStack(spacing: 15) {
+            HStack(spacing: 15) {
+                VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill") { isReviewing = true }
+                VocabookActionButton(title: "Listen", icon: "headphones") { isListening = true }
+            }
+            HStack(spacing: 15) {
+                VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill") { isQuizzing = true }
+                VocabookActionButton(title: "Add Word", icon: "plus.app.fill") { isAddingNewWord = true }
+            }
         }
-        // MODIFIED: A fixed height is applied to the container, forcing all buttons to be the same size.
-        .frame(height: 80)
     }
 }
 
@@ -183,6 +256,7 @@ private struct VocabookActionButton: View {
             .cornerRadius(12)
         }
         .buttonStyle(PlainButtonStyle())
+        .frame(height: 80)
     }
 }
 
@@ -227,5 +301,7 @@ private struct PagesListView: View {
                 }
             }
         }
+        .navigationTitle("Vocabulary Pages")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -16,10 +16,13 @@ struct VocabookTabView: View {
                 await flashcardViewModel.loadStatistics()
                 await vocabookViewModel.loadVocabookPages()
             }
-            .navigationTitle("My Vocabulary Book")
-            .navigationBarTitleDisplayMode(NavigationBarItem.TitleDisplayMode.inline) // iOS 14+
+            // The title is removed to allow the custom title to be shown inside the view
+            .navigationTitle("")
+            // This makes the Navigation Bar background invisible
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) { // works on iOS 16+
+                // The toolbar button is kept, as requested
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         withAnimation(.easeInOut) { isSideMenuShowing.toggle() }
                     } label: {

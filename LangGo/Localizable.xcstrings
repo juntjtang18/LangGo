@@ -514,7 +514,7 @@
         }
       }
     },
-    "My Vocabulary Book" : {
+    "My Vocabulary\nNote Book" : {
 
     },
     "My Vocabulary Notebook" : {
@@ -621,6 +621,9 @@
           }
         }
       }
+    },
+    "Open Book" : {
+
     },
     "Page %lld" : {
 
@@ -1262,6 +1265,9 @@
 
     },
     "Vocabulary Notebook Settings" : {
+
+    },
+    "Vocabulary Pages" : {
 
     },
     "Welcome to LangGo" : {
