@@ -4,7 +4,7 @@ import os
 struct VocabookView: View {
     @ObservedObject var flashcardViewModel: FlashcardViewModel
     @ObservedObject var vocabookViewModel: VocabookViewModel
-    
+
     @EnvironmentObject var languageSettings: LanguageSettings
     @Environment(\.theme) var theme: Theme
 
@@ -16,34 +16,37 @@ struct VocabookView: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 30) {
-                // The HeaderTitleView is now updated to match the image exactly.
                 HeaderTitleView()
-                
+
                 OverallProgressView(viewModel: flashcardViewModel)
                     .padding(.horizontal)
 
-                ActionButtonsGrid(
+                ConnectedActionButtons(
                     isReviewing: $isReviewing,
                     isListening: $isListening,
                     isQuizzing: $isQuizzing,
                     isAddingNewWord: $isAddingNewWord
                 )
                 .padding(.horizontal)
-                
+
                 Spacer()
             }
             .padding(.top)
 
             NavigationLink(destination: PagesListView(viewModel: vocabookViewModel, flashcardViewModel: flashcardViewModel)) {
-                Text("Open Book")
-                    .font(.headline)
-                    .padding()
-                    .background(theme.accent)
-                    .foregroundColor(Color.white)
-                    .clipShape(Capsule())
-                    .shadow(radius: 5, y: 3)
+                HStack {
+                    Image(systemName: "play.fill")
+                    Text("Open")
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 24)
+                .background(Color(red: 0.2, green: 0.6, blue: 0.25))
+                .clipShape(Capsule())
+                .shadow(radius: 5, y: 3)
             }
-            .padding()
+            .padding([.trailing, .bottom], 20)
         }
         .background(theme.background.ignoresSafeArea())
         .fullScreenCover(isPresented: $isAddingNewWord) {
@@ -79,45 +82,55 @@ struct VocabookView: View {
 
 // MARK: - Components
 
-// A custom shape to round only the right-side corners of a rectangle.
 private struct RightRoundedRectangle: Shape {
     var radius: CGFloat
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-
-        // Start at top left (sharp corner)
         path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        
-        // Line to top right before the curve
         path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
-        
-        // Top-right arc
-        path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.minY + radius),
-                    radius: radius,
-                    startAngle: Angle(degrees: -90),
-                    endAngle: Angle(degrees: 0),
-                    clockwise: false)
-        
-        // Line to bottom right before the curve
+        path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.minY + radius), radius: radius, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
-
-        // Bottom-right arc
-        path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.maxY - radius),
-                    radius: radius,
-                    startAngle: Angle(degrees: 0),
-                    endAngle: Angle(degrees: 90),
-                    clockwise: false)
-        
-        // Line to bottom left (sharp corner)
+        path.addArc(center: CGPoint(x: rect.maxX - radius, y: rect.maxY - radius), radius: radius, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
         path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        
         path.closeSubpath()
         return path
     }
 }
 
-// MODIFIED: HeaderTitleView now uses the custom shape and layout.
+// MODIFIED: The custom shape now draws a narrower connector.
+private struct DiagonalConnectingShape: Shape {
+    let buttonSize: CGFloat
+    let cornerRadius: CGFloat
+    
+    // This ratio determines how "pinched" the connector is. 0.7 = 70% of the original width.
+    let connectorWidthRatio: CGFloat = 0.7
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        
+        let topLeftRect = CGRect(x: 0, y: 0, width: buttonSize, height: buttonSize)
+        let bottomRightRect = CGRect(x: rect.width - buttonSize, y: rect.height - buttonSize, width: buttonSize, height: buttonSize)
+
+        // Draw the two rounded rectangle buttons
+        path.addRoundedRect(in: topLeftRect, cornerSize: CGSize(width: cornerRadius, height: cornerRadius))
+        path.addRoundedRect(in: bottomRightRect, cornerSize: CGSize(width: cornerRadius, height: cornerRadius))
+
+        // Calculate the offset for the "pinched" connector
+        let pinchOffset = cornerRadius * (1 - connectorWidthRatio)
+
+        // Create the narrower connecting path
+        path.move(to: CGPoint(x: topLeftRect.maxX - cornerRadius + pinchOffset, y: topLeftRect.maxY))
+        path.addLine(to: CGPoint(x: topLeftRect.maxX, y: topLeftRect.maxY - cornerRadius + pinchOffset))
+        path.addLine(to: CGPoint(x: bottomRightRect.minX + cornerRadius - pinchOffset, y: bottomRightRect.minY))
+        path.addLine(to: CGPoint(x: bottomRightRect.minX, y: bottomRightRect.minY + cornerRadius - pinchOffset))
+        path.closeSubpath()
+        
+        return path
+    }
+}
+
+
 private struct HeaderTitleView: View {
     var body: some View {
         HStack {
@@ -127,14 +140,9 @@ private struct HeaderTitleView: View {
                 .multilineTextAlignment(.center)
                 .padding(.vertical, 20)
                 .padding(.leading, 30)
-                .padding(.trailing, 40) // More padding on the right for the curve
-                .background(
-                    RightRoundedRectangle(radius: 30)
-                        .fill(Color(red: 0.29, green: 0.82, blue: 0.4))
-                )
+                .padding(.trailing, 40)
+                .background(RightRoundedRectangle(radius: 30).fill(Color(red: 0.29, green: 0.82, blue: 0.4)))
                 .shadow(color: .black.opacity(0.2), radius: 5, x: 2, y: 2)
-
-            // Spacer pushes the title to the left edge of the screen.
             Spacer()
         }
     }
@@ -148,7 +156,6 @@ private struct OverallProgressView: View {
         HStack(spacing: 20) {
             VocabookProgressCircleView(viewModel: viewModel)
                 .frame(width: 100, height: 100)
-
             VStack(alignment: .leading, spacing: 8) {
                 StatRow(label: "Total Words", value: "\(viewModel.totalCardCount)")
                 StatRow(label: "Remembered", value: "\(viewModel.rememberedCount)")
@@ -167,14 +174,12 @@ private struct StatRow: View {
     let label: String
     let value: String
     @Environment(\.theme) var theme: Theme
-    
+
     var body: some View {
         HStack {
-            Text(label)
-                .foregroundColor(theme.text.opacity(0.7))
+            Text(label).foregroundColor(theme.text.opacity(0.7))
             Spacer()
-            Text(value)
-                .fontWeight(.medium)
+            Text(value).fontWeight(.medium)
         }
     }
 }
@@ -212,51 +217,82 @@ private struct VocabookProgressCircleView: View {
     }
 }
 
-private struct ActionButtonsGrid: View {
+private struct ConnectedActionButtons: View {
     @Binding var isReviewing: Bool
     @Binding var isListening: Bool
     @Binding var isQuizzing: Bool
     @Binding var isAddingNewWord: Bool
 
+    private let buttonSize: CGFloat = 110
+    private let spacing: CGFloat = 20
+
     var body: some View {
-        VStack(spacing: 15) {
-            HStack(spacing: 15) {
-                VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill") { isReviewing = true }
-                VocabookActionButton(title: "Listen", icon: "headphones") { isListening = true }
-            }
-            HStack(spacing: 15) {
-                VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill") { isQuizzing = true }
-                VocabookActionButton(title: "Add Word", icon: "plus.app.fill") { isAddingNewWord = true }
+        ZStack {
+            DiagonalConnectingShape(buttonSize: buttonSize, cornerRadius: 20)
+                .fill(Color(red: 0.2, green: 0.6, blue: 0.25))
+                .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+
+            VStack(spacing: spacing) {
+                HStack(spacing: spacing) {
+                    buttonContent(title: "Card Review", icon: "square.stack.3d.up.fill")
+                        .onTapGesture { isReviewing = true }
+                    
+                    VocabookActionButton(title: "Listen", icon: "headphones", isDark: false) { isListening = true }
+                }
+                HStack(spacing: spacing) {
+                    VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", isDark: false) { isQuizzing = true }
+
+                    buttonContent(title: "Add Word", icon: "plus.app.fill")
+                        .onTapGesture { isAddingNewWord = true }
+                }
             }
         }
+        .frame(width: buttonSize * 2 + spacing, height: buttonSize * 2 + spacing)
+    }
+
+    @ViewBuilder
+    private func buttonContent(title: String, icon: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 32))
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        }
+        .foregroundColor(.white)
+        .frame(width: buttonSize, height: buttonSize)
     }
 }
+
 
 private struct VocabookActionButton: View {
     let title: String
     let icon: String
+    let isDark: Bool
     let action: () -> Void
-    @Environment(\.theme) var theme: Theme
+
+    private var backgroundColor: Color {
+        isDark ? Color(red: 0.2, green: 0.6, blue: 0.25) : Color(red: 0.5, green: 0.8, blue: 0.5)
+    }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(theme.accent)
+                    .font(.system(size: 32))
                 Text(title)
-                    .font(.caption)
-                    .foregroundColor(theme.text)
+                    .font(.system(size: 12, weight: .semibold))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(4)
-            .background(theme.secondary.opacity(0.1))
-            .cornerRadius(12)
+            .foregroundColor(.white)
+            .frame(width: 110, height: 110)
+            .background(backgroundColor)
+            .cornerRadius(20)
+            .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
         }
         .buttonStyle(PlainButtonStyle())
-        .frame(height: 80)
     }
 }
 
@@ -270,10 +306,8 @@ private struct PagesListView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if viewModel.isLoadingVocabooks {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    } else if let vocabook = viewModel.vocabook, let pages = vocabook.vocapages, !pages.isEmpty {
+                    if viewModel.isLoadingVocabooks { ProgressView().frame(maxWidth: .infinity) }
+                    else if let vocabook = viewModel.vocabook, let pages = vocabook.vocapages, !pages.isEmpty {
                         let sortedPages = pages.sorted(by: { $0.order < $1.order })
                         ForEach(sortedPages) { page in
                             VocabookPageRow(flashcardViewModel: flashcardViewModel, vocapage: page, allVocapageIds: sortedPages.map { $0.id })
@@ -281,10 +315,7 @@ private struct PagesListView: View {
                         }
                     } else {
                         Text("No vocabulary pages found. Start learning to create them!")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                            .padding()
-                            .frame(maxWidth: .infinity)
+                            .font(.caption).multilineTextAlignment(.center).padding().frame(maxWidth: .infinity)
                     }
                 }
                 .padding()
@@ -294,9 +325,7 @@ private struct PagesListView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
                     if lastViewedID != 0 {
-                        withAnimation {
-                            proxy.scrollTo(lastViewedID, anchor: .center)
-                        }
+                        withAnimation { proxy.scrollTo(lastViewedID, anchor: .center) }
                     }
                 }
             }
