@@ -5,7 +5,6 @@
 //  Created by James Tang on 2025/8/8.
 //
 
-
 import Foundation
 import os
 
@@ -19,10 +18,9 @@ class CacheService {
     // A private initializer to ensure no other instances are created.
     private init() {}
 
+    // MARK: - File I/O Methods
+
     /// Saves any Codable object to a file in the app's cache directory.
-    /// - Parameters:
-    ///   - object: The Codable object to save.
-    ///   - key: A unique string to use as the filename (e.g., "allMyFlashcards").
     func save<T: Codable>(_ object: T, key: String) {
         guard let url = cacheURL(for: key) else { return }
         do {
@@ -35,10 +33,7 @@ class CacheService {
     }
 
     /// Loads any Codable object from a file in the app's cache directory.
-    /// - Parameters:
-    ///   - type: The type of the object we are trying to decode.
-    ///   - key: The unique filename key for the data (e.g., "allMyFlashcards").
-    /// - Returns: The decoded object, or nil if it doesn't exist or fails to decode.
+    /// Returns nil if the file doesn't exist or fails to decode.
     func load<T: Codable>(type: T.Type, from key: String) -> T? {
         guard let url = cacheURL(for: key), fileManager.fileExists(atPath: url.path) else {
             return nil
@@ -57,7 +52,6 @@ class CacheService {
     }
     
     /// Deletes a specific cache file.
-    /// - Parameter key: The unique filename key to delete.
     func delete(key: String) {
         guard let url = cacheURL(for: key), fileManager.fileExists(atPath: url.path) else { return }
         do {
