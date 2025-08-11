@@ -275,11 +275,15 @@ struct SelectableTextView: View {
             
             text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .byWords) { (substring, substringRange, _, _) in
                 guard let substring = substring else { return }
-                attributedString.addAttribute(.link, value: URL(string: "word-select://\(substring)")!, range: NSRange(substringRange, in: text))
+
+                // **CRASH FIX**: URL-encode the substring to handle special characters safely.
+                if let encodedSubstring = substring.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                   let url = URL(string: "word-select://\(encodedSubstring)") {
+                    attributedString.addAttribute(.link, value: url, range: NSRange(substringRange, in: text))
+                }
             }
             
             if let range = selectedWordRange {
-                // FIXED: Add a safety check to prevent applying an out-of-bounds range.
                 let stringRange = NSRange(location: 0, length: attributedString.length)
                 if NSIntersectionRange(stringRange, range).length == range.length {
                     attributedString.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.4), range: range)
@@ -306,7 +310,6 @@ struct SelectableTextView: View {
                 guard let link = textView.attributedText.attribute(.link, at: characterIndex, effectiveRange: &effectiveRange) as? URL,
                       link.scheme == "word-select" else { return }
                 
-                //let selectedWord = link.absoluteString.replacingOccurrences(of: "word-select://", with: "")
                 let selectedWord = (textView.text as NSString).substring(with: effectiveRange)
 
                 let paragraphText = parent.text
