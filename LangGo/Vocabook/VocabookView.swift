@@ -12,9 +12,10 @@ struct VocabookView: View {
     @State private var isAddingNewWord: Bool = false
     @State private var isListening: Bool = false
     @State private var isQuizzing: Bool = false
+    @State private var isShowingSettings: Bool = false
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             VStack(spacing: 30) {
                 HeaderTitleView()
 
@@ -25,41 +26,16 @@ struct VocabookView: View {
                     isReviewing: $isReviewing,
                     isListening: $isListening,
                     isQuizzing: $isQuizzing,
-                    isAddingNewWord: $isAddingNewWord
+                    isAddingNewWord: $isAddingNewWord,
+                    isShowingSettings: $isShowingSettings,
+                    vocabookViewModel: vocabookViewModel,
+                    flashcardViewModel: flashcardViewModel
                 )
                 .padding(.horizontal)
 
                 Spacer()
             }
             .padding(.top)
-
-            // MODIFIED: This button now navigates directly to the last viewed page.
-            if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
-                let allIDs = pages.map { $0.id }.sorted()
-                let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-                
-                // Use last viewed ID if it's valid; otherwise, default to the first page.
-                let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : allIDs.first ?? 1
-
-                NavigationLink(destination: VocapageHostView(
-                    allVocapageIds: allIDs,
-                    selectedVocapageId: targetPageID,
-                    flashcardViewModel: flashcardViewModel
-                )) {
-                    HStack {
-                        Image(systemName: "play.fill")
-                        Text("Open")
-                    }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 24)
-                    .background(Color(red: 0.2, green: 0.6, blue: 0.25))
-                    .clipShape(Capsule())
-                    .shadow(radius: 5, y: 3)
-                }
-                .padding([.trailing, .bottom], 20)
-            }
         }
         .background(theme.background.ignoresSafeArea())
         .fullScreenCover(isPresented: $isAddingNewWord) {
@@ -84,6 +60,9 @@ struct VocabookView: View {
                 }
                 .padding()
             }
+        }
+        .sheet(isPresented: $isShowingSettings) {
+            VocabookSettingView()
         }
         .task {
             if flashcardViewModel.reviewCards.isEmpty {
@@ -111,25 +90,20 @@ private struct RightRoundedRectangle: Shape {
     }
 }
 
-private struct DiagonalConnectingShape: Shape {
-    let buttonSize: CGFloat
+private struct TwoButtonConnector: Shape {
+    let rect1: CGRect
+    let rect2: CGRect
     let cornerRadius: CGFloat
     let connectorWidthRatio: CGFloat = 0.7
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let topLeftRect = CGRect(x: 0, y: 0, width: buttonSize, height: buttonSize)
-        let bottomRightRect = CGRect(x: rect.width - buttonSize, y: rect.height - buttonSize, width: buttonSize, height: buttonSize)
-
-        path.addRoundedRect(in: topLeftRect, cornerSize: CGSize(width: cornerRadius, height: cornerRadius))
-        path.addRoundedRect(in: bottomRightRect, cornerSize: CGSize(width: cornerRadius, height: cornerRadius))
-
         let pinchOffset = cornerRadius * (1 - connectorWidthRatio)
 
-        path.move(to: CGPoint(x: topLeftRect.maxX - cornerRadius + pinchOffset, y: topLeftRect.maxY))
-        path.addLine(to: CGPoint(x: topLeftRect.maxX, y: topLeftRect.maxY - cornerRadius + pinchOffset))
-        path.addLine(to: CGPoint(x: bottomRightRect.minX + cornerRadius - pinchOffset, y: bottomRightRect.minY))
-        path.addLine(to: CGPoint(x: bottomRightRect.minX, y: bottomRightRect.minY + cornerRadius - pinchOffset))
+        path.move(to: CGPoint(x: rect1.maxX - cornerRadius + pinchOffset, y: rect1.maxY))
+        path.addLine(to: CGPoint(x: rect1.maxX, y: rect1.maxY - cornerRadius + pinchOffset))
+        path.addLine(to: CGPoint(x: rect2.minX + cornerRadius - pinchOffset, y: rect2.minY))
+        path.addLine(to: CGPoint(x: rect2.minX, y: rect2.minY + cornerRadius - pinchOffset))
         path.closeSubpath()
         
         return path
@@ -227,36 +201,73 @@ private struct ConnectedActionButtons: View {
     @Binding var isListening: Bool
     @Binding var isQuizzing: Bool
     @Binding var isAddingNewWord: Bool
+    @Binding var isShowingSettings: Bool
+
+    @ObservedObject var vocabookViewModel: VocabookViewModel
+    @ObservedObject var flashcardViewModel: FlashcardViewModel
 
     private let buttonSize: CGFloat = 110
-    private let spacing: CGFloat = 20
+    private let spacing: CGFloat = 15
+    private let cornerRadius: CGFloat = 20
 
     var body: some View {
         ZStack {
-            DiagonalConnectingShape(buttonSize: buttonSize, cornerRadius: 20)
-                .fill(Color(red: 0.2, green: 0.6, blue: 0.25))
+            let primaryColor = Color(red: 0.2, green: 0.6, blue: 0.25)
+            let secondaryColor = Color(red: 0.5, green: 0.8, blue: 0.5)
+            
+            let rect1_CardReview = CGRect(x: 0, y: 0, width: buttonSize, height: buttonSize)
+            let rect2_Listen = CGRect(x: buttonSize + spacing, y: 0, width: buttonSize, height: buttonSize)
+            let rect5_AddWord = CGRect(x: buttonSize + spacing, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
+            let rect6_Open = CGRect(x: (buttonSize + spacing) * 2, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
+            
+            TwoButtonConnector(rect1: rect1_CardReview, rect2: rect5_AddWord, cornerRadius: cornerRadius)
+                .fill(primaryColor)
+                .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+            
+            TwoButtonConnector(rect1: rect2_Listen, rect2: rect6_Open, cornerRadius: cornerRadius)
+                .fill(secondaryColor)
                 .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
 
-            VStack(spacing: spacing) {
+            VStack(alignment: .center, spacing: spacing) {
                 HStack(spacing: spacing) {
-                    buttonContent(title: "Card Review", icon: "square.stack.3d.up.fill")
-                        .onTapGesture { isReviewing = true }
-                    
-                    VocabookActionButton(title: "Listen", icon: "headphones", isDark: false) { isListening = true }
+                    VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) { isReviewing = true }
+                    VocabookActionButton(title: "Listen", icon: "headphones", style: .vocabookActionSecondary) { isListening = true }
+                    VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionPrimary) { isShowingSettings = true }
                 }
-                HStack(spacing: spacing) {
-                    VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", isDark: false) { isQuizzing = true }
 
-                    buttonContent(title: "Add Word", icon: "plus.app.fill")
-                        .onTapGesture { isAddingNewWord = true }
+                HStack(spacing: spacing) {
+                    VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) { isQuizzing = true }
+                    VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) { isAddingNewWord = true }
+
+                    if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
+                        let allIDs = pages.map { $0.id }.sorted()
+                        let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
+                        let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : allIDs.first ?? 1
+
+                        NavigationLink(destination: VocapageHostView(
+                            allVocapageIds: allIDs,
+                            selectedVocapageId: targetPageID,
+                            flashcardViewModel: flashcardViewModel
+                        )) {
+                            VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
+                        }
+                    } else {
+                        VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
+                            .opacity(0.5)
+                    }
                 }
             }
         }
-        .frame(width: buttonSize * 2 + spacing, height: buttonSize * 2 + spacing)
+        .frame(width: buttonSize * 3 + spacing * 2, height: buttonSize * 2 + spacing)
     }
+}
 
-    @ViewBuilder
-    private func buttonContent(title: String, icon: String) -> some View {
+private struct VocabookButtonLabel: View {
+    let title: String
+    let icon: String
+    let style: ViewStyle
+
+    var body: some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 32))
@@ -265,44 +276,24 @@ private struct ConnectedActionButtons: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
         }
-        .foregroundColor(.white)
-        .frame(width: buttonSize, height: buttonSize)
+        .style(style)
     }
 }
-
 
 private struct VocabookActionButton: View {
     let title: String
     let icon: String
-    let isDark: Bool
+    let style: ViewStyle
     let action: () -> Void
-
-    private var backgroundColor: Color {
-        isDark ? Color(red: 0.2, green: 0.6, blue: 0.25) : Color(red: 0.5, green: 0.8, blue: 0.5)
-    }
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 32))
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
-            .foregroundColor(.white)
-            .frame(width: 110, height: 110)
-            .background(backgroundColor)
-            .cornerRadius(20)
-            .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+            VocabookButtonLabel(title: title, icon: icon, style: style)
         }
         .buttonStyle(PlainButtonStyle())
     }
 }
 
-// NOTE: PagesListView is no longer used in this file but is kept for the NavigationLink destination.
-// In a real project, this would likely be moved to its own file.
 private struct PagesListView: View {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "PagesListView")
     @ObservedObject var viewModel: VocabookViewModel

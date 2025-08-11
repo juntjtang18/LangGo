@@ -2,7 +2,8 @@ import SwiftUI
 
 // 1. Define your style cases.
 enum ViewStyle {
-    case title, body, caption, primaryButton, secondaryButton, themedTextField, registerTag, correctButton, wrongButton, errorText
+    case title, body, caption, primaryButton, secondaryButton, themedTextField, registerTag, correctButton, wrongButton, errorText,
+         vocabookActionPrimary, vocabookActionSecondary
 }
 
 // 2. Conform exactly to ViewModifier—including @MainActor.
@@ -11,6 +12,12 @@ struct StyleModifier: ViewModifier {
     // 2a. Existential protocols work without the `any` keyword here.
     @Environment(\.theme) var theme: Theme
     let style: ViewStyle
+    
+    // Private constants for styling to avoid magic numbers
+    private let buttonSize: CGFloat = 110
+    private let cornerRadius: CGFloat = 20
+    private let shadowRadius: CGFloat = 5
+    private let shadowY: CGFloat = 4
 
     // 2b. Signature must match the protocol’s @MainActor requirement.
     @ViewBuilder
@@ -18,7 +25,7 @@ struct StyleModifier: ViewModifier {
         switch style {
         case .title:
             content
-                .font(.largeTitle)            // ← correct, built-in style
+                .font(.largeTitle)
                 .foregroundColor(theme.text)
 
         case .body:
@@ -85,6 +92,22 @@ struct StyleModifier: ViewModifier {
             content
                 .foregroundColor(Color.red)
                 .padding()
+                
+        case .vocabookActionPrimary:
+            content
+                .foregroundColor(.white)
+                .frame(width: buttonSize, height: buttonSize)
+                .background(Color(red: 0.2, green: 0.6, blue: 0.25))
+                .cornerRadius(cornerRadius)
+                .shadow(color: .black.opacity(0.2), radius: shadowRadius, y: shadowY)
+
+        case .vocabookActionSecondary:
+            content
+                .foregroundColor(.white)
+                .frame(width: buttonSize, height: buttonSize)
+                .background(Color(red: 0.5, green: 0.8, blue: 0.5))
+                .cornerRadius(cornerRadius)
+                .shadow(color: .black.opacity(0.2), radius: shadowRadius, y: shadowY)
         }
     }
 }
