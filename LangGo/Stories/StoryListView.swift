@@ -300,9 +300,7 @@ private struct StoryCardView: View {
         VStack(spacing: 0) {
             imageSection(height: 232)
                 .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
-            
-            // Call the textSection without a fixed height
-            textSection(briefLineLimit: 3) // CHANGED
+            textSection(height: 160, briefLineLimit: 3)
                 .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
         }
         .storyCardStyle()
@@ -365,14 +363,10 @@ private struct StoryCardView: View {
     private var landscapeCard: some View {
         HStack(spacing: 0) {
             imageSection(height: 180)
-                .frame(width: 140)
                 .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .bottomLeft]))
-            
-            // Call the textSection without a fixed height
-            textSection(briefLineLimit: 3) // CHANGED
+            textSection(height: 180, briefLineLimit: 3)
                 .clipShape(RoundedCorner(radius: 20, corners: [.topRight, .bottomRight]))
         }
-        .frame(height: 180)
         .storyCardStyle()
     }
     
@@ -402,23 +396,14 @@ private struct StoryCardView: View {
         )
     }
     
-    // In StoryCardView, replace the existing textSection function with this one.
-
-    private func textSection(briefLineLimit: Int) -> some View { // REMOVED the height parameter
+    private func textSection(height: CGFloat, briefLineLimit: Int) -> some View {
         ZStack {
             cardGradient
             
             VStack(alignment: .leading, spacing: 8) {
                 Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
-                
-                // Allow the brief to determine its own height
-                Text(story.attributes.brief ?? "No brief available.")
-                    .storyStyle(.cardBrief)
-                    .lineLimit(briefLineLimit)
-                    .fixedSize(horizontal: false, vertical: true) // ADDED: Ensures text isn't truncated vertically
-                
-                Spacer(minLength: 12) // Use minLength to ensure some space before the button
-                
+                Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(briefLineLimit)
+                Spacer(minLength: 0)
                 HStack {
                     Spacer()
                     HStack {
@@ -429,6 +414,6 @@ private struct StoryCardView: View {
             .padding()
         }
         .frame(maxWidth: .infinity)
-        // REMOVED: .frame(height: height)
+        .frame(height: height)
     }
 }
