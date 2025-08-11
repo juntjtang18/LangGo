@@ -201,24 +201,37 @@ class StoryViewModel: ObservableObject {
         }
     }
     
+    // In Stories/StoryViewModel.swift
+
     private func generateLayout(for stories: [Story]) -> [StoryRow] {
         var rows: [StoryRow] = []
-        var index = 0
+        
+        // 1. A counter for stories that are eligible for the landscape style.
+        var shortTitleStoryCounter = 0
+        
+        // 2. The character limit for a "short" title.
+        let shortTitleCharacterLimit = 35
+        
+        // 3. How often a landscape card should appear (e.g., every 4th eligible story).
+        let landscapeFrequency = 4
 
-        while index < stories.count {
-            let story = stories[index]
-            let styleId = story.id % 4
+        for story in stories {
+            var style: CardStyle = .full // Always default to full.
             
-            if styleId == 0 && index + 1 < stories.count {
-                let pair = [story, stories[index + 1]]
-                rows.append(StoryRow(stories: pair, style: .half))
-                index += 2
-            } else {
-                let style: CardStyle = (styleId == 2) ? .landscape : .full
-                rows.append(StoryRow(stories: [story], style: style))
-                index += 1
+            // 4. Check if the story's title is short enough.
+            if story.attributes.title.count < shortTitleCharacterLimit {
+                // It's a short-titled story, so increment our specific counter.
+                shortTitleStoryCounter += 1
+                
+                // 5. If this is the Nth short-titled story, use the landscape style.
+                if shortTitleStoryCounter % landscapeFrequency == 0 {
+                    style = .landscape
+                }
             }
+            
+            rows.append(StoryRow(stories: [story], style: style))
         }
+        
         return rows
     }
 
