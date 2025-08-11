@@ -141,7 +141,7 @@ struct RecommendedStoryCardView: View {
         VStack(spacing: 0) {
             imageSection(height: 124)
                 .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
-            textSection(height: 150, briefLineLimit: 3)
+            textSection(briefLineLimit: 3)
                 .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
         }
         .frame(width: 250)
@@ -174,25 +174,40 @@ struct RecommendedStoryCardView: View {
         )
     }
     
-    private func textSection(height: CGFloat, briefLineLimit: Int) -> some View {
+    // In Stories/StoryListView.swift, inside StoryCardView
+
+    private func textSection(briefLineLimit: Int) -> some View {
         ZStack {
             cardGradient
             
-            VStack(alignment: .leading, spacing: 8) {
-                Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
-                Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(briefLineLimit)
-                Spacer(minLength: 0)
+            VStack(alignment: .leading) {
+                // --- Top Group: Author & Brief ---
+                // This group will take the space it needs for its text.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(story.attributes.author)
+                        .storyStyle(.cardAuthor)
+                        .lineLimit(1)
+                    
+                    Text(story.attributes.brief ?? "No brief available.")
+                        .storyStyle(.cardBrief)
+                        .lineLimit(briefLineLimit)
+                        // This tells the text view to take up vertical space as needed.
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                Spacer(minLength: 8) // Pushes the button to the bottom.
+                
+                // --- Bottom Group: Button ---
                 HStack {
-                    Spacer()
+                    Spacer() // Pushes the button to the right.
                     HStack {
                         Image(systemName: "play.fill"); Text("Read")
-                    }.storyStyle(.readButton)
+                    }
+                    .storyStyle(.readButton)
                 }
             }
             .padding()
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
     }
 }
 
@@ -201,40 +216,11 @@ struct StoryRowView: View {
     let row: StoryRow
     
     var body: some View {
-        switch row.style {
-        case .full:
-            if let story = row.stories.first {
-                NavigationLink(value: story) {
-                    StoryCardView(story: story, style: .full)
-                }
-                .buttonStyle(PlainButtonStyle())
+        if let story = row.stories.first {
+            NavigationLink(value: story) {
+                StoryCardView(story: story, style: .full)
             }
-        case .landscape:
-            if let story = row.stories.first {
-                NavigationLink(value: story) {
-                    StoryCardView(story: story, style: .landscape)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        case .half:
-            HStack(spacing: 16) {
-                if let story1 = row.stories[safe: 0] {
-                    NavigationLink(value: story1) {
-                        StoryCardView(story: story1, style: .half)
-                            .aspectRatio(2/3, contentMode: .fit)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-                if let story2 = row.stories[safe: 1] {
-                    NavigationLink(value: story2) {
-                        StoryCardView(story: story2, style: .half)
-                            .aspectRatio(2/3, contentMode: .fit)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                } else {
-                    Spacer()
-                }
-            }
+            .buttonStyle(PlainButtonStyle())
         }
     }
 }
@@ -286,86 +272,15 @@ private struct StoryCardView: View {
     }
 
     var body: some View {
-        switch style {
-        case .full:
-            fullWidthCard
-        case .landscape:
-            landscapeCard
-        case .half:
-            halfWidthCard
-        }
+        fullWidthCard
     }
 
     private var fullWidthCard: some View {
         VStack(spacing: 0) {
             imageSection(height: 232)
                 .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
-            textSection(height: 160, briefLineLimit: 3)
+            textSection(briefLineLimit: 3)
                 .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
-        }
-        .storyCardStyle()
-    }
-
-    private var halfWidthCard: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                // --- 1. Image Section ---
-                ZStack(alignment: .bottomLeading) {
-                    // CORRECTED: This now uses the caching component
-                    if let url = story.attributes.coverImageURL {
-                        CachedAsyncImage(url: url, contentMode: .fill)
-                    } else {
-                        Rectangle().fill(theme.secondary.opacity(0.2))
-                    }
-                    LinearGradient(gradient: Gradient(colors: [.clear, .black.opacity(0.7)]), startPoint: .center, endPoint: .bottom)
-                    VStack(alignment: .leading) {
-                        Text(story.attributes.difficultyName.uppercased()).storyStyle(.cardSubtitle)
-                        Spacer()
-                    }.padding()
-                }
-                .frame(height: geometry.size.height * 0.45)
-                .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
-
-                // --- 2. Title Section ---
-                ZStack {
-                    Color(.systemBackground)
-                    Text(story.attributes.title)
-                        .font(.headline)
-                        .foregroundColor(theme.text)
-                        .lineLimit(2)
-                        .padding(.horizontal)
-                }
-                .frame(height: geometry.size.height * 0.20)
-                
-                // --- 3. Text Section ---
-                ZStack {
-                    cardGradient
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
-                        Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(2)
-                        Spacer(minLength: 0)
-                        HStack {
-                            Spacer()
-                            HStack {
-                                Image(systemName: "play.fill"); Text("Read")
-                            }.storyStyle(.readButton)
-                        }
-                    }
-                    .padding()
-                }
-                .frame(height: geometry.size.height * 0.35)
-                .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
-            }
-        }
-        .storyCardStyle()
-    }
-    
-    private var landscapeCard: some View {
-        HStack(spacing: 0) {
-            imageSection(height: 180)
-                .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .bottomLeft]))
-            textSection(height: 180, briefLineLimit: 3)
-                .clipShape(RoundedCorner(radius: 20, corners: [.topRight, .bottomRight]))
         }
         .storyCardStyle()
     }
@@ -396,24 +311,39 @@ private struct StoryCardView: View {
         )
     }
     
-    private func textSection(height: CGFloat, briefLineLimit: Int) -> some View {
+    // In Stories/StoryListView.swift, inside StoryCardView
+
+    private func textSection(briefLineLimit: Int) -> some View {
         ZStack {
             cardGradient
             
-            VStack(alignment: .leading, spacing: 8) {
-                Text(story.attributes.author).storyStyle(.cardAuthor).lineLimit(1)
-                Text(story.attributes.brief ?? "No brief available.").storyStyle(.cardBrief).lineLimit(briefLineLimit)
-                Spacer(minLength: 0)
+            VStack(alignment: .leading) {
+                // --- Top Group: Author & Brief ---
+                // This group will take the space it needs for its text.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(story.attributes.author)
+                        .storyStyle(.cardAuthor)
+                        .lineLimit(1)
+                    
+                    Text(story.attributes.brief ?? "No brief available.")
+                        .storyStyle(.cardBrief)
+                        .lineLimit(briefLineLimit)
+                        // This tells the text view to take up vertical space as needed.
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                Spacer(minLength: 8) // Pushes the button to the bottom.
+                
+                // --- Bottom Group: Button ---
                 HStack {
-                    Spacer()
+                    Spacer() // Pushes the button to the right.
                     HStack {
                         Image(systemName: "play.fill"); Text("Read")
-                    }.storyStyle(.readButton)
+                    }
+                    .storyStyle(.readButton)
                 }
             }
             .padding()
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
     }
 }

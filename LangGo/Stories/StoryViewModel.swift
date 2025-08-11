@@ -206,30 +206,8 @@ class StoryViewModel: ObservableObject {
     private func generateLayout(for stories: [Story]) -> [StoryRow] {
         var rows: [StoryRow] = []
         
-        // 1. A counter for stories that are eligible for the landscape style.
-        var shortTitleStoryCounter = 0
-        
-        // 2. The character limit for a "short" title.
-        let shortTitleCharacterLimit = 35
-        
-        // 3. How often a landscape card should appear (e.g., every 4th eligible story).
-        let landscapeFrequency = 4
-
         for story in stories {
-            var style: CardStyle = .full // Always default to full.
-            
-            // 4. Check if the story's title is short enough.
-            if story.attributes.title.count < shortTitleCharacterLimit {
-                // It's a short-titled story, so increment our specific counter.
-                shortTitleStoryCounter += 1
-                
-                // 5. If this is the Nth short-titled story, use the landscape style.
-                if shortTitleStoryCounter % landscapeFrequency == 0 {
-                    style = .landscape
-                }
-            }
-            
-            rows.append(StoryRow(stories: [story], style: style))
+            rows.append(StoryRow(stories: [story], style: .full))
         }
         
         return rows
