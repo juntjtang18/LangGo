@@ -6,7 +6,6 @@ import os // For logging
 struct VocapageHostView: View {
     @Environment(\.dismiss) var dismiss
     
-    // The loader is now initialized cleanly without parameters.
     @StateObject private var loader = VocapageLoader()
     
     @AppStorage("showBaseTextInVocapage") private var showBaseText: Bool = true
@@ -19,9 +18,7 @@ struct VocapageHostView: View {
 
     let flashcardViewModel: FlashcardViewModel
     @State private var isShowingReviewView: Bool = false
-    // REMOVED: strapiService property is no longer needed.
 
-    // MODIFIED: The initializer is simplified and no longer requires strapiService.
     init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
         self.allVocapageIds = allVocapageIds
         _currentPageIndex = State(initialValue: allVocapageIds.firstIndex(of: selectedVocapageId) ?? 0)
@@ -39,13 +36,22 @@ struct VocapageHostView: View {
     }
 
     var body: some View {
-        VocapagePagingView(
-            currentPageIndex: $currentPageIndex,
-            allVocapageIds: allVocapageIds,
-            loader: loader,
-            showBaseText: $showBaseText,
-            speechManager: speechManager
-        )
+        // ZStack allows overlaying the navigation buttons on top of the pager view.
+        ZStack {
+            VocapagePagingView(
+                currentPageIndex: $currentPageIndex,
+                allVocapageIds: allVocapageIds,
+                loader: loader,
+                showBaseText: $showBaseText,
+                speechManager: speechManager
+            )
+
+            // The new navigation buttons for previous/next page
+            PageNavigationControls(
+                currentPageIndex: $currentPageIndex,
+                pageCount: allVocapageIds.count
+            )
+        }
         .navigationTitle("My Vocabulary Notebook")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -65,7 +71,6 @@ struct VocapageHostView: View {
         }
         .sheet(isPresented: $isShowingExamView) {
             if let vocapage = currentVocapage, let flashcards = vocapage.flashcards, !flashcards.isEmpty {
-                // MODIFIED: ExamView is now initialized without strapiService.
                 ExamView(flashcards: flashcards)
             }
         }
@@ -79,6 +84,58 @@ struct VocapageHostView: View {
 }
 
 // MARK: - Extracted Subviews for Simplicity
+
+// NEW: A view for the overlay navigation controls (< >)
+private struct PageNavigationControls: View {
+    @Binding var currentPageIndex: Int
+    let pageCount: Int
+
+    var body: some View {
+        HStack {
+            // Previous Page Button
+            Button(action: {
+                withAnimation {
+                    currentPageIndex = max(0, currentPageIndex - 1)
+                }
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.title.weight(.bold))
+            }
+            .buttonStyle(PageNavigationButtonStyle())
+            .opacity(currentPageIndex > 0 ? 1.0 : 0.0) // Hide when at the first page
+            .disabled(currentPageIndex <= 0)
+
+            Spacer()
+
+            // Next Page Button
+            Button(action: {
+                withAnimation {
+                    currentPageIndex = min(pageCount - 1, currentPageIndex + 1)
+                }
+            }) {
+                Image(systemName: "chevron.right")
+                    .font(.title.weight(.bold))
+            }
+            .buttonStyle(PageNavigationButtonStyle())
+            .opacity(currentPageIndex < pageCount - 1 ? 1.0 : 0.0) // Hide when at the last page
+            .disabled(currentPageIndex >= pageCount - 1)
+        }
+        .padding(.horizontal)
+    }
+}
+
+// NEW: A custom button style for the navigation controls for a consistent look.
+private struct PageNavigationButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding()
+            .background(Color.black.opacity(configuration.isPressed ? 0.5 : 0.25))
+            .foregroundColor(.white)
+            .clipShape(Circle())
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+    }
+}
 
 private struct VocapageActionButton: View {
     let icon: String
@@ -105,9 +162,6 @@ private struct VocapageActionButtons: View {
     @ObservedObject var speechManager: SpeechManager
     
     @EnvironmentObject var languageSettings: LanguageSettings
-    // REMOVED: AppEnvironment is no longer needed.
-    
-    // The view now gets its own service dependency from the singleton.
     private let strapiService = DataServices.shared.strapiService
 
     var body: some View {
@@ -122,7 +176,6 @@ private struct VocapageActionButtons: View {
                 } else {
                     Task {
                         do {
-                            // MODIFIED: The call now uses the internal strapiService property.
                             let settings = try await strapiService.fetchVBSetting()
                             if !sortedFlashcards.isEmpty {
                                 speechManager.startReadingSession(
@@ -147,7 +200,6 @@ private struct VocapageActionButtons: View {
         .padding(.bottom, 8)
     }
 }
-
 
 private struct VocapagePagingView: View {
     @Binding var currentPageIndex: Int
@@ -296,7 +348,6 @@ private struct VocapageContentListView: View {
                 }
                 .listStyle(.plain)
                 .background(Color.clear)
-                // MODIFIED: .onChange signature updated for iOS 16.
                 .onChange(of: speechManager.currentIndex) { newIndex in
                     if newIndex >= 0 && newIndex < sortedFlashcards.count {
                         let cardIdToScroll = sortedFlashcards[newIndex].id

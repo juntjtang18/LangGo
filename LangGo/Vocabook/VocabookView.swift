@@ -33,20 +33,33 @@ struct VocabookView: View {
             }
             .padding(.top)
 
-            NavigationLink(destination: PagesListView(viewModel: vocabookViewModel, flashcardViewModel: flashcardViewModel)) {
-                HStack {
-                    Image(systemName: "play.fill")
-                    Text("Open")
+            // MODIFIED: This button now navigates directly to the last viewed page.
+            if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
+                let allIDs = pages.map { $0.id }.sorted()
+                let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
+                
+                // Use last viewed ID if it's valid; otherwise, default to the first page.
+                let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : allIDs.first ?? 1
+
+                NavigationLink(destination: VocapageHostView(
+                    allVocapageIds: allIDs,
+                    selectedVocapageId: targetPageID,
+                    flashcardViewModel: flashcardViewModel
+                )) {
+                    HStack {
+                        Image(systemName: "play.fill")
+                        Text("Open")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 24)
+                    .background(Color(red: 0.2, green: 0.6, blue: 0.25))
+                    .clipShape(Capsule())
+                    .shadow(radius: 5, y: 3)
                 }
-                .font(.headline)
-                .foregroundColor(.white)
-                .padding(.vertical, 12)
-                .padding(.horizontal, 24)
-                .background(Color(red: 0.2, green: 0.6, blue: 0.25))
-                .clipShape(Capsule())
-                .shadow(radius: 5, y: 3)
+                .padding([.trailing, .bottom], 20)
             }
-            .padding([.trailing, .bottom], 20)
         }
         .background(theme.background.ignoresSafeArea())
         .fullScreenCover(isPresented: $isAddingNewWord) {
@@ -98,28 +111,21 @@ private struct RightRoundedRectangle: Shape {
     }
 }
 
-// MODIFIED: The custom shape now draws a narrower connector.
 private struct DiagonalConnectingShape: Shape {
     let buttonSize: CGFloat
     let cornerRadius: CGFloat
-    
-    // This ratio determines how "pinched" the connector is. 0.7 = 70% of the original width.
     let connectorWidthRatio: CGFloat = 0.7
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        
         let topLeftRect = CGRect(x: 0, y: 0, width: buttonSize, height: buttonSize)
         let bottomRightRect = CGRect(x: rect.width - buttonSize, y: rect.height - buttonSize, width: buttonSize, height: buttonSize)
 
-        // Draw the two rounded rectangle buttons
         path.addRoundedRect(in: topLeftRect, cornerSize: CGSize(width: cornerRadius, height: cornerRadius))
         path.addRoundedRect(in: bottomRightRect, cornerSize: CGSize(width: cornerRadius, height: cornerRadius))
 
-        // Calculate the offset for the "pinched" connector
         let pinchOffset = cornerRadius * (1 - connectorWidthRatio)
 
-        // Create the narrower connecting path
         path.move(to: CGPoint(x: topLeftRect.maxX - cornerRadius + pinchOffset, y: topLeftRect.maxY))
         path.addLine(to: CGPoint(x: topLeftRect.maxX, y: topLeftRect.maxY - cornerRadius + pinchOffset))
         path.addLine(to: CGPoint(x: bottomRightRect.minX + cornerRadius - pinchOffset, y: bottomRightRect.minY))
@@ -129,7 +135,6 @@ private struct DiagonalConnectingShape: Shape {
         return path
     }
 }
-
 
 private struct HeaderTitleView: View {
     var body: some View {
@@ -296,6 +301,8 @@ private struct VocabookActionButton: View {
     }
 }
 
+// NOTE: PagesListView is no longer used in this file but is kept for the NavigationLink destination.
+// In a real project, this would likely be moved to its own file.
 private struct PagesListView: View {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "PagesListView")
     @ObservedObject var viewModel: VocabookViewModel
