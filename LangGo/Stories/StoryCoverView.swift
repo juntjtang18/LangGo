@@ -8,19 +8,29 @@ struct StoryCoverView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
-                // --- 1. Image ---
-                AsyncImage(url: story.attributes.coverImageURL) { image in
-                    image.resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 300)
-                        .clipped()
-                } placeholder: {
-                    Rectangle()
-                        .fill(theme.secondary.opacity(0.2))
-                        .frame(height: 300)
-                        .overlay(Image(systemName: "book.closed").font(.largeTitle))
-                }
                 
+                // --- 1. Image ---
+                // By wrapping the image in a GeometryReader, we can get the exact
+                // width of the screen and force the image to conform to it.
+                GeometryReader { geometry in
+                    AsyncImage(url: story.attributes.coverImageURL) { image in
+                        image.resizable()
+                            .aspectRatio(contentMode: .fill)
+                            // Set the frame width explicitly from the geometry proxy.
+                            .frame(width: geometry.size.width, height: 300)
+                            .clipped() // Ensures no part of the image spills out.
+                    } placeholder: {
+                        Rectangle()
+                            .fill(theme.secondary.opacity(0.2))
+                            // Also apply the explicit width to the placeholder.
+                            .frame(width: geometry.size.width, height: 300)
+                            .overlay(Image(systemName: "book.closed").font(.largeTitle))
+                    }
+                }
+                // We must also give the GeometryReader itself a fixed height so the
+                // ScrollView knows how much space it occupies.
+                .frame(height: 300)
+
                 // --- Content VStack with Spacing ---
                 VStack(alignment: .leading, spacing: 24) {
                     // --- 2. Title ---
@@ -41,10 +51,10 @@ struct StoryCoverView: View {
                                 Text("Start Reading")
                                 Image(systemName: "play.fill")
                             }
-                            .font(.subheadline) // Smaller font
+                            .font(.subheadline)
                             .foregroundColor(.white)
-                            .padding(.horizontal, 20) // Reduced padding
-                            .padding(.vertical, 12)   // Reduced padding
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
                             .background(theme.accent)
                             .clipShape(Capsule())
                         }
