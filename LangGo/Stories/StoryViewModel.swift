@@ -1,10 +1,14 @@
 import Foundation
 import SwiftUI
 import os
+import AVFoundation // ADDED: For text-to-speech
 
 @MainActor
 class StoryViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StoryViewModel")
+    
+    // ADDED: The speech synthesizer for reading words aloud.
+    private let speechSynthesizer = AVSpeechSynthesizer()
 
     // MARK: - Published Properties
     @Published var stories: [Story] = []
@@ -51,6 +55,17 @@ class StoryViewModel: ObservableObject {
     }
     
     // MARK: - Public Methods
+    
+    // ADDED: A new method to handle speaking text.
+    func speak(word: String) {
+        let utterance = AVSpeechUtterance(string: word)
+        // This automatically uses the system's voice for the device's language.
+        utterance.voice = AVSpeechSynthesisVoice(language: Config.learningTargetLanguageCode)
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        
+        speechSynthesizer.speak(utterance)
+    }
+    
     func initialLoad() async {
         guard stories.isEmpty else { return }
         isLoading = true

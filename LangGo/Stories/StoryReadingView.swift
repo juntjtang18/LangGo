@@ -106,7 +106,11 @@ struct StoryReadingView: View {
                                 originalWord: selectedWord,
                                 translationData: viewModel.contextualTranslation,
                                 isLoading: viewModel.isTranslating,
-                                onSave: saveToVocabook
+                                onSave: saveToVocabook,
+                                // ADDED: Connecting the button's action to the view model.
+                                onPlayAudio: {
+                                    viewModel.speak(word: selectedWord)
+                                }
                             )
                             .modifier(PopoverPositioner(wordFrame: wordFrame))
                             .transition(.scale.combined(with: .opacity))

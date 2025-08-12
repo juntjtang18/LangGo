@@ -1,12 +1,13 @@
 import SwiftUI
 
 struct TranslationPopover: View {
-    // ADDED: The original word to display
+    // The original word to display
     let originalWord: String
     
     let translationData: StoryViewModel.ContextualTranslation?
     let isLoading: Bool
     let onSave: () -> Void
+    let onPlayAudio: () -> Void // ADDED: A closure to handle the audio action.
     
     @Environment(\.theme) var theme: Theme
 
@@ -14,7 +15,7 @@ struct TranslationPopover: View {
         VStack(alignment: .leading, spacing: 10) {
             if isLoading {
                 ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: theme.background))
+                    .progressViewStyle(CircularProgressViewStyle(tint: theme.primary))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 5)
             } else if let data = translationData {
@@ -23,30 +24,39 @@ struct TranslationPopover: View {
                     Text(originalWord)
                         .font(.title3)
                         .fontWeight(.bold)
-                        .foregroundColor(theme.background)
+                        .foregroundColor(theme.text)
+                    
+                    // ADDED: The speaker button for text-to-speech.
+                    Button(action: onPlayAudio) {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.headline)
+                            .foregroundColor(theme.accent)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                     
                     Text(data.partOfSpeech)
                         .font(.callout)
                         .italic()
-                        .foregroundColor(theme.background.opacity(0.9))
+                        .foregroundColor(theme.text.opacity(0.9))
                     
                     Text(data.translatedWord)
                         .font(.title3)
                         .fontWeight(.bold)
-                        .foregroundColor(theme.background)
+                        .foregroundColor(theme.text)
                 }
 
                 if !data.translatedSentence.isEmpty {
                     Divider()
-                        .background(theme.background.opacity(0.5))
+                        .background(theme.text.opacity(0.2))
                     Text(data.translatedSentence)
                         .font(.body)
-                        .foregroundColor(theme.background)
-                        .lineLimit(4)
+                        .foregroundColor(theme.text)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
                 Divider()
-                    .background(theme.background.opacity(0.5))
+                    .background(theme.text.opacity(0.2))
                 
                 Button(action: onSave) {
                     HStack {
@@ -56,7 +66,7 @@ struct TranslationPopover: View {
                     .font(.caption.weight(.bold))
                     .padding(8)
                     .frame(maxWidth: .infinity)
-                    .background(theme.background.opacity(0.2))
+                    .background(theme.accent)
                     .foregroundColor(theme.background)
                     .cornerRadius(8)
                 }
@@ -65,9 +75,13 @@ struct TranslationPopover: View {
             } else {
                 Text("Translation unavailable.")
                     .font(.headline)
-                    .foregroundColor(theme.background)
+                    .foregroundColor(theme.text)
             }
         }
-        .storyStyle(.translationBubble)
+        .padding()
+        .frame(width: 300)
+        .background(theme.surface)
+        .cornerRadius(20)
+        .shadow(color: .black.opacity(0.2), radius: 10, y: 5)
     }
 }
