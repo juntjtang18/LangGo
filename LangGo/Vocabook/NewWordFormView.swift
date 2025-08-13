@@ -1,14 +1,45 @@
 // LangGo/Vocabook/NewWordFormView.swift
 import SwiftUI
 
+// A more prominent button style, based on your image, for primary actions.
+private struct ProminentIconButtonStyle: ButtonStyle {
+    let backgroundColor: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.title3)
+            .foregroundColor(.white)
+            .frame(width: 44, height: 44)
+            .background(backgroundColor)
+            .clipShape(Circle())
+            .shadow(color: .black.opacity(0.2), radius: 3, y: 2)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+// A less prominent style for secondary icon buttons like the speaker.
+private struct SubtleIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body)
+            .foregroundColor(.secondary)
+            .padding(8)
+            .background(
+                Circle()
+                    .fill(Color(UIColor.systemGray6))
+            )
+            .opacity(configuration.isPressed ? 0.5 : 1.0)
+    }
+}
+
+
 struct NewWordFormView: View {
     // MARK: - State Bindings
     @Binding var word: String
     @Binding var baseText: String
     @Binding var partOfSpeech: PartOfSpeech
     @Binding var inputDirection: NewWordInputView.InputDirection
-    
-    // MARK: - Search State Bindings
     @Binding var searchResults: [SearchResult]
     @Binding var isSearching: Bool
     
@@ -27,113 +58,79 @@ struct NewWordFormView: View {
     // MARK: - Body
     var body: some View {
         Group {
-            if inputDirection == .baseToTarget {
-                baseToTargetSections
-            } else {
-                targetToBaseSections
-            }
+            topInputSection
+            bottomInputSection
             partOfSpeechSection
         }
     }
     
-    // MARK: - Reusable Components
-    @ViewBuilder
-    private var baseToTargetSections: some View {
-        Section("Base (\(baseLanguageName))") {
-            TextField("Enter base word", text: $word)
+    // MARK: - Input Sections
+    private var topInputSection: some View {
+        let isBaseAtTop = (inputDirection == .baseToTarget)
+        
+        return Section {
+            TextField(isBaseAtTop ? "Enter base word" : "Enter target word", text: $word, axis: .vertical)
+                .frame(minHeight: 80, alignment: .top)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .focused($focusedField, equals: .top)
-                .onChange(of: word) { onDebouncedSearch($0, true) }
-            
-            if isSearching {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
+                .onChange(of: word) { onDebouncedSearch($0, isBaseAtTop) }
+
+            if focusedField == .top {
+                if isSearching {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                }
+                ForEach(searchResults) { result in
+                    searchResultRow(for: result)
                 }
             }
-            
-            ForEach(searchResults) { result in
-                searchResultRow(for: result)
+        } header: {
+            HStack {
+                Text(isBaseAtTop ? "Base (\(baseLanguageName))" : "Target (\(targetLanguageName))")
+                Spacer()
+                Button(action: {}) { Image(systemName: "speaker.wave.2.fill") }
+                    .buttonStyle(SubtleIconButtonStyle())
+                
+                // RESTORED: Translate button is back in the top header
+                Button(action: onTranslate) { Image(systemName: "camera.viewfinder") }
+                    .buttonStyle(ProminentIconButtonStyle(backgroundColor: Color(UIColor.systemGray2)))
             }
+            .padding(.bottom, 4) // Adds a little space between header and text field
         }
-        
-        actionButtonsSection
-        
-        Section("Target (\(targetLanguageName))") {
-            TextField("Enter target word", text: $baseText)
+    }
+
+    private var bottomInputSection: some View {
+        let isBaseAtBottom = (inputDirection != .baseToTarget)
+
+        return Section {
+            TextField(isBaseAtBottom ? "Enter base word" : "Target word", text: $baseText, axis: .vertical)
+                .frame(minHeight: 80, alignment: .top)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .focused($focusedField, equals: .bottom)
-                .onChange(of: baseText) { onDebouncedSearch($0, false) }
-        }
-    }
-    
-    @ViewBuilder
-    private var targetToBaseSections: some View {
-        Section("Target (\(targetLanguageName))") {
-            TextField("Enter target word", text: $word)
-                .autocapitalization(.none)
-                .disableAutocorrection(true)
-                .focused($focusedField, equals: .top)
-                .onChange(of: word) { onDebouncedSearch($0, false) }
-            
-            if isSearching {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
+                .onChange(of: baseText) { onDebouncedSearch($0, isBaseAtBottom) }
+
+            if focusedField == .bottom {
+                if isSearching {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                }
+                ForEach(searchResults) { result in
+                    searchResultRow(for: result)
                 }
             }
-
-            ForEach(searchResults) { result in
-                searchResultRow(for: result)
+        } header: {
+            HStack {
+                Text(isBaseAtBottom ? "Base (\(baseLanguageName))" : "Target (\(targetLanguageName))")
+                Spacer()
+                Button(action: {}) { Image(systemName: "speaker.wave.2.fill") }
+                    .buttonStyle(SubtleIconButtonStyle())
+                
+                // RESTORED: Swap button is back in the bottom header
+                Button(action: onSwap) { Image(systemName: "arrow.up.arrow.down") }
+                    .buttonStyle(ProminentIconButtonStyle(backgroundColor: .accentColor))
             }
+            .padding(.bottom, 4) // Adds a little space between header and text field
         }
-        
-        actionButtonsSection
-
-        Section("Base (\(baseLanguageName))") {
-            TextField("Enter base word", text: $baseText)
-                .autocapitalization(.none)
-                .disableAutocorrection(true)
-                .focused($focusedField, equals: .bottom)
-                .onChange(of: baseText) { onDebouncedSearch($0, true) }
-        }
-    }
-    
-    // MODIFIED: This section is updated to match the mockup.
-    private var actionButtonsSection: some View {
-        HStack(spacing: 0) {
-            Spacer()
-            Button(action: onSwap) {
-                VStack {
-                    Image(systemName: "arrow.up.arrow.down") // Cleaner icon
-                        .font(.largeTitle).foregroundColor(.white).frame(width: 60, height: 60)
-                        .background(Color.accentColor).clipShape(Circle()).shadow(radius: 3)
-                    Text("Swap").foregroundColor(.primary).font(.caption)
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-            
-            Spacer()
-
-            Button(action: onTranslate) {
-                VStack {
-                    Image(systemName: "wand.and.stars")
-                        .font(.largeTitle).foregroundColor(.white).frame(width: 60, height: 60)
-                        .background(Color(UIColor.systemGray3)).clipShape(Circle()).shadow(radius: 3) // Gray background
-                    Text("AI Translation").foregroundColor(.primary).font(.caption)
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-            .disabled(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            
-            Spacer()
-        }
-        .padding(.vertical, 10)
-        .listRowBackground(Color.clear)
     }
     
     private var partOfSpeechSection: some View {

@@ -20,7 +20,7 @@ struct NewWordInputView: View {
     @State private var isTranslating: Bool = false
     @State private var isLearningWord: Bool = false
     
-    // Search State
+    // RE-ADDED: Search State
     @State private var searchResults: [SearchResult] = []
     @State private var isSearching: Bool = false
     @State private var searchTask: Task<Void, Never>?
@@ -51,10 +51,10 @@ struct NewWordInputView: View {
     // MARK: - Body
     var body: some View {
         NavigationStack {
-            // MODIFIED: Wrapped in a ZStack to allow for overlay messages.
             ZStack {
                 VStack {
                     Form {
+                        // RE-ADDED: Search parameters passed to the form view
                         NewWordFormView(
                             word: $word,
                             baseText: $baseText,
@@ -80,7 +80,7 @@ struct NewWordInputView: View {
                 }
                 .padding(.bottom, 10)
 
-                // MODIFIED: Floating success/error messages
+                // Floating success/error messages
                 if showSuccessMessage || showErrorMessage {
                     FloatingMessageView(
                         isSuccess: showSuccessMessage,
@@ -116,11 +116,11 @@ struct NewWordInputView: View {
         Button(action: saveWord) {
             HStack {
                 if isLoading { ProgressView() }
-                Text(isLoading ? "Saving..." : "Save Word")
+                Text(isLoading ? "Saving..." : "Save")
             }
             .frame(maxWidth: .infinity)
             .padding()
-            .background(Capsule().fill(Color.accentColor))
+            .background(Capsule().fill(Color.green))
             .foregroundColor(.white)
             .font(.headline)
             .opacity(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -134,9 +134,8 @@ struct NewWordInputView: View {
         .padding(.horizontal)
     }
     
-    // REMOVED: The dedicated userFeedbackMessages view is no longer needed.
-    
     // MARK: - Logic & Actions
+    // RE-ADDED: Search and Learn functions
     private func learnThisWord(result: SearchResult) {
         guard !isLearningWord else { return }
         isLearningWord = true

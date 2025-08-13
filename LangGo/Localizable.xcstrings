@@ -80,9 +80,6 @@
     "AI Conversation Partner" : {
 
     },
-    "AI Translation" : {
-
-    },
     "Back" : {
       "localizations" : {
         "ja" : {
@@ -864,6 +861,9 @@
         }
       }
     },
+    "Save" : {
+
+    },
     "Save Changes" : {
       "localizations" : {
         "ja" : {
@@ -893,9 +893,6 @@
       }
     },
     "Save to Vocabook" : {
-
-    },
-    "Save Word" : {
 
     },
     "Saving..." : {
@@ -1085,13 +1082,13 @@
         }
       }
     },
-    "Swap" : {
-
-    },
     "Swipe to load content." : {
 
     },
     "Target (%@)" : {
+
+    },
+    "Target word" : {
 
     },
     "The correct answer is: **%@**" : {
