@@ -1,7 +1,6 @@
 // LangGo/Vocabook/NewWordFormView.swift
 import SwiftUI
 
-// A more prominent button style, based on your image, for primary actions.
 private struct ProminentIconButtonStyle: ButtonStyle {
     let backgroundColor: Color
 
@@ -18,7 +17,6 @@ private struct ProminentIconButtonStyle: ButtonStyle {
     }
 }
 
-// A less prominent style for secondary icon buttons like the speaker.
 private struct SubtleIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -38,11 +36,11 @@ struct NewWordFormView: View {
     // MARK: - State Bindings
     @Binding var word: String
     @Binding var baseText: String
-    // MODIFIED: Binding is now correctly marked as optional to match its source.
     @Binding var partOfSpeech: PartOfSpeech?
     @Binding var inputDirection: NewWordInputView.InputDirection
     @Binding var searchResults: [SearchResult]
     @Binding var isSearching: Bool
+    @Binding var isTranslationStale: Bool
     
     @FocusState.Binding var focusedField: NewWordInputView.Field?
     
@@ -77,7 +75,10 @@ struct NewWordFormView: View {
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .focused($focusedField, equals: .top)
-                .onChange(of: word) { onDebouncedSearch($0, isBaseAtTop) }
+                // MODIFIED: Used older, more compatible onChange syntax.
+                .onChange(of: word, perform: { newWord in
+                    onDebouncedSearch(newWord, isBaseAtTop)
+                })
 
             if focusedField == .top {
                 if isSearching {
@@ -110,7 +111,11 @@ struct NewWordFormView: View {
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .focused($focusedField, equals: .bottom)
-                .onChange(of: baseText) { onDebouncedSearch($0, isBaseAtBottom) }
+                .foregroundColor(isTranslationStale ? .gray : .primary)
+                // MODIFIED: Used older, more compatible onChange syntax.
+                .onChange(of: baseText, perform: { newText in
+                    onDebouncedSearch(newText, isBaseAtBottom)
+                })
 
             if focusedField == .bottom {
                 if isSearching {
@@ -123,6 +128,13 @@ struct NewWordFormView: View {
         } header: {
             HStack {
                 Text(isBaseAtBottom ? "Base (\(baseLanguageName))" : "Target (\(targetLanguageName))")
+                
+                if isTranslationStale && !baseText.isEmpty {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                }
+                
                 Spacer()
                 Button(action: onSpeakBottom) { Image(systemName: "speaker.wave.2.fill") }
                     .buttonStyle(SubtleIconButtonStyle())
@@ -136,7 +148,6 @@ struct NewWordFormView: View {
     
     private var partOfSpeechSection: some View {
         Section("Part of Speech") {
-            // MODIFIED: The Picker now includes a "Not Specified" option to handle the nil case.
             Picker("Select Part of Speech", selection: $partOfSpeech) {
                 Text("Not Specified").tag(nil as PartOfSpeech?)
                 ForEach(PartOfSpeech.allCases) { pos in

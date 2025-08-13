@@ -13,10 +13,9 @@ struct NewWordInputView: View {
     // MARK: - State (Source of Truth)
     @State private var word: String = ""
     @State private var baseText: String = ""
-    // MODIFIED: Part of speech is now optional and defaults to nil.
     @State private var partOfSpeech: PartOfSpeech? = nil
-    
     @State private var inputDirection: InputDirection = .baseToTarget
+    @State private var isTranslationStale: Bool = true
     
     // Asynchronous Operation State
     @State private var isLoading: Bool = false
@@ -58,35 +57,8 @@ struct NewWordInputView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                VStack {
-                    Form {
-                        NewWordFormView(
-                            word: $word,
-                            baseText: $baseText,
-                            partOfSpeech: $partOfSpeech,
-                            inputDirection: $inputDirection,
-                            searchResults: $searchResults,
-                            isSearching: $isSearching,
-                            focusedField: $focusedField,
-                            baseLanguageName: baseLanguageName,
-                            targetLanguageName: targetLanguageName,
-                            onDebouncedSearch: debouncedSearch,
-                            onTranslate: translateWord,
-                            onSwap: swapLanguages,
-                            onLearnThis: learnThisWord,
-                            onSpeakTop: speakTop,
-                            onSpeakBottom: speakBottom
-                        )
-                    }
-                    .id(inputDirection)
-                    .onAppear {
-                        focusedField = .top
-                    }
-                    
-                    saveButton
-                }
-                .padding(.bottom, 10)
-
+                mainContent
+                
                 if showSuccessMessage || showErrorMessage {
                     FloatingMessageView(
                         isSuccess: showSuccessMessage,
@@ -98,7 +70,7 @@ struct NewWordInputView: View {
             .navigationTitle("Add New Word")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItemGroup(placement: .navigationBarLeading) {
                     Button(action: { dismiss() }) {
                         HStack { Image(systemName: "chevron.left"); Text("Back") }
                     }
@@ -117,6 +89,42 @@ struct NewWordInputView: View {
         }
     }
 
+    private var mainContent: some View {
+        VStack {
+            Form {
+                NewWordFormView(
+                    word: $word,
+                    baseText: $baseText,
+                    partOfSpeech: $partOfSpeech,
+                    inputDirection: $inputDirection,
+                    searchResults: $searchResults,
+                    isSearching: $isSearching,
+                    isTranslationStale: $isTranslationStale,
+                    focusedField: $focusedField,
+                    baseLanguageName: baseLanguageName,
+                    targetLanguageName: targetLanguageName,
+                    onDebouncedSearch: debouncedSearch,
+                    onTranslate: translateWord,
+                    onSwap: swapLanguages,
+                    onLearnThis: learnThisWord,
+                    onSpeakTop: speakTop,
+                    onSpeakBottom: speakBottom
+                )
+            }
+            .id(inputDirection)
+            .onAppear {
+                focusedField = .top
+            }
+            // MODIFIED: Used older, more compatible onChange syntax.
+            .onChange(of: word, perform: { _ in
+                isTranslationStale = true
+            })
+            
+            saveButton
+        }
+        .padding(.bottom, 10)
+    }
+
     // MARK: - Subviews
     private var saveButton: some View {
         Button(action: saveWord) {
@@ -131,12 +139,13 @@ struct NewWordInputView: View {
             .font(.headline)
             .opacity(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                      || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                     || isLoading || isTranslating ? 0.5 : 1.0)
+                     || isLoading || isTranslating || isTranslationStale ? 0.5 : 1.0)
         }
         .disabled(isLoading
                   || word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                   || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                  || isTranslating)
+                  || isTranslating
+                  || isTranslationStale)
         .padding(.horizontal)
     }
     
@@ -144,9 +153,7 @@ struct NewWordInputView: View {
     
     private func speak(text: String, languageCode: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-
         synthesizer.stopSpeaking(at: .immediate)
-
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
@@ -154,59 +161,43 @@ struct NewWordInputView: View {
             print("Failed to set up audio session: \(error.localizedDescription)")
             return
         }
-
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
-        
         if utterance.voice == nil {
             print("Error: The voice for language code '\(languageCode)' is not available on this device.")
-            errorMessageText = "Speech for this language is not available."
-            showErrorMessage = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                showErrorMessage = false
-            }
             return
         }
-
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         synthesizer.speak(utterance)
     }
 
     private func speakTop() {
         let isBaseAtTop = (inputDirection == .baseToTarget)
-        let textToSpeak = word
-        let langCode = isBaseAtTop ? baseLanguageCode : targetLanguageCode
-        speak(text: textToSpeak, languageCode: langCode)
+        speak(text: word, languageCode: isBaseAtTop ? baseLanguageCode : targetLanguageCode)
     }
 
     private func speakBottom() {
         let isBaseAtBottom = (inputDirection != .baseToTarget)
-        let textToSpeak = baseText
-        let langCode = isBaseAtBottom ? baseLanguageCode : targetLanguageCode
-        speak(text: textToSpeak, languageCode: langCode)
+        speak(text: baseText, languageCode: isBaseAtBottom ? baseLanguageCode : targetLanguageCode)
     }
 
     private func learnThisWord(result: SearchResult) {
         guard !isLearningWord else { return }
         isLearningWord = true
-        
         Task {
             do {
                 let posRawValue = PartOfSpeech.allCases.first(where: { $0.displayName == result.partOfSpeech })?.rawValue ?? "noun"
-                
                 try await viewModel.saveNewWord(
                     targetText: result.targetText,
                     baseText: result.baseText,
                     partOfSpeech: posRawValue
                 )
-                
                 word = ""
                 baseText = ""
                 searchResults = []
-                // MODIFIED: Reset part of speech to nil
                 partOfSpeech = nil
+                isTranslationStale = true
                 focusedField = .top
-                
             } catch {
                 errorMessageText = "Failed to add word: \(error.localizedDescription)"
                 withAnimation { showErrorMessage = true }
@@ -226,26 +217,23 @@ struct NewWordInputView: View {
         withAnimation {
             inputDirection = (inputDirection == .baseToTarget) ? .targetToBase : .baseToTarget
             word = ""; baseText = ""; searchResults = []; searchTask?.cancel()
+            isTranslationStale = true
         }
     }
     
     private func debouncedSearch(term: String, searchBase: Bool) {
         searchTask?.cancel()
-        
         let trimmedTerm = term.trimmingCharacters(in: .whitespaces)
         guard trimmedTerm.count >= 2 else {
             searchResults = []
             isSearching = false
             return
         }
-        
         isSearching = true
         showErrorMessage = false
-        
         searchTask = Task {
             do {
                 try await Task.sleep(nanoseconds: 500_000_000)
-                
                 let results = try await viewModel.searchForWord(term: trimmedTerm, searchBase: searchBase)
                 await MainActor.run { self.searchResults = results; self.isSearching = false }
             } catch {
@@ -268,7 +256,6 @@ struct NewWordInputView: View {
             do {
                 let targetOut: String
                 let baseOut: String
-
                 if inputDirection == .baseToTarget {
                     baseOut   = word.trimmingCharacters(in: .whitespacesAndNewlines)
                     targetOut = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -276,18 +263,15 @@ struct NewWordInputView: View {
                     targetOut = word.trimmingCharacters(in: .whitespacesAndNewlines)
                     baseOut   = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-
                 try await viewModel.saveNewWord(
                     targetText: targetOut,
                     baseText: baseOut,
-                    // MODIFIED: Handle optional part of speech. Pass an empty string if nil.
                     partOfSpeech: partOfSpeech?.rawValue ?? ""
                 )
-
                 word = ""
                 baseText = ""
-                // MODIFIED: Reset part of speech to nil on successful save.
                 partOfSpeech = nil
+                isTranslationStale = true
                 withAnimation {
                     showSuccessMessage = true
                     showErrorMessage = false
@@ -317,19 +301,18 @@ struct NewWordInputView: View {
                 let sourceCode = (inputDirection == .baseToTarget) ? baseLanguageCode : targetLanguageCode
                 let targetCode = (inputDirection == .baseToTarget) ? targetLanguageCode : baseLanguageCode
                 let sourceText = word.trimmingCharacters(in: .whitespacesAndNewlines)
-
                 if sourceText.isEmpty || sourceCode == targetCode {
                     baseText = word
                     isTranslating = false
                     return
                 }
-
                 let translated = try await viewModel.translateWord(
                     word: sourceText,
                     source: sourceCode,
                     target: targetCode
                 )
                 self.baseText = translated
+                self.isTranslationStale = false
             } catch {
                 errorMessageText = "Translation failed: \(error.localizedDescription)"
                 withAnimation {
