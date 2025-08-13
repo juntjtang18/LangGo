@@ -38,7 +38,8 @@ struct NewWordFormView: View {
     // MARK: - State Bindings
     @Binding var word: String
     @Binding var baseText: String
-    @Binding var partOfSpeech: PartOfSpeech
+    // MODIFIED: Binding is now correctly marked as optional to match its source.
+    @Binding var partOfSpeech: PartOfSpeech?
     @Binding var inputDirection: NewWordInputView.InputDirection
     @Binding var searchResults: [SearchResult]
     @Binding var isSearching: Bool
@@ -54,7 +55,6 @@ struct NewWordFormView: View {
     let onTranslate: () -> Void
     let onSwap: () -> Void
     let onLearnThis: (SearchResult) -> Void
-    // ADDED: Actions for speaking text
     let onSpeakTop: () -> Void
     let onSpeakBottom: () -> Void
     
@@ -91,7 +91,6 @@ struct NewWordFormView: View {
             HStack {
                 Text(isBaseAtTop ? "Base (\(baseLanguageName))" : "Target (\(targetLanguageName))")
                 Spacer()
-                // UPDATED: Speaker button is now functional
                 Button(action: onSpeakTop) { Image(systemName: "speaker.wave.2.fill") }
                     .buttonStyle(SubtleIconButtonStyle())
                 
@@ -125,7 +124,6 @@ struct NewWordFormView: View {
             HStack {
                 Text(isBaseAtBottom ? "Base (\(baseLanguageName))" : "Target (\(targetLanguageName))")
                 Spacer()
-                // UPDATED: Speaker button is now functional
                 Button(action: onSpeakBottom) { Image(systemName: "speaker.wave.2.fill") }
                     .buttonStyle(SubtleIconButtonStyle())
 
@@ -138,9 +136,11 @@ struct NewWordFormView: View {
     
     private var partOfSpeechSection: some View {
         Section("Part of Speech") {
+            // MODIFIED: The Picker now includes a "Not Specified" option to handle the nil case.
             Picker("Select Part of Speech", selection: $partOfSpeech) {
+                Text("Not Specified").tag(nil as PartOfSpeech?)
                 ForEach(PartOfSpeech.allCases) { pos in
-                    Text(pos.displayName).tag(pos)
+                    Text(pos.displayName).tag(pos as PartOfSpeech?)
                 }
             }
             .pickerStyle(.navigationLink)

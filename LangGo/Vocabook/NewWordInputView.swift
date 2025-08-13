@@ -2,7 +2,7 @@
 import SwiftUI
 import Combine
 import os
-import AVFoundation // Import for speech synthesis
+import AVFoundation
 
 struct NewWordInputView: View {
     // MARK: - Environment & View Model
@@ -13,7 +13,9 @@ struct NewWordInputView: View {
     // MARK: - State (Source of Truth)
     @State private var word: String = ""
     @State private var baseText: String = ""
-    @State private var partOfSpeech: PartOfSpeech = .noun
+    // MODIFIED: Part of speech is now optional and defaults to nil.
+    @State private var partOfSpeech: PartOfSpeech? = nil
+    
     @State private var inputDirection: InputDirection = .baseToTarget
     
     // Asynchronous Operation State
@@ -140,14 +142,11 @@ struct NewWordInputView: View {
     
     // MARK: - Logic & Actions
     
-    // UPDATED: More robust speech function
     private func speak(text: String, languageCode: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        // Stop any speech that is currently happening.
         synthesizer.stopSpeaking(at: .immediate)
 
-        // Configure the audio session for playback. This is a crucial step.
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
@@ -159,10 +158,8 @@ struct NewWordInputView: View {
         let utterance = AVSpeechUtterance(string: text)
         utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
         
-        // Add a check to ensure the requested voice is available.
         if utterance.voice == nil {
             print("Error: The voice for language code '\(languageCode)' is not available on this device.")
-            // Optionally, provide feedback to the user.
             errorMessageText = "Speech for this language is not available."
             showErrorMessage = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
@@ -206,6 +203,8 @@ struct NewWordInputView: View {
                 word = ""
                 baseText = ""
                 searchResults = []
+                // MODIFIED: Reset part of speech to nil
+                partOfSpeech = nil
                 focusedField = .top
                 
             } catch {
@@ -281,12 +280,14 @@ struct NewWordInputView: View {
                 try await viewModel.saveNewWord(
                     targetText: targetOut,
                     baseText: baseOut,
-                    partOfSpeech: partOfSpeech.rawValue
+                    // MODIFIED: Handle optional part of speech. Pass an empty string if nil.
+                    partOfSpeech: partOfSpeech?.rawValue ?? ""
                 )
 
                 word = ""
                 baseText = ""
-                partOfSpeech = .noun
+                // MODIFIED: Reset part of speech to nil on successful save.
+                partOfSpeech = nil
                 withAnimation {
                     showSuccessMessage = true
                     showErrorMessage = false
