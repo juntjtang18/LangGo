@@ -54,7 +54,11 @@ class StrapiService {
     func signup(payload: RegistrationPayload) async throws -> AuthResponse {
         logger.debug("StrapiService: Attempting signup.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register") else { throw URLError(.badURL) }
-        return try await NetworkManager.shared.post(to: url, body: payload)
+        //return try await NetworkManager.shared.post(to: url, body: payload)
+        let response: AuthResponse = try await NetworkManager.shared.post(to: url, body: payload)
+        self.invalidateAllUserCaches()
+        
+        return response
     }
 
     func fetchCurrentUser() async throws -> StrapiUser {
