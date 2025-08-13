@@ -51,34 +51,44 @@ struct NewWordInputView: View {
     // MARK: - Body
     var body: some View {
         NavigationStack {
-            VStack {
-                Form {
-                    NewWordFormView(
-                        word: $word,
-                        baseText: $baseText,
-                        partOfSpeech: $partOfSpeech,
-                        inputDirection: $inputDirection,
-                        searchResults: $searchResults,
-                        isSearching: $isSearching,
-                        focusedField: $focusedField,
-                        baseLanguageName: baseLanguageName,
-                        targetLanguageName: targetLanguageName,
-                        onDebouncedSearch: debouncedSearch,
-                        onTranslate: translateWord,
-                        onSwap: swapLanguages,
-                        // REMOVED: onSelectSearchResult is no longer passed.
-                        onLearnThis: learnThisWord
+            // MODIFIED: Wrapped in a ZStack to allow for overlay messages.
+            ZStack {
+                VStack {
+                    Form {
+                        NewWordFormView(
+                            word: $word,
+                            baseText: $baseText,
+                            partOfSpeech: $partOfSpeech,
+                            inputDirection: $inputDirection,
+                            searchResults: $searchResults,
+                            isSearching: $isSearching,
+                            focusedField: $focusedField,
+                            baseLanguageName: baseLanguageName,
+                            targetLanguageName: targetLanguageName,
+                            onDebouncedSearch: debouncedSearch,
+                            onTranslate: translateWord,
+                            onSwap: swapLanguages,
+                            onLearnThis: learnThisWord
+                        )
+                    }
+                    .id(inputDirection)
+                    .onAppear {
+                        focusedField = .top
+                    }
+                    
+                    saveButton
+                }
+                .padding(.bottom, 10)
+
+                // MODIFIED: Floating success/error messages
+                if showSuccessMessage || showErrorMessage {
+                    FloatingMessageView(
+                        isSuccess: showSuccessMessage,
+                        message: showSuccessMessage ? "Word saved successfully!" : errorMessageText
                     )
+                    .transition(.opacity.combined(with: .scale))
                 }
-                .id(inputDirection)
-                .onAppear {
-                    focusedField = .top
-                }
-                
-                saveButton
-                userFeedbackMessages
             }
-            .padding(.bottom, 10)
             .navigationTitle("Add New Word")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -95,7 +105,6 @@ struct NewWordInputView: View {
                     Text("Saving...")
                         .font(.headline)
                 }
-                // Make the sheet a small, non-dismissable pop-up
                 .presentationDetents([.height(150)])
                 .interactiveDismissDisabled(true)
             }
@@ -125,20 +134,7 @@ struct NewWordInputView: View {
         .padding(.horizontal)
     }
     
-    private var userFeedbackMessages: some View {
-        VStack {
-            if showSuccessMessage {
-                Text("Word saved successfully!")
-                    .font(.subheadline).padding().background(Color.green.opacity(0.9))
-                    .foregroundColor(.white).cornerRadius(10).shadow(radius: 5).transition(.opacity)
-            } else if showErrorMessage {
-                Text(errorMessageText)
-                    .font(.subheadline).padding().background(Color.red.opacity(0.9))
-                    .foregroundColor(.white).cornerRadius(10).shadow(radius: 5).transition(.opacity)
-            }
-        }
-        .frame(height: 100)
-    }
+    // REMOVED: The dedicated userFeedbackMessages view is no longer needed.
     
     // MARK: - Logic & Actions
     private func learnThisWord(result: SearchResult) {
@@ -181,8 +177,6 @@ struct NewWordInputView: View {
             word = ""; baseText = ""; searchResults = []; searchTask?.cancel()
         }
     }
-    
-    // REMOVED: The handleResultSelection function is no longer needed.
     
     private func debouncedSearch(term: String, searchBase: Bool) {
         searchTask?.cancel()
@@ -245,7 +239,7 @@ struct NewWordInputView: View {
                     showSuccessMessage = true
                     showErrorMessage = false
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     withAnimation { showSuccessMessage = false }
                 }
                 isLoading = false
@@ -297,6 +291,24 @@ struct NewWordInputView: View {
         }
     }
 }
+
+
+// MARK: - Floating Message View
+private struct FloatingMessageView: View {
+    let isSuccess: Bool
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.subheadline)
+            .foregroundColor(.white)
+            .padding()
+            .background(isSuccess ? Color.green : Color.red)
+            .cornerRadius(12)
+            .shadow(radius: 10)
+    }
+}
+
 
 struct SearchResult: Identifiable, Hashable {
     let id: String

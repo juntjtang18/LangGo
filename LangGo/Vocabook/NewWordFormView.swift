@@ -103,29 +103,33 @@ struct NewWordFormView: View {
         }
     }
     
+    // MODIFIED: This section is updated to match the mockup.
     private var actionButtonsSection: some View {
         HStack(spacing: 0) {
             Spacer()
             Button(action: onSwap) {
                 VStack {
-                    Image(systemName: "arrow.up.arrow.down.circle.fill")
+                    Image(systemName: "arrow.up.arrow.down") // Cleaner icon
                         .font(.largeTitle).foregroundColor(.white).frame(width: 60, height: 60)
                         .background(Color.accentColor).clipShape(Circle()).shadow(radius: 3)
                     Text("Swap").foregroundColor(.primary).font(.caption)
                 }
             }
             .buttonStyle(PlainButtonStyle())
+            
             Spacer()
+
             Button(action: onTranslate) {
                 VStack {
                     Image(systemName: "wand.and.stars")
                         .font(.largeTitle).foregroundColor(.white).frame(width: 60, height: 60)
-                        .background(Color.accentColor).clipShape(Circle()).shadow(radius: 3)
+                        .background(Color(UIColor.systemGray3)).clipShape(Circle()).shadow(radius: 3) // Gray background
                     Text("AI Translation").foregroundColor(.primary).font(.caption)
                 }
             }
             .buttonStyle(PlainButtonStyle())
             .disabled(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            
             Spacer()
         }
         .padding(.vertical, 10)
@@ -165,6 +169,5 @@ struct NewWordFormView: View {
             }
         }
         .padding(.vertical, 4)
-        // REMOVED: .contentShape and .onTapGesture modifiers are no longer here.
     }
 }

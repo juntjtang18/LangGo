@@ -70,6 +70,18 @@ class StrapiService {
         return try await NetworkManager.shared.put(to: url, body: body)
     }
 
+    func updateBaseLanguage(languageCode: String) async throws {
+        logger.debug("StrapiService: Updating base language to \(languageCode).")
+        // The only change is on this line: .me -> .mine
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
+
+        let payload = UserProfileUpdatePayload(baseLanguage: languageCode)
+        let body = UserProfileUpdatePayloadWrapper(data: payload)
+
+        let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
+    }
+
+
     func changePassword(currentPassword: String, newPassword: String, confirmNewPassword: String) async throws -> EmptyResponse {
         logger.debug("StrapiService: Changing password.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/change-password") else { throw URLError(.badURL) }
@@ -348,7 +360,7 @@ class StrapiService {
     
     /// The single source of truth for fetching "my flashcards". It handles caching and network requests.
     /// Get /api/flashcards/mine?pagination[page]=...
-    /// 
+    ///
     private func getOrFetchAllMyFlashcards() async throws -> [Flashcard] {
         // 1. If cache is fresh, try to load from it.
         if !isFlashcardsCacheStale {
@@ -389,7 +401,7 @@ class StrapiService {
     }
 
     /*
-     *  fetch /api/review-flashcards
+     * fetch /api/review-flashcards
      */
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching review flashcards page \(page), size \(pageSize).")

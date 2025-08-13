@@ -3,4 +3,52 @@
    uuid = "1E04B626-5D50-42E1-85CD-BEDFEE9C4C3B"
    type = "1"
    version = "2.0">
+   <Breakpoints>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "43B7BF22-CC56-47A6-8308-B8B92A78941B"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LangGo/Vocabook/VocabookPageRow.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "7"
+            endingLineNumber = "7"
+            landmarkName = "VocabookPageRow"
+            landmarkType = "14">
+            <Locations>
+               <Location
+                  uuid = "43B7BF22-CC56-47A6-8308-B8B92A78941B - 48d5ced2c1adb2a6"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "LangGo.VocabookPageRow.theme.getter : LangGo.Theme"
+                  moduleName = "LangGo.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/James/develop/apple/LangGo/LangGo/Vocabook/VocabookPageRow.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+               <Location
+                  uuid = "43B7BF22-CC56-47A6-8308-B8B92A78941B - 6fa58a5686ea6d1"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "default argument 0 of LangGo.VocabookPageRow.init(theme: SwiftUI.Environment&lt;LangGo.Theme&gt;, reviewSettings: SwiftUI.EnvironmentObject&lt;LangGo.ReviewSettingsManager&gt;, flashcardViewModel: LangGo.FlashcardViewModel, vocapage: LangGo.Vocapage, allVocapageIds: Swift.Array&lt;Swift.Int&gt;) -&gt; LangGo.VocabookPageRow"
+                  moduleName = "LangGo.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/James/develop/apple/LangGo/LangGo/Vocabook/VocabookPageRow.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "0"
+                  endingLineNumber = "0">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+   </Breakpoints>
 </Bucket>

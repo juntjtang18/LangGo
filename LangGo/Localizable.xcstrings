@@ -38,16 +38,44 @@
 
     },
     "Add New Word" : {
-
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "add new word"
+          }
+        }
+      }
     },
     "Add to VocaBook" : {
-
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "add to vocabook"
+          }
+        }
+      }
     },
     "Adding..." : {
-
+      "localizations" : {
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adding…"
+          }
+        }
+      }
     },
     "AI Conversation" : {
-
+      "localizations" : {
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Conversation"
+          }
+        }
+      }
     },
     "AI Conversation Partner" : {
 
@@ -1294,9 +1322,6 @@
           }
         }
       }
-    },
-    "Word saved successfully!" : {
-
     },
     "Wrong" : {
       "localizations" : {

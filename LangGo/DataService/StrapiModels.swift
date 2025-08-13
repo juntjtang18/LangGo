@@ -139,6 +139,17 @@ struct VBSettingUpdatePayload: Encodable {
     let data: Data
 }
 
+// MARK: - User Profile Models
+struct UserProfileUpdatePayload: Encodable {
+    let baseLanguage: String
+}
+
+// Add this struct to wrap the payload
+struct UserProfileUpdatePayloadWrapper: Encodable {
+    let data: UserProfileUpdatePayload
+}
+
+
 // MARK: - Generic API Response Wrappers
 struct StrapiListResponse<T: Codable>: Codable {
     let data: [T]?
