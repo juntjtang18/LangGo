@@ -2,6 +2,7 @@
 import SwiftUI
 import Combine
 import os
+import AVFoundation // Import for speech synthesis
 
 struct NewWordInputView: View {
     // MARK: - Environment & View Model
@@ -20,7 +21,7 @@ struct NewWordInputView: View {
     @State private var isTranslating: Bool = false
     @State private var isLearningWord: Bool = false
     
-    // RE-ADDED: Search State
+    // Search State
     @State private var searchResults: [SearchResult] = []
     @State private var isSearching: Bool = false
     @State private var searchTask: Task<Void, Never>?
@@ -35,6 +36,9 @@ struct NewWordInputView: View {
         case top, bottom
     }
     @FocusState private var focusedField: Field?
+    
+    // Speech Synthesizer
+    @State private var synthesizer = AVSpeechSynthesizer()
 
     // MARK: - Enums & Computed Properties
     enum InputDirection: String, CaseIterable, Identifiable {
@@ -54,7 +58,6 @@ struct NewWordInputView: View {
             ZStack {
                 VStack {
                     Form {
-                        // RE-ADDED: Search parameters passed to the form view
                         NewWordFormView(
                             word: $word,
                             baseText: $baseText,
@@ -68,7 +71,9 @@ struct NewWordInputView: View {
                             onDebouncedSearch: debouncedSearch,
                             onTranslate: translateWord,
                             onSwap: swapLanguages,
-                            onLearnThis: learnThisWord
+                            onLearnThis: learnThisWord,
+                            onSpeakTop: speakTop,
+                            onSpeakBottom: speakBottom
                         )
                     }
                     .id(inputDirection)
@@ -80,7 +85,6 @@ struct NewWordInputView: View {
                 }
                 .padding(.bottom, 10)
 
-                // Floating success/error messages
                 if showSuccessMessage || showErrorMessage {
                     FloatingMessageView(
                         isSuccess: showSuccessMessage,
@@ -135,7 +139,56 @@ struct NewWordInputView: View {
     }
     
     // MARK: - Logic & Actions
-    // RE-ADDED: Search and Learn functions
+    
+    // UPDATED: More robust speech function
+    private func speak(text: String, languageCode: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        // Stop any speech that is currently happening.
+        synthesizer.stopSpeaking(at: .immediate)
+
+        // Configure the audio session for playback. This is a crucial step.
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("Failed to set up audio session: \(error.localizedDescription)")
+            return
+        }
+
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
+        
+        // Add a check to ensure the requested voice is available.
+        if utterance.voice == nil {
+            print("Error: The voice for language code '\(languageCode)' is not available on this device.")
+            // Optionally, provide feedback to the user.
+            errorMessageText = "Speech for this language is not available."
+            showErrorMessage = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                showErrorMessage = false
+            }
+            return
+        }
+
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        synthesizer.speak(utterance)
+    }
+
+    private func speakTop() {
+        let isBaseAtTop = (inputDirection == .baseToTarget)
+        let textToSpeak = word
+        let langCode = isBaseAtTop ? baseLanguageCode : targetLanguageCode
+        speak(text: textToSpeak, languageCode: langCode)
+    }
+
+    private func speakBottom() {
+        let isBaseAtBottom = (inputDirection != .baseToTarget)
+        let textToSpeak = baseText
+        let langCode = isBaseAtBottom ? baseLanguageCode : targetLanguageCode
+        speak(text: textToSpeak, languageCode: langCode)
+    }
+
     private func learnThisWord(result: SearchResult) {
         guard !isLearningWord else { return }
         isLearningWord = true

@@ -54,6 +54,9 @@ struct NewWordFormView: View {
     let onTranslate: () -> Void
     let onSwap: () -> Void
     let onLearnThis: (SearchResult) -> Void
+    // ADDED: Actions for speaking text
+    let onSpeakTop: () -> Void
+    let onSpeakBottom: () -> Void
     
     // MARK: - Body
     var body: some View {
@@ -88,14 +91,14 @@ struct NewWordFormView: View {
             HStack {
                 Text(isBaseAtTop ? "Base (\(baseLanguageName))" : "Target (\(targetLanguageName))")
                 Spacer()
-                Button(action: {}) { Image(systemName: "speaker.wave.2.fill") }
+                // UPDATED: Speaker button is now functional
+                Button(action: onSpeakTop) { Image(systemName: "speaker.wave.2.fill") }
                     .buttonStyle(SubtleIconButtonStyle())
                 
-                // RESTORED: Translate button is back in the top header
                 Button(action: onTranslate) { Image(systemName: "camera.viewfinder") }
                     .buttonStyle(ProminentIconButtonStyle(backgroundColor: Color(UIColor.systemGray2)))
             }
-            .padding(.bottom, 4) // Adds a little space between header and text field
+            .padding(.bottom, 4)
         }
     }
 
@@ -122,14 +125,14 @@ struct NewWordFormView: View {
             HStack {
                 Text(isBaseAtBottom ? "Base (\(baseLanguageName))" : "Target (\(targetLanguageName))")
                 Spacer()
-                Button(action: {}) { Image(systemName: "speaker.wave.2.fill") }
+                // UPDATED: Speaker button is now functional
+                Button(action: onSpeakBottom) { Image(systemName: "speaker.wave.2.fill") }
                     .buttonStyle(SubtleIconButtonStyle())
-                
-                // RESTORED: Swap button is back in the bottom header
+
                 Button(action: onSwap) { Image(systemName: "arrow.up.arrow.down") }
                     .buttonStyle(ProminentIconButtonStyle(backgroundColor: .accentColor))
             }
-            .padding(.bottom, 4) // Adds a little space between header and text field
+            .padding(.bottom, 4)
         }
     }
     
