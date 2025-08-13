@@ -71,11 +71,11 @@ struct NewWordFormView: View {
         
         return Section {
             TextField(isBaseAtTop ? "Enter base word" : "Enter target word", text: $word, axis: .vertical)
-                .frame(minHeight: 80, alignment: .top)
+                // MODIFIED: Reduced height to be closer to two lines.
+                .frame(minHeight: 60, alignment: .top)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .focused($focusedField, equals: .top)
-                // MODIFIED: Used older, more compatible onChange syntax.
                 .onChange(of: word, perform: { newWord in
                     onDebouncedSearch(newWord, isBaseAtTop)
                 })
@@ -107,12 +107,12 @@ struct NewWordFormView: View {
 
         return Section {
             TextField(isBaseAtBottom ? "Enter base word" : "Target word", text: $baseText, axis: .vertical)
-                .frame(minHeight: 80, alignment: .top)
+                // MODIFIED: Reduced height to be closer to two lines.
+                .frame(minHeight: 60, alignment: .top)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .focused($focusedField, equals: .bottom)
                 .foregroundColor(isTranslationStale ? .gray : .primary)
-                // MODIFIED: Used older, more compatible onChange syntax.
                 .onChange(of: baseText, perform: { newText in
                     onDebouncedSearch(newText, isBaseAtBottom)
                 })
@@ -147,8 +147,9 @@ struct NewWordFormView: View {
     }
     
     private var partOfSpeechSection: some View {
-        Section("Part of Speech") {
-            Picker("Select Part of Speech", selection: $partOfSpeech) {
+        // MODIFIED: Removed the section header text.
+        Section("") {
+            Picker("Part of Speech", selection: $partOfSpeech) {
                 Text("Not Specified").tag(nil as PartOfSpeech?)
                 ForEach(PartOfSpeech.allCases) { pos in
                     Text(pos.displayName).tag(pos as PartOfSpeech?)

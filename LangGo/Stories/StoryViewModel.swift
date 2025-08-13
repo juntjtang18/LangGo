@@ -53,7 +53,10 @@ class StoryViewModel: ObservableObject {
     init(languageSettings: LanguageSettings) {
         self.languageSettings = languageSettings
     }
-    
+    // Add this computed property
+    private var baseLanguageCode: String {
+        languageSettings.selectedLanguageCode
+    }
     // MARK: - Public Methods
     
     // ADDED: A new method to handle speaking text.
@@ -187,7 +190,8 @@ class StoryViewModel: ObservableObject {
             _ = try await strapiService.saveNewWord(
                 targetText: tgt,
                 baseText: base,
-                partOfSpeech: partOfSpeech
+                partOfSpeech: partOfSpeech,
+                locale: baseLanguageCode // FIX 1: Add locale parameter
             )
             logger.info("Saved new word successfully from story view.")
         } catch {

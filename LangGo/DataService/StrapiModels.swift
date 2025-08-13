@@ -327,11 +327,13 @@ struct WordDefinitionCreationPayload: Encodable {
     let targetText: String
     let baseText: String
     let partOfSpeech: String
-    
+    let locale: String // Add this line
+
     enum CodingKeys: String, CodingKey {
         case targetText = "target_text"
         case baseText = "base_text"
         case partOfSpeech = "part_of_speech"
+        case locale // Add this line
     }
 }
 // Add this struct to handle the attributes of a part of speech

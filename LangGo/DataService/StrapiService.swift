@@ -226,7 +226,7 @@ class StrapiService {
     
     // MARK: - Word Creation, Translation & Search
     
-    func saveNewWord(targetText: String, baseText: String, partOfSpeech: String) async throws -> WordDefinitionResponse {
+    func saveNewWord(targetText: String, baseText: String, partOfSpeech: String, locale: String) async throws -> WordDefinitionResponse { // Add locale parameter
         logger.debug("StrapiService: Saving new word and definition.")
         
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/word-definitions") else { throw URLError(.badURL) }
@@ -234,7 +234,8 @@ class StrapiService {
         let payload = WordDefinitionCreationPayload(
             targetText: targetText,
             baseText: baseText,
-            partOfSpeech: partOfSpeech
+            partOfSpeech: partOfSpeech,
+            locale: locale // Add locale to payload
         )
         let requestBody = CreateWordDefinitionRequest(data: payload)
         

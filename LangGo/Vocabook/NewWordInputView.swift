@@ -190,7 +190,8 @@ struct NewWordInputView: View {
                 try await viewModel.saveNewWord(
                     targetText: result.targetText,
                     baseText: result.baseText,
-                    partOfSpeech: posRawValue
+                    partOfSpeech: posRawValue,
+                    locale: baseLanguageCode // FIX 1: Add locale parameter
                 )
                 word = ""
                 baseText = ""
@@ -266,7 +267,8 @@ struct NewWordInputView: View {
                 try await viewModel.saveNewWord(
                     targetText: targetOut,
                     baseText: baseOut,
-                    partOfSpeech: partOfSpeech?.rawValue ?? ""
+                    partOfSpeech: partOfSpeech?.rawValue ?? "",
+                    locale: baseLanguageCode // FIX 2: Add locale parameter
                 )
                 word = ""
                 baseText = ""

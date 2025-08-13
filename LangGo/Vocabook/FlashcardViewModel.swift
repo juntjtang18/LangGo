@@ -99,16 +99,17 @@ class FlashcardViewModel: ObservableObject {
 
     // MARK: - New Word Logic
     
-    func saveNewWord(targetText: String, baseText: String, partOfSpeech: String) async throws {
+    func saveNewWord(targetText: String, baseText: String, partOfSpeech: String, locale: String) async throws { // Add locale parameter
         do {
             let tgt = targetText.trimmingCharacters(in: .whitespacesAndNewlines)
             let base = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            logger.info("Saving new word -> target:'\(tgt, privacy: .public)' | base:'\(base, privacy: .public)' | pos:'\(partOfSpeech, privacy: .public)'")
+            logger.info("Saving new word -> target:'\(tgt, privacy: .public)' | base:'\(base, privacy: .public)' | pos:'\(partOfSpeech, privacy: .public)' | locale:'\(locale, privacy: .public)'") // Add locale to log
             _ = try await strapiService.saveNewWord(
                 targetText: tgt,
                 baseText: base,
-                partOfSpeech: partOfSpeech
+                partOfSpeech: partOfSpeech,
+                locale: locale // Pass locale to service
             )
             logger.info("Saved new word successfully.")
             // Refresh user's cards and stats after saving a new one

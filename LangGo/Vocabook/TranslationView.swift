@@ -241,7 +241,8 @@ struct TranslationView: View {
                 try await viewModel.saveNewWord(
                     targetText: targetOut,
                     baseText: baseOut,
-                    partOfSpeech: partOfSpeech.rawValue
+                    partOfSpeech: partOfSpeech.rawValue,
+                    locale: languageSettings.selectedLanguageCode
                 )
 
                 withAnimation { showSuccessMessage = true }
