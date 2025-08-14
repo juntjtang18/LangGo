@@ -52,12 +52,11 @@ class StrapiService {
     }
 
     func signup(payload: RegistrationPayload) async throws -> AuthResponse {
-        logger.debug("StrapiService: Attempting signup.")
+        logger.debug("StrapiService: Attempting signup with proficiency and reminders.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register") else { throw URLError(.badURL) }
-        //return try await NetworkManager.shared.post(to: url, body: payload)
         let response: AuthResponse = try await NetworkManager.shared.post(to: url, body: payload)
+        // Invalidate caches on a new registration.
         self.invalidateAllUserCaches()
-        
         return response
     }
 
@@ -86,16 +85,15 @@ class StrapiService {
     }
 
     // This is the new function from the previous step, now corrected.
-    func updateUserProfile(userId: Int, proficiency: String, remindersEnabled: Bool) async throws {
+    func updateUserProfile(userId: Int, proficiencyKey: String, remindersEnabled: Bool) async throws {
         logger.debug("StrapiService: Updating user profile for user ID: \(userId).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
 
-        // CORRECTED: Retrieves the base language from UserDefaults, with "en" as a fallback.
         let baseLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en"
 
         let payload = UserProfileUpdatePayload(
             baseLanguage: baseLanguage,
-            proficiency: proficiency,
+            proficiency: proficiencyKey,
             reminder_enabled: remindersEnabled
         )
         let body = UserProfileUpdatePayloadWrapper(data: payload)
@@ -377,6 +375,30 @@ class StrapiService {
         logger.debug("✏️ Invalidated VB settings cache due to update.")
         
         return response.data
+    }
+
+    func fetchProficiencyLevels(locale: String) async throws -> [ProficiencyLevel] {
+        logger.debug("StrapiService: Attempting to fetch proficiency levels for locale: \(locale).")
+        let localizedLevels = try await fetchLevels(for: locale)
+        if localizedLevels.isEmpty && locale != "en" {
+            logger.debug("No results for locale '\(locale)', falling back to 'en'.")
+            return try await fetchLevels(for: "en")
+        }
+        return localizedLevels
+    }
+
+    /// A private helper function to perform the actual network request for proficiency levels.
+    private func fetchLevels(for locale: String) async throws -> [ProficiencyLevel] {
+        guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/proficiency-levels") else {
+            throw URLError(.badURL)
+        }
+        urlComponents.queryItems = [
+            URLQueryItem(name: "locale", value: locale),
+            URLQueryItem(name: "sort", value: "level:asc")
+        ]
+        guard let url = urlComponents.url else { throw URLError(.badURL) }
+        let response: StrapiListResponse<ProficiencyLevel> = try await NetworkManager.shared.fetchDirect(from: url)
+        return response.data ?? []
     }
     
     // MARK: - Private Helper Functions

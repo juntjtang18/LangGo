@@ -101,9 +101,12 @@ struct RegistrationPayload: Encodable {
     let username: String
     let baseLanguage: String
     let telephone: String?
+    let proficiency: String? // Changed from Int?
+    let reminder_enabled: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case email, password, username, baseLanguage, telephone
+        case email, password, username, baseLanguage, telephone, proficiency
+        case reminder_enabled = "reminder_enabled"
     }
 }
 
@@ -139,10 +142,25 @@ struct VBSettingUpdatePayload: Encodable {
     let data: Data
 }
 
+// ADDED: Structs for the new ProficiencyLevel collection
+struct ProficiencyLevel: Codable, Identifiable, Hashable {
+    let id: Int
+    let attributes: ProficiencyLevelAttributes
+}
+
+struct ProficiencyLevelAttributes: Codable, Hashable {
+    let key: String
+    let displayName: String
+    let description: String?
+    let level: Int
+}
+
+
+
 // MARK: - User Profile Models
 struct UserProfileUpdatePayload: Encodable {
     let baseLanguage: String
-    let proficiency: String?
+    let proficiency: String? // Changed from Int?
     let reminder_enabled: Bool?
 
     enum CodingKeys: String, CodingKey {

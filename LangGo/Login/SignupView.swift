@@ -8,6 +8,7 @@ struct SignupView: View {
     @EnvironmentObject var languageSettings: LanguageSettings
     @Binding var currentView: LoginView.ViewState
     @Binding var authState: AuthState
+    var onboardingData: OnboardingData?
 
     // The view now gets its service dependency directly from the singleton.
     private let strapiService = DataServices.shared.strapiService
@@ -96,16 +97,18 @@ struct SignupView: View {
 
         Task {
             do {
+                // MODIFIED: The payload now correctly sends the proficiency *key* (string).
                 let payload = RegistrationPayload(
                     email: email,
                     password: password,
                     username: email,
                     baseLanguage: languageSettings.selectedLanguageCode,
-                    telephone: nil
+                    telephone: nil,
+                    proficiency: onboardingData?.proficiencyKey,
+                    reminder_enabled: onboardingData?.remindersEnabled
                 )
 
-                // Use the internally resolved service.
-                let authResponse = try await strapiService.signup(payload: payload)
+                let authResponse: AuthResponse = try await strapiService.signup(payload: payload)
                 keychain["jwt"] = authResponse.jwt
                 UserDefaults.standard.set(authResponse.user.username, forKey: "username")
                 UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
@@ -118,7 +121,7 @@ struct SignupView: View {
                 if let ns = error as NSError?, ns.domain == "NetworkManager.StrapiError" {
                     displayErrorMessage = ns.localizedDescription
                 } else {
-                    displayErrorMessage = "An unexpected error occurred during registration: \(error.localizedDescription)"
+                    displayErrorMessage = "An unexpected error occurred: \(error.localizedDescription)"
                 }
                 errorMessage = displayErrorMessage
                 logger.error("Signup failed: \(displayErrorMessage, privacy: .public)")

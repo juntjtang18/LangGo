@@ -4,14 +4,18 @@ import os
 
 struct LoginView: View {
     @Binding var authState: AuthState
+    var onboardingData: OnboardingData?
+
     @State private var currentView: ViewState = .login
     @State private var email = ""
     @State private var password = ""
     @State private var errorMessage = ""
     
+    // State to track the loading process
+    @State private var isLoading = false
+    
     @EnvironmentObject var languageSettings: LanguageSettings
 
-    // The view now gets the service it needs directly from the singleton
     private let strapiService = DataServices.shared.strapiService
     
     private let keychain = Keychain(service: Config.keychainService)
@@ -37,10 +41,12 @@ struct LoginView: View {
                             .autocapitalization(.none)
                             .keyboardType(.emailAddress)
                             .padding(.horizontal)
+                            .disabled(isLoading)
 
                         SecureField("Password", text: $password)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .padding(.horizontal)
+                            .disabled(isLoading)
 
                         if !errorMessage.isEmpty {
                             Text(errorMessage)
@@ -48,17 +54,21 @@ struct LoginView: View {
                                 .padding()
                         }
 
-                        Button(action: {
-                            login()
-                        }) {
-                            Text("Login")
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .clipShape(Capsule())
+                        Button(action: login) {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Text("Login")
+                            }
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .clipShape(Capsule())
                         .padding(.horizontal)
+                        .disabled(isLoading)
 
                         Button(action: {
                             currentView = .signup
@@ -67,6 +77,7 @@ struct LoginView: View {
                                 .foregroundColor(.blue)
                         }
                         .padding()
+                        .disabled(isLoading)
                     }
                     .padding()
                     .navigationTitle("")
@@ -91,13 +102,20 @@ struct LoginView: View {
                         logger.info("LoginView appeared. Learning Target Language Code: \(Config.learningTargetLanguageCode, privacy: .public)")
                     }
                 } else if currentView == .signup {
-                    SignupView(currentView: $currentView, authState: $authState)
+                    SignupView(
+                        currentView: $currentView,
+                        authState: $authState,
+                        onboardingData: onboardingData
+                    )
                 }
             }
         }
     }
 
     func login() {
+        isLoading = true
+        errorMessage = "" // Clear previous errors
+        
         logger.info("Attempting login...")
         logger.info("Login function. Strapi Base URL: \(Config.strapiBaseUrl, privacy: .public)")
         logger.info("Login function. Learning Target Language Code: \(Config.learningTargetLanguageCode, privacy: .public)")
@@ -105,7 +123,6 @@ struct LoginView: View {
         Task {
             do {
                 let credentials = LoginCredentials(identifier: email, password: password)
-                // Use the service resolved at the top of the struct
                 let authResponse = try await strapiService.login(credentials: credentials)
                 
                 keychain["jwt"] = authResponse.jwt
@@ -113,7 +130,6 @@ struct LoginView: View {
                 UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
                 UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
 
-                // Use the service resolved at the top of the struct
                 let vbSetting = try await strapiService.fetchVBSetting()
                 UserDefaults.standard.set(Double(vbSetting.attributes.wordsPerPage), forKey: "wordCountPerPage")
                 UserDefaults.standard.set(vbSetting.attributes.interval1, forKey: "interval1")
@@ -133,6 +149,8 @@ struct LoginView: View {
                 self.errorMessage = displayErrorMessage
                 logger.error("Login failed: \(displayErrorMessage, privacy: .public)")
             }
+            
+            isLoading = false
         }
     }
 }

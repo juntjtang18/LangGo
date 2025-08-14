@@ -4,11 +4,12 @@ import Foundation
 
 // ADDED: A new struct to represent the nested user_profile attributes.
 struct UserProfileAttributes: Codable {
-    let proficiency: String?
+    let proficiency: String?  // Change to String?
     let reminder_enabled: Bool?
     let baseLanguage: String?
     let telephone: String?
 }
+
 
 /// Represents the main user object returned from the `/api/users/me` endpoint.
 struct StrapiUser: Codable, Identifiable {

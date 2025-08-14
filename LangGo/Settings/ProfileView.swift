@@ -1,5 +1,3 @@
-// ProfileView.swift
-
 import SwiftUI
 import KeychainAccess
 import os
@@ -16,8 +14,10 @@ struct ProfileView: View {
     @State private var newPassword = ""
     @State private var confirmNewPassword = ""
     
-    // ADDED: State for new profile fields
-    @State private var proficiency: String = ""
+    // State for new profile fields
+    @State private var proficiencyId: Int = 0
+    @State private var proficiencyLevels: [ProficiencyLevel] = []
+    
     @State private var remindersEnabled: Bool = false
     
     // State for UI and feedback
@@ -27,9 +27,6 @@ struct ProfileView: View {
     
     private let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ProfileView")
-    
-    // ADDED: List of proficiency levels for the Picker
-    let proficiencyLevels = ["I'm just starting", "I know some basics", "I'm conversational", "I'm fluent but want to improve more"]
 
     var body: some View {
         NavigationStack {
@@ -51,11 +48,15 @@ struct ProfileView: View {
                         }
                     }
                     
-                    // ADDED: New section for learning preferences
                     Section(header: Text("LEARNING PREFERENCES")) {
-                        Picker("Proficiency", selection: $proficiency) {
-                            ForEach(proficiencyLevels, id: \.self) { level in
-                                Text(level)
+                        if proficiencyLevels.isEmpty {
+                            Text("Proficiency levels could not be loaded.")
+                                .foregroundColor(.secondary)
+                        } else {
+                            Picker("Proficiency", selection: $proficiencyId) {
+                                ForEach(proficiencyLevels) { level in
+                                    Text(level.attributes.displayName).tag(level.id)
+                                }
                             }
                         }
                         Toggle("Review Reminders", isOn: $remindersEnabled)
@@ -86,7 +87,6 @@ struct ProfileView: View {
                     Button("Back") { dismiss() }
                 }
             }
-            // MODIFIED: Use .task to load the full profile asynchronously.
             .task {
                 await loadUserProfile()
             }
@@ -98,14 +98,33 @@ struct ProfileView: View {
         }
     }
     
-    // ADDED: Fetches the complete user profile from the server.
     private func loadUserProfile() async {
+        isLoading = true
+        defer { isLoading = false }
+        
         do {
-            let user = try await strapiService.fetchCurrentUser()
+            async let userTask = strapiService.fetchCurrentUser()
+            async let levelsTask = strapiService.fetchProficiencyLevels(locale: UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en")
+            
+            let (user, levels) = try await (userTask, levelsTask)
+            
+            self.proficiencyLevels = levels
             self.username = user.username
             self.email = user.email
-            self.proficiency = user.user_profile?.proficiency ?? proficiencyLevels.first!
+            
+            // CORRECTED: This logic is now crash-proof and correctly handles the string key.
+            // 1. Get the proficiency key (string) from the user data.
+            let userProficiencyKey = user.user_profile?.proficiency
+            
+            // 2. Find the corresponding ProficiencyLevel object in the levels array.
+            let selectedLevel = levels.first { $0.attributes.key == userProficiencyKey }
+            
+            // 3. Set the proficiencyId state from the found level's ID.
+            //    If no level is found or the levels array is empty, it safely defaults to 0.
+            self.proficiencyId = selectedLevel?.id ?? levels.first?.id ?? 0
+            
             self.remindersEnabled = user.user_profile?.reminder_enabled ?? false
+            
         } catch {
             logger.error("Failed to load user profile: \(error.localizedDescription, privacy: .public)")
             alertMessage = "Could not load your profile. Please try again."
@@ -113,7 +132,6 @@ struct ProfileView: View {
         }
     }
     
-    // MODIFIED: Orchestrates all updates.
     func updateProfile() async {
         isLoading = true
         defer { isLoading = false }
@@ -127,7 +145,6 @@ struct ProfileView: View {
         
         var messages: [String] = []
         
-        // This now calls the more general profile update endpoint.
         await updateLearningPreferences(userId: userId, messages: &messages)
 
         let originalUsername = UserDefaults.standard.string(forKey: "username") ?? ""
@@ -147,12 +164,21 @@ struct ProfileView: View {
         showAlert = true
     }
     
-    // ADDED: Handles updating proficiency and reminders.
     private func updateLearningPreferences(userId: Int, messages: inout [String]) async {
+        // CORRECTED: Find the selected proficiency object based on the `proficiencyId`.
+        guard let selectedProficiency = proficiencyLevels.first(where: { $0.id == self.proficiencyId }) else {
+            messages.append("Could not save proficiency, levels were not loaded correctly.")
+            return
+        }
+        
+        // Get the string `key` from the selected object.
+        let proficiencyKeyToSave = selectedProficiency.attributes.key
+        
         do {
+            // Pass the correct string `key` to the service.
             try await strapiService.updateUserProfile(
                 userId: userId,
-                proficiency: proficiency,
+                proficiencyKey: proficiencyKeyToSave,
                 remindersEnabled: remindersEnabled
             )
             messages.append("Learning preferences updated.")
@@ -167,7 +193,6 @@ struct ProfileView: View {
     /// Handles the network request to update the username.
     private func updateUsername(userId: Int, messages: inout [String]) async {
         do {
-            // Use the internally resolved service
             let updatedUser = try await strapiService.updateUsername(userId: userId, username: username)
             UserDefaults.standard.set(updatedUser.username, forKey: "username")
             messages.append("Username updated successfully!")
@@ -193,7 +218,6 @@ struct ProfileView: View {
         }
         
         do {
-            // Use the internally resolved service
             let _: EmptyResponse = try await strapiService.changePassword(currentPassword: currentPassword, newPassword: newPassword, confirmNewPassword: confirmNewPassword)
             messages.append("Password changed successfully!")
             currentPassword = ""
