@@ -76,10 +76,28 @@ class StrapiService {
 
     func updateBaseLanguage(languageCode: String) async throws {
         logger.debug("StrapiService: Updating base language to \(languageCode).")
-        // The only change is on this line: .me -> .mine
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
 
-        let payload = UserProfileUpdatePayload(baseLanguage: languageCode)
+        // CORRECTED: Added nil for the new optional parameters to satisfy the initializer.
+        let payload = UserProfileUpdatePayload(baseLanguage: languageCode, proficiency: nil, reminder_enabled: nil)
+        let body = UserProfileUpdatePayloadWrapper(data: payload)
+
+        let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
+    }
+
+    // This is the new function from the previous step, now corrected.
+    func updateUserProfile(userId: Int, proficiency: String, remindersEnabled: Bool) async throws {
+        logger.debug("StrapiService: Updating user profile for user ID: \(userId).")
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
+
+        // CORRECTED: Retrieves the base language from UserDefaults, with "en" as a fallback.
+        let baseLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en"
+
+        let payload = UserProfileUpdatePayload(
+            baseLanguage: baseLanguage,
+            proficiency: proficiency,
+            reminder_enabled: remindersEnabled
+        )
         let body = UserProfileUpdatePayloadWrapper(data: payload)
 
         let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)

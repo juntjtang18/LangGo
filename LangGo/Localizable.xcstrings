@@ -214,6 +214,9 @@
         }
       }
     },
+    "Continue" : {
+
+    },
     "Correct" : {
       "localizations" : {
         "ja" : {
@@ -400,6 +403,9 @@
     "Explore lessons on specific topics" : {
 
     },
+    "Finished Onboarding" : {
+
+    },
     "Flashcard" : {
       "localizations" : {
         "ja" : {
@@ -437,7 +443,13 @@
     "Home" : {
 
     },
+    "How would you rate your proficiency?" : {
+
+    },
     "Input Text (%@)" : {
+
+    },
+    "LangGo to Pro, Ready to GO!" : {
 
     },
     "LangGo to Pro, Ready to GO?" : {
@@ -472,6 +484,9 @@
       }
     },
     "Learn This" : {
+
+    },
+    "LEARNING PREFERENCES" : {
 
     },
     "Lesson 3 Good Morning" : {
@@ -616,6 +631,9 @@
     "No vocabulary pages found. Start learning to create them!" : {
 
     },
+    "Not now — I’ll review manually" : {
+
+    },
     "Not Specified" : {
 
     },
@@ -686,6 +704,9 @@
           }
         }
       }
+    },
+    "Proficiency" : {
+
     },
     "Profile" : {
       "localizations" : {
@@ -836,6 +857,9 @@
         }
       }
     },
+    "Review Reminders" : {
+
+    },
     "Review Session" : {
       "localizations" : {
         "ja" : {
@@ -899,6 +923,9 @@
 
     },
     "Saving..." : {
+
+    },
+    "Select a language" : {
 
     },
     "Select a Theme" : {
@@ -1292,6 +1319,9 @@
     "Vocabulary Pages" : {
 
     },
+    "Want to remember 10× more — with less effort?" : {
+
+    },
     "Welcome to LangGo" : {
       "localizations" : {
         "ja" : {
@@ -1320,6 +1350,12 @@
         }
       }
     },
+    "What is your native language?" : {
+
+    },
+    "Without review, most people forget 90% of new words in 2 days. Our smart Vocabulary Notebook reminds you only when you’re about to forget — not too soon, not too late." : {
+
+    },
     "Wrong" : {
       "localizations" : {
         "ja" : {
@@ -1347,6 +1383,9 @@
           }
         }
       }
+    },
+    "Yes, help me remember better" : {
+
     }
   },
   "version" : "1.0"

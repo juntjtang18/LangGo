@@ -9,30 +9,31 @@ enum AuthState {
     case loggedOut
 }
 
-@main // ✅ Make this available from iOS 16
+@main
 struct LangGoApp: App {
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var authState: AuthState = .checking
     @StateObject private var languageSettings = LanguageSettings()
-    //@StateObject private var appEnvironment = AppEnvironment()
     @StateObject private var themeManager = ThemeManager()
 
     var body: some Scene {
         WindowGroup {
             Group {
-                switch authState {
-                case .checking:
-                    InitialLoadingView(authState: $authState)
-                case .loggedIn:
-                    MainView(authState: $authState)
-                case .loggedOut:
-                    LoginView(authState: $authState)
+                if !hasCompletedOnboarding {
+                    OnboardingView()
+                } else {
+                    switch authState {
+                    case .checking:
+                        InitialLoadingView(authState: $authState)
+                    case .loggedIn:
+                        MainView(authState: $authState)
+                    case .loggedOut:
+                        LoginView(authState: $authState)
+                    }
                 }
             }
-            // ✅ Inject required global dependencies
             .environmentObject(languageSettings)
-            //.environmentObject(appEnvironment)
-            //.environmentObject(appEnvironment.reviewSettingsManager)
-            .environmentObject(DataServices.shared.reviewSettingsManager) // <-- Updated from Services.shared
+            .environmentObject(DataServices.shared.reviewSettingsManager)
             .environment(\.theme, themeManager.currentTheme)
         }
     }

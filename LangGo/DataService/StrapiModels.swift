@@ -142,12 +142,20 @@ struct VBSettingUpdatePayload: Encodable {
 // MARK: - User Profile Models
 struct UserProfileUpdatePayload: Encodable {
     let baseLanguage: String
+    let proficiency: String?
+    let reminder_enabled: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case baseLanguage, proficiency
+        case reminder_enabled = "reminder_enabled"
+    }
 }
 
 // Add this struct to wrap the payload
 struct UserProfileUpdatePayloadWrapper: Encodable {
     let data: UserProfileUpdatePayload
 }
+
 
 
 // MARK: - Generic API Response Wrappers
