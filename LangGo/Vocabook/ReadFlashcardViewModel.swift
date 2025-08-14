@@ -52,6 +52,17 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     }
 
     func startReadingSession(showBaseTextBinding: Binding<Bool>) {
+        // --- ADD THIS LOGGING BLOCK ---
+        logger.debug("""
+        
+        --- Starting Reading Session ---
+        - Target Language (from Config): '\(Config.learningTargetLanguageCode)'
+        - Base Language (from LanguageSettings): '\(self.languageSettings.selectedLanguageCode)'
+        - Total flashcards: \(self.flashcards.count)
+        ---------------------------------
+        
+        """)
+        
         guard !flashcards.isEmpty else {
             logger.warning("No flashcards to read.")
             return
@@ -118,26 +129,38 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
         }
 
         let textToSpeak: String
-        let languageCode: String
+        var languageCode: String
 
         switch currentStep {
         case .firstWord, .secondWord:
             textToSpeak = card.backContent
-            languageCode = "en-US" // This should likely come from a config or language settings
+            // Use the learning target language
+            languageCode = Config.learningTargetLanguageCode
             readingState = .readingWord
+            logger.info("Reading TARGET text. Using language: '\(languageCode)'")
+
         case .baseText:
             textToSpeak = card.frontContent
+            // Use the user's selected base language
             languageCode = self.languageSettings.selectedLanguageCode
             readingState = .readingBaseText
+            logger.info("Reading BASE text. Using language: '\(languageCode)'")
+            
         case .finished:
             return
         }
+        
+        // This handles cases like "fr" -> "fr-FR" for the synthesizer
+        if languageCode == "fr" { languageCode = "fr-FR" }
+        if languageCode == "zh-Hans" { languageCode = "zh-CN" }
 
         let utterance = AVSpeechUtterance(string: textToSpeak)
         utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
+        
         if utterance.voice == nil {
-            logger.error("Error: The voice for language code '\(languageCode)' is not available on this device.")
+            logger.error("!!! VOICE NOT FOUND for language code '\(languageCode)'.")
         }
+
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
         synthesizer.speak(utterance)
     }

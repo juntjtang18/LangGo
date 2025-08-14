@@ -16,7 +16,8 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private var interval1: TimeInterval = 1.5
     private var interval2: TimeInterval = 2.0
     private var interval3: TimeInterval = 2.0
-    
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "SpeechManager")
+
     private enum ReadingStep {
         case firstReadTarget, secondReadTarget, readBase, finished
     }
@@ -28,6 +29,17 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
 
     func startReadingSession(flashcards: [Flashcard], showBaseText: Bool, languageSettings: LanguageSettings, settings: VBSettingAttributes) {
+        // --- ADD THIS LOGGING BLOCK ---
+        logger.debug("""
+        
+        --- Starting SpeechManager Session ---
+        - Target Language (from Config): '\(Config.learningTargetLanguageCode)'
+        - Base Language (from LanguageSettings): '\(languageSettings.selectedLanguageCode)'
+        - Total flashcards: \(flashcards.count)
+        ------------------------------------
+        
+        """)
+
         self.flashcards = flashcards
         self.languageSettings = languageSettings
         self.showBaseText = showBaseText
@@ -56,25 +68,32 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
         let card = flashcards[currentIndex]
         let textToSpeak: String
-        let languageCode: String
+        var languageCode: String
 
         switch currentStep {
         case .firstReadTarget, .secondReadTarget:
             textToSpeak = card.backContent
             languageCode = Config.learningTargetLanguageCode
+            logger.info("Reading TARGET text. Using language: '\(languageCode)'")
+
         case .readBase:
             textToSpeak = card.frontContent
             languageCode = languageSettings?.selectedLanguageCode ?? "en-US"
+            logger.info("Reading BASE text. Using language: '\(languageCode)'")
+
         case .finished:
             goToNextCard()
             return
         }
         
+        if languageCode == "fr" { languageCode = "fr-FR" }
+        if languageCode == "zh-Hans" { languageCode = "zh-CN" }
+        
         let utterance = AVSpeechUtterance(string: textToSpeak)
         utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
         
         if utterance.voice == nil {
-            print("Error: Voice for language code '\(languageCode)' not available.")
+            logger.error("!!! VOICE NOT FOUND for language code '\(languageCode)'.")
             speechSynthesizer(synthesizer, didFinish: utterance)
             return
         }
