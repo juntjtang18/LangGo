@@ -3,6 +3,7 @@ import SwiftUI
 
 private struct ProminentIconButtonStyle: ButtonStyle {
     let backgroundColor: Color
+    @Environment(\.isEnabled) private var isEnabled: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -14,6 +15,7 @@ private struct ProminentIconButtonStyle: ButtonStyle {
             .shadow(color: .black.opacity(0.2), radius: 3, y: 2)
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .opacity(isEnabled ? 1.0 : 0.5)
     }
 }
 
@@ -56,6 +58,8 @@ struct NewWordFormView: View {
     let onSpeakTop: () -> Void
     let onSpeakBottom: () -> Void
     
+    @Environment(\.theme) var theme: Theme
+    
     // MARK: - Body
     var body: some View {
         Group {
@@ -95,8 +99,9 @@ struct NewWordFormView: View {
                 Button(action: onSpeakTop) { Image(systemName: "speaker.wave.2.fill") }
                     .buttonStyle(SubtleIconButtonStyle())
                 
-                Button(action: onTranslate) { Image(systemName: "camera.viewfinder") }
-                    .buttonStyle(ProminentIconButtonStyle(backgroundColor: Color(UIColor.systemGray2)))
+                Button(action: onTranslate) { Image(systemName: "sparkles") }
+                    .buttonStyle(ProminentIconButtonStyle(backgroundColor: word.isEmpty ? Color(UIColor.systemGray2) : theme.accent))
+                    .disabled(word.isEmpty)
             }
             .padding(.bottom, 4)
         }

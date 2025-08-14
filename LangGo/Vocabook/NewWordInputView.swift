@@ -76,11 +76,11 @@ struct NewWordInputView: View {
                     }
                 }
             }
-            .sheet(isPresented: $isLearningWord) {
+            .sheet(isPresented: $isTranslating) {
                 VStack(spacing: 20) {
                     ProgressView()
                         .scaleEffect(1.5)
-                    Text("Saving...")
+                    Text("Translating...")
                         .font(.headline)
                 }
                 .presentationDetents([.height(150)])
@@ -120,32 +120,45 @@ struct NewWordInputView: View {
                 isTranslationStale = true
             })
             
-            saveButton
+            actionButtons
         }
         .padding(.bottom, 10)
     }
 
     // MARK: - Subviews
-    private var saveButton: some View {
-        Button(action: saveWord) {
-            HStack {
-                if isLoading { ProgressView() }
-                Text(isLoading ? "Saving..." : "Save")
+    private var actionButtons: some View {
+        HStack(spacing: 20) {
+            Button(action: translateWord) {
+                Text("Translate")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Capsule().fill(Color.blue))
+                    .foregroundColor(.white)
+                    .font(.headline)
+                    .opacity(word.isEmpty || isTranslating || isLoading ? 0.5 : 1.0)
             }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Capsule().fill(Color.green))
-            .foregroundColor(.white)
-            .font(.headline)
-            .opacity(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                     || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                     || isLoading || isTranslating || isTranslationStale ? 0.5 : 1.0)
+            .disabled(word.isEmpty || isTranslating || isLoading)
+            
+            Button(action: saveWord) {
+                HStack {
+                    if isLoading { ProgressView() }
+                    Text(isLoading ? "Saving..." : "Save")
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Capsule().fill(Color.green))
+                .foregroundColor(.white)
+                .font(.headline)
+                .opacity(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                         || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                         || isLoading || isTranslating || isTranslationStale ? 0.5 : 1.0)
+            }
+            .disabled(isLoading
+                      || word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                      || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                      || isTranslating
+                      || isTranslationStale)
         }
-        .disabled(isLoading
-                  || word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                  || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                  || isTranslating
-                  || isTranslationStale)
         .padding(.horizontal)
     }
     
