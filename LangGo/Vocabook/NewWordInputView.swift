@@ -314,12 +314,14 @@ struct NewWordInputView: View {
                     target: targetCode
                 )
                 self.baseText = response.translation
-                if let firstPartOfSpeech = response.partOfSpeech.split(separator: ",").first {
-                    let posString = String(firstPartOfSpeech).trimmingCharacters(in: .whitespaces).lowercased()
-                    if let newPartOfSpeech = PartOfSpeech(rawValue: posString) {
+                
+                // Only set the part of speech if it's a single value
+                if !response.partOfSpeech.contains(",") {
+                    if let newPartOfSpeech = PartOfSpeech(rawValue: response.partOfSpeech.trimmingCharacters(in: .whitespaces).lowercased()) {
                         self.partOfSpeech = newPartOfSpeech
                     }
                 }
+                
                 self.isTranslationStale = false
             } catch {
                 errorMessageText = "Translation failed: \(error.localizedDescription)"
