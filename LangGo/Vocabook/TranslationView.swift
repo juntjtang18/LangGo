@@ -201,7 +201,7 @@ struct TranslationView: View {
                     source: sourceTranslationLanguageCode,
                     target: targetTranslationLanguageCode
                 )
-                translatedText = result
+                translatedText = result.translation
                 lastTranslatedInput = inputText
                 lastTranslatedOutput = translatedText
                 inputIsStale = false

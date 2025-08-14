@@ -1,3 +1,4 @@
+// LangGo/Vocabook/FlashcardViewModel.swift
 import SwiftUI
 import os
 
@@ -123,12 +124,12 @@ class FlashcardViewModel: ObservableObject {
 
     // MARK: - Translation
     
-    func translateWord(word: String, source: String, target: String) async throws -> String {
+    func translateWord(word: String, source: String, target: String) async throws -> TranslateWordResponse {
         do {
             logger.info("Attempting to translate word '\(word, privacy: .public)' from \(source, privacy: .public) to \(target, privacy: .public)")
             let response: TranslateWordResponse = try await strapiService.translateWord(word: word, source: source, target: target)
             logger.info("Successfully translated word: \(response.translation, privacy: .public)")
-            return response.translation
+            return response
         } catch {
             logger.error("Failed to translate word '\(word, privacy: .public)': \(error.localizedDescription)")
             throw error

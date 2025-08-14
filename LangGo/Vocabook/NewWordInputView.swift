@@ -308,12 +308,18 @@ struct NewWordInputView: View {
                     isTranslating = false
                     return
                 }
-                let translated = try await viewModel.translateWord(
+                let response = try await viewModel.translateWord(
                     word: sourceText,
                     source: sourceCode,
                     target: targetCode
                 )
-                self.baseText = translated
+                self.baseText = response.translation
+                if let firstPartOfSpeech = response.partOfSpeech.split(separator: ",").first {
+                    let posString = String(firstPartOfSpeech).trimmingCharacters(in: .whitespaces).lowercased()
+                    if let newPartOfSpeech = PartOfSpeech(rawValue: posString) {
+                        self.partOfSpeech = newPartOfSpeech
+                    }
+                }
                 self.isTranslationStale = false
             } catch {
                 errorMessageText = "Translation failed: \(error.localizedDescription)"

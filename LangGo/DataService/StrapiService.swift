@@ -161,14 +161,21 @@ class StrapiService {
     }
 
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
+        // --- Start Logging ---
+        logger.debug("--- Preparing to fetch review flashcards ---")
+        logger.debug("Current isFlashcardsCacheStale flag is: \(self.isFlashcardsCacheStale)")
+        // --- End Logging ---
+
         if !isFlashcardsCacheStale {
             if let cachedFlashcards = cacheService.load(type: [Flashcard].self, from: reviewFlashcardsCacheKey) {
-                logger.debug("✅ Returning review flashcards from cache.")
+                logger.debug("✅ Cache is FRESH. Returning \(cachedFlashcards.count) cards from local cache.")
                 return cachedFlashcards
+            } else {
+                logger.debug("⚠️ Cache flag was FRESH, but no cache file was found. Proceeding to network fetch.")
             }
         }
 
-        logger.debug("Cache for review flashcards is stale or empty. Fetching all pages from network.")
+        logger.debug("➡️ Cache is STALE or empty. Fetching all pages from network.")
         var allCards: [Flashcard] = []
         var currentPage = 1
         let pageSize = 100
@@ -189,8 +196,15 @@ class StrapiService {
             }
         }
         
+        logger.debug("✅ Fetched \(allCards.count) review flashcards from network.")
         cacheService.save(allCards, key: reviewFlashcardsCacheKey)
+        
+        // --- THIS IS THE CRITICAL FIX ---
+        // After successfully fetching from the network and saving to cache,
+        // we now mark the cache as FRESH.
         self.isFlashcardsCacheStale = false
+        logger.debug("✅ Cache has been updated. isFlashcardsCacheStale flag is now FALSE.")
+        // --- END FIX ---
         
         return allCards
     }

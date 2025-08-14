@@ -38,16 +38,32 @@ struct VocabookView: View {
             .padding(.top)
         }
         .background(theme.background.ignoresSafeArea())
+        .onAppear {
+            Task {
+                await flashcardViewModel.loadStatistics()
+            }
+        }
         .fullScreenCover(isPresented: $isAddingNewWord) {
             NewWordInputView(viewModel: flashcardViewModel)
         }
-        .fullScreenCover(isPresented: $isReviewing) {
+        .fullScreenCover(isPresented: $isReviewing, onDismiss: {
+            Task {
+                // This ensures stats are refreshed the moment the review sheet closes.
+                await flashcardViewModel.loadStatistics()
+            }
+        }) {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isListening) {
              ReadFlashcardView(languageSettings: languageSettings)
         }
-        .sheet(isPresented: $isQuizzing) {
+        .sheet(isPresented: $isQuizzing, onDismiss: {
+            Task {
+                // This block runs when the quiz view is closed,
+                // ensuring the main screen always shows fresh data.
+                await flashcardViewModel.loadStatistics()
+            }
+        }) {
             if !flashcardViewModel.reviewCards.isEmpty {
                 ExamView(flashcards: flashcardViewModel.reviewCards)
             } else {
@@ -230,13 +246,30 @@ private struct ConnectedActionButtons: View {
 
             VStack(alignment: .center, spacing: spacing) {
                 HStack(spacing: spacing) {
-                    VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) { isReviewing = true }
+                    // --- THIS IS THE MODIFIED BUTTON ---
+                    VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) {
+                        Task {
+                            // 1. Refresh the review card list.
+                            await flashcardViewModel.prepareReviewSession()
+                            // 2. Then, open the review screen.
+                            isReviewing = true
+                        }
+                    }
+                    // --- END MODIFICATION ---
+
                     VocabookActionButton(title: "Listen", icon: "headphones", style: .vocabookActionSecondary) { isListening = true }
                     VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionPrimary) { isShowingSettings = true }
                 }
 
-                HStack(spacing: spacing) {
-                    VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) { isQuizzing = true }
+                HStack(spacing: spacing) {                    
+                    VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
+                        Task {
+                            // 1. First, fetch the latest review cards.
+                            await flashcardViewModel.prepareReviewSession()
+                            // 2. Then, show the quiz view.
+                            isQuizzing = true
+                        }
+                    }
                     VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) { isAddingNewWord = true }
 
                     if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
