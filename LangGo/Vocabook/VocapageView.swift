@@ -15,14 +15,15 @@ struct VocapageHostView: View {
     @State private var isShowingExamView: Bool = false
     @StateObject private var speechManager = SpeechManager()
     
-    // MODIFICATION 1: Store the original full list of IDs and make the displayed list a state variable.
     let originalAllVocapageIds: [Int]
     @State private var vocapageIds: [Int]
     @State private var currentPageIndex: Int
 
     let flashcardViewModel: FlashcardViewModel
     @State private var isShowingReviewView: Bool = false
-    @State private var isShowingDueWordsOnly: Bool = false
+    
+    // MODIFICATION 1: Use @AppStorage to persist the filter state.
+    @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly: Bool = false
 
     init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
         self.originalAllVocapageIds = allVocapageIds
@@ -32,7 +33,6 @@ struct VocapageHostView: View {
     }
 
     private var currentVocapage: Vocapage? {
-        // Use the state variable `vocapageIds`
         guard !vocapageIds.isEmpty else { return nil }
         let currentId = vocapageIds[currentPageIndex]
         return loader.vocapages[currentId]
@@ -43,21 +43,19 @@ struct VocapageHostView: View {
     }
 
     var body: some View {
-        // ZStack allows overlaying the navigation buttons on top of the pager view.
         ZStack {
             VocapagePagingView(
                 currentPageIndex: $currentPageIndex,
-                allVocapageIds: vocapageIds, // Use the state variable
+                allVocapageIds: vocapageIds,
                 loader: loader,
                 showBaseText: $showBaseText,
                 speechManager: speechManager,
                 isShowingDueWordsOnly: isShowingDueWordsOnly
             )
 
-            // The new navigation buttons for previous/next page
             PageNavigationControls(
                 currentPageIndex: $currentPageIndex,
-                pageCount: vocapageIds.count // Use the state variable
+                pageCount: vocapageIds.count
             )
         }
         .navigationTitle("My Vocabulary")
@@ -73,42 +71,10 @@ struct VocapageHostView: View {
                 isShowingReviewView: $isShowingReviewView,
                 isShowingDueWordsOnly: $isShowingDueWordsOnly,
                 onToggleDueWords: {
-                    // MODIFICATION 2: Implement the logic to regenerate the page list.
+                    // This now toggles the @AppStorage variable, automatically saving the state.
                     isShowingDueWordsOnly.toggle()
                     Task {
-                        if isShowingDueWordsOnly {
-                            // In "due only" mode, calculate new page count based on due cards.
-                            await flashcardViewModel.loadStatistics()
-                            let totalDueCards = flashcardViewModel.dueForReviewCount
-                            
-                            do {
-                                // Fetch page size from settings.
-                                let vbSetting = try await DataServices.shared.strapiService.fetchVBSetting()
-                                let pageSize = vbSetting.attributes.wordsPerPage
-                                let totalPages = Int(ceil(Double(totalDueCards) / Double(pageSize)))
-                                
-                                // Update the page ID list for the view.
-                                vocapageIds = totalPages > 0 ? Array(1...totalPages) : []
-                                
-                                // Ensure the current page index is not out of bounds.
-                                if currentPageIndex >= vocapageIds.count {
-                                    currentPageIndex = max(0, vocapageIds.count - 1)
-                                }
-                            } catch {
-                                // On error, rever to an empty list.
-                                vocapageIds = []
-                            }
-                        } else {
-                            // In "all" mode, restore the original full list of pages.
-                            vocapageIds = originalAllVocapageIds
-                        }
-
-                        // Clear the page cache and reload the content for the current page.
-                        loader.vocapages.removeAll()
-                        if !vocapageIds.isEmpty {
-                            let currentId = vocapageIds[currentPageIndex]
-                            await loader.loadPage(withId: currentId, dueWordsOnly: isShowingDueWordsOnly)
-                        }
+                        await updatePageIdsForFilter()
                     }
                 }
             )
@@ -127,6 +93,40 @@ struct VocapageHostView: View {
                 cardsToReview: sortedFlashcardsForCurrentPage,
                 viewModel: flashcardViewModel
             )
+        }
+        // MODIFICATION 2: Add a task to load the initial state when the view appears.
+        .task {
+            await updatePageIdsForFilter()
+        }
+    }
+    
+    // MODIFICATION 3: Create a reusable function to update the page list.
+    private func updatePageIdsForFilter() async {
+        if isShowingDueWordsOnly {
+            await flashcardViewModel.loadStatistics()
+            let totalDueCards = flashcardViewModel.dueForReviewCount
+            
+            do {
+                let vbSetting = try await DataServices.shared.strapiService.fetchVBSetting()
+                let pageSize = vbSetting.attributes.wordsPerPage
+                let totalPages = Int(ceil(Double(totalDueCards) / Double(pageSize)))
+                
+                vocapageIds = totalPages > 0 ? Array(1...totalPages) : []
+                
+                if currentPageIndex >= vocapageIds.count {
+                    currentPageIndex = max(0, vocapageIds.count - 1)
+                }
+            } catch {
+                vocapageIds = []
+            }
+        } else {
+            vocapageIds = originalAllVocapageIds
+        }
+
+        loader.vocapages.removeAll()
+        if !vocapageIds.isEmpty {
+            let currentId = vocapageIds[currentPageIndex]
+            await loader.loadPage(withId: currentId, dueWordsOnly: isShowingDueWordsOnly)
         }
     }
 }
@@ -380,9 +380,8 @@ private struct VocapageContentListView: View {
     var body: some View {
         if sortedFlashcards.isEmpty {
             Spacer()
-            // MODIFICATION 3: Show a more informative message when a page is empty.
             if speechManager.isSpeaking {
-                ProgressView() // Show spinner if loading content
+                ProgressView()
             } else {
                 Text("No words to show for this page.")
                     .foregroundColor(.secondary)
