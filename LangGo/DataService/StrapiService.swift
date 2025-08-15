@@ -1,4 +1,4 @@
-// LangGo/StrapiService.swift
+// LangGo/DataService/StrapiService.swift
 
 import Foundation
 import os
@@ -231,7 +231,11 @@ class StrapiService {
     
     // MARK: - Flashcards Pagination
     
-    func fetchFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+    func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false) async throws -> ([Flashcard], StrapiPagination?) {
+        if dueOnly {
+            return try await fetchReviewFlashcardsPage(page: page, pageSize: pageSize)
+        }
+        
         // 1. Get the full list of flashcards, either from cache or network.
         let allFlashcards = try await getOrFetchAllMyFlashcards()
         

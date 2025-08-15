@@ -1,3 +1,4 @@
+// LangGo/Vocabook/VocapageView.swift
 import SwiftUI
 import AVFoundation
 import os // For logging
@@ -5,6 +6,7 @@ import os // For logging
 // MARK: - VocapageHostView
 struct VocapageHostView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.theme) var theme: Theme
     
     @StateObject private var loader = VocapageLoader()
     
@@ -18,6 +20,7 @@ struct VocapageHostView: View {
 
     let flashcardViewModel: FlashcardViewModel
     @State private var isShowingReviewView: Bool = false
+    @State private var isShowingDueWordsOnly: Bool = false
 
     init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
         self.allVocapageIds = allVocapageIds
@@ -43,7 +46,8 @@ struct VocapageHostView: View {
                 allVocapageIds: allVocapageIds,
                 loader: loader,
                 showBaseText: $showBaseText,
-                speechManager: speechManager
+                speechManager: speechManager,
+                isShowingDueWordsOnly: isShowingDueWordsOnly
             )
 
             // The new navigation buttons for previous/next page
@@ -52,7 +56,7 @@ struct VocapageHostView: View {
                 pageCount: allVocapageIds.count
             )
         }
-        .navigationTitle("My Vocabulary Notebook")
+        .navigationTitle("My Vocabulary")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -62,7 +66,16 @@ struct VocapageHostView: View {
                 sortedFlashcards: sortedFlashcardsForCurrentPage,
                 speechManager: speechManager,
                 onDismiss: { dismiss() },
-                isShowingReviewView: $isShowingReviewView
+                isShowingReviewView: $isShowingReviewView,
+                isShowingDueWordsOnly: $isShowingDueWordsOnly,
+                onToggleDueWords: {
+                    isShowingDueWordsOnly.toggle()
+                    let currentId = allVocapageIds[currentPageIndex]
+                    loader.vocapages.removeAll()
+                    Task {
+                        await loader.loadPage(withId: currentId, dueWordsOnly: isShowingDueWordsOnly)
+                    }
+                }
             )
         }
         .toolbar(.hidden, for: .tabBar)
@@ -207,6 +220,7 @@ private struct VocapagePagingView: View {
     @ObservedObject var loader: VocapageLoader
     @Binding var showBaseText: Bool
     @ObservedObject var speechManager: SpeechManager
+    let isShowingDueWordsOnly: Bool
 
     var body: some View {
         TabView(selection: $currentPageIndex) {
@@ -220,7 +234,7 @@ private struct VocapagePagingView: View {
                     speechManager: speechManager,
                     onLoad: {
                         Task {
-                            await loader.loadPage(withId: allVocapageIds[index])
+                            await loader.loadPage(withId: allVocapageIds[index], dueWordsOnly: isShowingDueWordsOnly)
                         }
                     }
                 )
@@ -238,6 +252,9 @@ private struct VocapageToolbar: ToolbarContent {
     @ObservedObject var speechManager: SpeechManager
     var onDismiss: () -> Void
     @Binding var isShowingReviewView: Bool
+    @Binding var isShowingDueWordsOnly: Bool
+    var onToggleDueWords: () -> Void
+    @Environment(\.theme) var theme: Theme
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
@@ -254,13 +271,23 @@ private struct VocapageToolbar: ToolbarContent {
             }
         }
         ToolbarItem(placement: .bottomBar) {
-            VocapageActionButtons(
-                sortedFlashcards: sortedFlashcards,
-                showBaseText: showBaseText,
-                isShowingExamView: $isShowingExamView,
-                isShowingReviewView: $isShowingReviewView,
-                speechManager: speechManager
-            )
+            HStack {
+                VocapageActionButtons(
+                    sortedFlashcards: sortedFlashcards,
+                    showBaseText: showBaseText,
+                    isShowingExamView: $isShowingExamView,
+                    isShowingReviewView: $isShowingReviewView,
+                    speechManager: speechManager
+                )
+                
+                Spacer()
+                
+                Button(action: onToggleDueWords) {
+                    Image(systemName: isShowingDueWordsOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .font(.title2)
+                        .foregroundColor(theme.accent)
+                }
+            }
         }
     }
 }

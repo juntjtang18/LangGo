@@ -1,3 +1,4 @@
+// LangGo/Vocabook/VocapageLoader.swift
 import SwiftUI
 import os
 
@@ -18,29 +19,25 @@ class VocapageLoader: ObservableObject {
     // The initializer is now clean and parameter-less.
     init() {}
 
-    func loadPage(withId vocapageId: Int) async {
+    func loadPage(withId vocapageId: Int, dueWordsOnly: Bool = false) async {
         // Don't re-load if already loading or if the page's flashcards are already loaded.
-        if loadingStatus[vocapageId] == true || (vocapages[vocapageId]?.flashcards != nil) {
-            return
+        if loadingStatus[vocapageId] == true || (vocapages[vocapageId]?.flashcards != nil && !dueWordsOnly) {
+             return
         }
         
-        logger.debug("VocapageLoader::loadPage(\(vocapageId))")
+        logger.debug("VocapageLoader::loadPage(\(vocapageId), dueWordsOnly: \(dueWordsOnly))")
         loadingStatus[vocapageId] = true
         errorMessages[vocapageId] = nil
 
         do {
-            // 1. Fetch the settings to determine the page size.
             let vbSetting = try await strapiService.fetchVBSetting()
             let pageSize = vbSetting.attributes.wordsPerPage
             
-            // 2. Fetch the flashcards for the specific page number from the server.
-            let (fetchedFlashcards, _) = try await strapiService.fetchFlashcards(page: vocapageId, pageSize: pageSize)
+            let (fetchedFlashcards, _) = try await strapiService.fetchFlashcards(page: vocapageId, pageSize: pageSize, dueOnly: dueWordsOnly)
             
-            // 3. Create a new Vocapage object containing the fetched flashcards.
             var page = Vocapage(id: vocapageId, title: "Page \(vocapageId)", order: vocapageId)
             page.flashcards = fetchedFlashcards
             
-            // 4. Store the fully loaded page in our local cache.
             vocapages[vocapageId] = page
 
         } catch {
