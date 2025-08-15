@@ -147,13 +147,12 @@ private struct StatisticsView: View {
             }
             .padding(.bottom, 10)
 
-            StatRow(label: "Total Cards", value: "\(viewModel.totalCardCount)")
-            StatRow(label: "Remembered", value: "\(viewModel.rememberedCount)")
-            StatRow(label: "New Cards", value: "\(viewModel.newCardCount)")
-            StatRow(label: "Warm-up cards", value: "\(viewModel.warmUpCardCount)")
-            StatRow(label: "Weekly Review Cards", value: "\(viewModel.weeklyReviewCardCount)")
-            StatRow(label: "Monthly Cards", value: "\(viewModel.monthlyCardCount)")
-            StatRow(label: "Hard to remember", value: "\(viewModel.hardToRememberCount)")
+            StatRow(label: "Total Words", value: "\(viewModel.totalCardCount)")
+            StatRow(label: "Mastered", value: "\(viewModel.rememberedCount)")
+            StatRow(label: "Nearly Mastered", value: "\(viewModel.monthlyCardCount)")
+            StatRow(label: "Well Practiced", value: "\(viewModel.weeklyReviewCardCount)")
+            StatRow(label: "Warming Up", value: "\(viewModel.warmUpCardCount)")
+            StatRow(label: "Just Added", value: "\(viewModel.newCardCount)")
         }
         .padding()
         .background(Color(uiColor: .secondarySystemGroupedBackground))

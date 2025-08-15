@@ -1,4 +1,4 @@
-// LangGo/StrapiModels.swift
+// LangGo/DataService/StrapiModels.swift
 import Foundation
 
 // MARK: - Core Response Wrappers
@@ -224,7 +224,8 @@ struct StrapiStatistics: Codable {
     let weekly: Int
     let monthly: Int
     let hardToRemember: Int
-    let dueForReview: Int // ADDED: New property for due cards
+    let dueForReview: Int
+    let reviewed: Int
 }
 
 // MARK: - Review Models

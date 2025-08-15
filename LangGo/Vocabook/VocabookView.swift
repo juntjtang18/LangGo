@@ -1,3 +1,4 @@
+// LangGo/Vocabook/VocabookView.swift
 import SwiftUI
 import os
 
@@ -6,6 +7,7 @@ struct VocabookView: View {
     @ObservedObject var vocabookViewModel: VocabookViewModel
 
     @EnvironmentObject var languageSettings: LanguageSettings
+    @EnvironmentObject var reviewSettings: ReviewSettingsManager
     @Environment(\.theme) var theme: Theme
 
     @State private var isReviewing: Bool = false
@@ -13,14 +15,55 @@ struct VocabookView: View {
     @State private var isListening: Bool = false
     @State private var isQuizzing: Bool = false
     @State private var isShowingSettings: Bool = false
+    
+    private var allFlashcards: [Flashcard] {
+        vocabookViewModel.vocabook?.vocapages?.flatMap { $0.flashcards ?? [] } ?? []
+    }
+
+    private var weightedProgress: Double {
+        guard !allFlashcards.isEmpty, !reviewSettings.settings.isEmpty else {
+            return 0.0
+        }
+
+        let promotionBonus = 2.0
+        let masteryStreak = Double(reviewSettings.masteryStreak)
+        let numberOfPromotions = Double(reviewSettings.settings.count - 1)
+        let maxCardScore = masteryStreak + (numberOfPromotions * promotionBonus)
+
+        guard maxCardScore > 0 else {
+            return 0.0
+        }
+
+        let totalPossiblePoints = Double(allFlashcards.count) * maxCardScore
+
+        let currentTotalPoints = allFlashcards.reduce(0.0) { total, card in
+            if card.reviewTire == "remembered" {
+                return total + maxCardScore
+            }
+
+            var cardScore = Double(card.correctStreak)
+            let sortedTiers = reviewSettings.settings.values.sorted { $0.min_streak < $1.min_streak }
+            for tierSetting in sortedTiers where tierSetting.tier != "new" {
+                 if card.correctStreak >= tierSetting.min_streak {
+                    cardScore += promotionBonus
+                }
+            }
+            return total + min(cardScore, maxCardScore)
+        }
+        
+        return totalPossiblePoints > 0 ? currentTotalPoints / totalPossiblePoints : 0.0
+    }
 
     var body: some View {
         ZStack {
             VStack(spacing: 30) {
-                HeaderTitleView()
+                HeaderTitleView(viewModel: flashcardViewModel)
 
-                OverallProgressView(viewModel: flashcardViewModel)
-                    .padding(.horizontal)
+                OverallProgressView(
+                    progress: weightedProgress,
+                    viewModel: flashcardViewModel
+                )
+                .padding(.horizontal)
 
                 ConnectedActionButtons(
                     isReviewing: $isReviewing,
@@ -127,37 +170,49 @@ private struct TwoButtonConnector: Shape {
 }
 
 private struct HeaderTitleView: View {
+    @ObservedObject var viewModel: FlashcardViewModel
+
     var body: some View {
         HStack {
-            Text("My Vocabulary\nNote Book")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .padding(.vertical, 20)
-                .padding(.leading, 30)
-                .padding(.trailing, 40)
-                .background(RightRoundedRectangle(radius: 30).fill(Color(red: 0.29, green: 0.82, blue: 0.4)))
-                .shadow(color: .black.opacity(0.2), radius: 5, x: 2, y: 2)
+            HStack {
+                Text("My Vocabulary\nNote Book")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+
+                Spacer()
+
+                Text("\(viewModel.totalCardCount)")
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(Color(red: 0.29, green: 0.82, blue: 0.4))
+                    .frame(minWidth: 40, minHeight: 40)
+                    .background(Circle().fill(Color.white))
+            }
+            .padding(.vertical, 20)
+            .padding(.leading, 30)
+            .padding(.trailing, 20)
+            .background(RightRoundedRectangle(radius: 30).fill(Color(red: 0.29, green: 0.82, blue: 0.4)))
+            .shadow(color: .black.opacity(0.2), radius: 5, x: 2, y: 2)
+            
             Spacer()
         }
     }
 }
 
 private struct OverallProgressView: View {
+    let progress: Double
     @ObservedObject var viewModel: FlashcardViewModel
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
         HStack(spacing: 20) {
-            VocabookProgressCircleView(viewModel: viewModel)
+            VocabookProgressCircleView(progress: progress)
                 .frame(width: 100, height: 100)
-            VStack(alignment: .leading, spacing: 8) {
-                StatRow(label: "Total Words", value: "\(viewModel.totalCardCount)")
+            VStack(alignment: .leading, spacing: 4) {
                 StatRow(label: "Remembered", value: "\(viewModel.rememberedCount)")
+                StatRow(label: "Reviewed", value: "\(viewModel.reviewedCount)")
                 StatRow(label: "Due for Review", value: "\(viewModel.dueForReviewCount)")
-                StatRow(label: "New Words", value: "\(viewModel.newCardCount)")
             }
-            .font(.body)
         }
         .padding()
         .background(theme.secondary.opacity(0.1))
@@ -176,17 +231,13 @@ private struct StatRow: View {
             Spacer()
             Text(value).fontWeight(.medium)
         }
+        .font(.subheadline)
     }
 }
 
 private struct VocabookProgressCircleView: View {
-    @ObservedObject var viewModel: FlashcardViewModel
+    let progress: Double
     @Environment(\.theme) var theme: Theme
-
-    private var progress: Double {
-        guard viewModel.totalCardCount > 0 else { return 0 }
-        return Double(viewModel.rememberedCount) / Double(viewModel.totalCardCount)
-    }
 
     private var percentageString: String {
         let formatter = NumberFormatter()
@@ -261,7 +312,7 @@ private struct ConnectedActionButtons: View {
                     VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionPrimary) { isShowingSettings = true }
                 }
 
-                HStack(spacing: spacing) {                    
+                HStack(spacing: spacing) {
                     VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
                         Task {
                             // 1. First, fetch the latest review cards.

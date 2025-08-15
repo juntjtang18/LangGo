@@ -22,6 +22,7 @@ class FlashcardViewModel: ObservableObject {
     @Published var monthlyCardCount: Int = 0
     @Published var hardToRememberCount: Int = 0
     @Published var dueForReviewCount: Int = 0
+    @Published var reviewedCount: Int = 0
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
@@ -62,6 +63,7 @@ class FlashcardViewModel: ObservableObject {
             self.monthlyCardCount = stats.monthly
             self.hardToRememberCount = stats.hardToRemember
             self.dueForReviewCount = stats.dueForReview
+            self.reviewedCount = stats.reviewed
             logger.info("Successfully loaded statistics from the server.")
         } catch {
             logger.error("Failed to fetch statistics from server: \(error.localizedDescription).")
