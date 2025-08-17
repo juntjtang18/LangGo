@@ -11,7 +11,7 @@ struct VocabookView: View {
 
     @State private var isReviewing: Bool = false
     @State private var isAddingNewWord: Bool = false
-    @State private var isListening: Bool = false
+    // 'isListening' state is removed as the button is no longer used.
     @State private var isQuizzing: Bool = false
     @State private var isShowingSettings: Bool = false
     
@@ -66,7 +66,6 @@ struct VocabookView: View {
 
                 ConnectedActionButtons(
                     isReviewing: $isReviewing,
-                    isListening: $isListening,
                     isQuizzing: $isQuizzing,
                     isAddingNewWord: $isAddingNewWord,
                     isShowingSettings: $isShowingSettings,
@@ -90,19 +89,14 @@ struct VocabookView: View {
         }
         .fullScreenCover(isPresented: $isReviewing, onDismiss: {
             Task {
-                // This ensures stats are refreshed the moment the review sheet closes.
                 await flashcardViewModel.loadStatistics()
             }
         }) {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
-        .fullScreenCover(isPresented: $isListening) {
-             ReadFlashcardView()
-        }
+        // The .fullScreenCover for 'isListening' has been removed.
         .sheet(isPresented: $isQuizzing, onDismiss: {
             Task {
-                // This block runs when the quiz view is closed,
-                // ensuring the main screen always shows fresh data.
                 await flashcardViewModel.loadStatistics()
             }
         }) {
@@ -264,7 +258,6 @@ private struct VocabookProgressCircleView: View {
 
 private struct ConnectedActionButtons: View {
     @Binding var isReviewing: Bool
-    @Binding var isListening: Bool
     @Binding var isQuizzing: Bool
     @Binding var isAddingNewWord: Bool
     @Binding var isShowingSettings: Bool
@@ -281,47 +274,33 @@ private struct ConnectedActionButtons: View {
             let primaryColor = Color(red: 0.2, green: 0.6, blue: 0.25)
             let secondaryColor = Color(red: 0.5, green: 0.8, blue: 0.5)
             
+            // The CGRects for the connectors remain the same, as they map to the original grid positions.
             let rect1_CardReview = CGRect(x: 0, y: 0, width: buttonSize, height: buttonSize)
-            let rect2_Listen = CGRect(x: buttonSize + spacing, y: 0, width: buttonSize, height: buttonSize)
+            let rect2_ListenSpot = CGRect(x: buttonSize + spacing, y: 0, width: buttonSize, height: buttonSize) // Now the "Open" button
             let rect5_AddWord = CGRect(x: buttonSize + spacing, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
-            let rect6_Open = CGRect(x: (buttonSize + spacing) * 2, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
+            let rect6_OpenSpot = CGRect(x: (buttonSize + spacing) * 2, y: buttonSize + spacing, width: buttonSize, height: buttonSize) // Now the "Setting" button
             
+            // This connector links "Card Review" (top-left) to "Add Word" (bottom-middle).
             TwoButtonConnector(rect1: rect1_CardReview, rect2: rect5_AddWord, cornerRadius: cornerRadius)
                 .fill(primaryColor)
                 .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
             
-            TwoButtonConnector(rect1: rect2_Listen, rect2: rect6_Open, cornerRadius: cornerRadius)
+            // This connector links the new "Open" button (top-middle) to the new "Setting" button (bottom-right).
+            TwoButtonConnector(rect1: rect2_ListenSpot, rect2: rect6_OpenSpot, cornerRadius: cornerRadius)
                 .fill(secondaryColor)
                 .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
 
-            VStack(alignment: .center, spacing: spacing) {
+            VStack(alignment: .leading, spacing: spacing) {
+                // --- MODIFICATION: Top row now has two buttons ---
                 HStack(spacing: spacing) {
-                    // --- THIS IS THE MODIFIED BUTTON ---
                     VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) {
                         Task {
-                            // 1. Refresh the review card list.
                             await flashcardViewModel.prepareReviewSession()
-                            // 2. Then, open the review screen.
                             isReviewing = true
                         }
                     }
-                    // --- END MODIFICATION ---
 
-                    VocabookActionButton(title: "Listen", icon: "headphones", style: .vocabookActionSecondary) { isListening = true }
-                    VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionPrimary) { isShowingSettings = true }
-                }
-
-                HStack(spacing: spacing) {
-                    VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
-                        Task {
-                            // 1. First, fetch the latest review cards.
-                            await flashcardViewModel.prepareReviewSession()
-                            // 2. Then, show the quiz view.
-                            isQuizzing = true
-                        }
-                    }
-                    VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) { isAddingNewWord = true }
-
+                    // "Listen" is replaced with "Open"
                     if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
                         let allIDs = pages.map { $0.id }.sorted()
                         let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
@@ -338,6 +317,23 @@ private struct ConnectedActionButtons: View {
                         VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
                             .opacity(0.5)
                     }
+                    
+                    // The original "Setting" button is removed.
+                }
+
+                // --- MODIFICATION: Bottom row now has the new "Setting" button ---
+                HStack(spacing: spacing) {
+                    VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
+                        Task {
+                            await flashcardViewModel.prepareReviewSession()
+                            isQuizzing = true
+                        }
+                    }
+
+                    VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) { isAddingNewWord = true }
+
+                    // The original "Open" button is replaced with "Setting".
+                    VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionSecondary) { isShowingSettings = true }
                 }
             }
         }
