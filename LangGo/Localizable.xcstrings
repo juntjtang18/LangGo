@@ -159,10 +159,24 @@
       }
     },
     "Close" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        }
+      }
     },
     "Complete some lessons or add new words to get cards for your quiz." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成课程或增加新词获得词汇卡"
+          }
+        }
+      }
     },
     "Confirm New Password" : {
       "localizations" : {
@@ -221,7 +235,14 @@
       }
     },
     "Continue" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续"
+          }
+        }
+      }
     },
     "Correct" : {
       "localizations" : {
@@ -392,19 +413,40 @@
       }
     },
     "Enter base word" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入中文"
+          }
+        }
+      }
     },
     "Enter target word" : {
 
     },
     "Enter word or sentence" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入词汇或句子"
+          }
+        }
+      }
     },
     "Error: %@" : {
 
     },
     "Exam" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测验"
+          }
+        }
+      }
     },
     "Explore lessons on specific topics" : {
 
@@ -494,10 +536,24 @@
       }
     },
     "Learn This" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学习"
+          }
+        }
+      }
     },
     "LEARNING PREFERENCES" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学习偏好"
+          }
+        }
+      }
     },
     "Lesson 3 Good Morning" : {
       "localizations" : {
@@ -528,16 +584,44 @@
       }
     },
     "Limited Offer" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "限时优惠"
+          }
+        }
+      }
     },
     "Loading cards..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读取词汇中…"
+          }
+        }
+      }
     },
     "Loading stories..." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在加载…"
+          }
+        }
+      }
     },
     "Log in" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录"
+          }
+        }
+      }
     },
     "Login" : {
       "localizations" : {
@@ -568,13 +652,34 @@
       }
     },
     "My Vocabulary" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我的词汇"
+          }
+        }
+      }
     },
     "My Vocabulary\nNote Book" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我的词汇本"
+          }
+        }
+      }
     },
     "Native language" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "母语"
+          }
+        }
+      }
     },
     "New Password" : {
       "localizations" : {
@@ -605,19 +710,54 @@
       }
     },
     "Next" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一步"
+          }
+        }
+      }
     },
     "Next page" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一页"
+          }
+        }
+      }
     },
     "No cards available for reading." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有卡片需要读"
+          }
+        }
+      }
     },
     "No Cards for Quiz" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有词汇需要测验"
+          }
+        }
+      }
     },
     "No cards to review on this page." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有词汇需要复习"
+          }
+        }
+      }
     },
     "No cards to review." : {
       "localizations" : {
@@ -642,7 +782,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有卡可以审查。"
+            "value" : "没有词汇需要复习"
           }
         }
       }
@@ -1084,7 +1224,14 @@
       }
     },
     "Stop" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止"
+          }
+        }
+      }
     },
     "Stories" : {
       "localizations" : {
