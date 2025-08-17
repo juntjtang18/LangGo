@@ -1,12 +1,28 @@
+// LangGo/Manager/SpeechManager.swift
 import SwiftUI
 import AVFoundation
 import os
 
-// MARK: - Speech Manager for VocapageView
+// ReadingMode now conforms to String to be saved in UserDefaults
+enum ReadingMode: String {
+    case inactive
+    case repeatWord
+    case cyclePage
+    case cycleAll
+}
+
 @MainActor
 class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     @Published var isSpeaking: Bool = false
     @Published var currentIndex: Int = -1
+    
+    // --- MODIFICATION: The readingMode now saves its state to UserDefaults ---
+    @Published var readingMode: ReadingMode = .cyclePage {
+        didSet {
+            // Save the new mode whenever it changes.
+            UserDefaults.standard.set(readingMode.rawValue, forKey: "readingModeKey")
+        }
+    }
 
     private var synthesizer = AVSpeechSynthesizer()
     private var flashcards: [Flashcard] = []
@@ -23,16 +39,25 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private var currentStep: ReadingStep = .firstReadTarget
 
     override init() {
+        // --- MODIFICATION: Load the last saved reading mode on initialization ---
+        if let savedModeRaw = UserDefaults.standard.string(forKey: "readingModeKey"),
+           let savedMode = ReadingMode(rawValue: savedModeRaw) {
+            self.readingMode = savedMode
+        } else {
+            self.readingMode = .cyclePage // Default to cyclePage if nothing is saved
+        }
+        
         super.init()
         self.synthesizer.delegate = self
     }
 
-    func startReadingSession(flashcards: [Flashcard], showBaseText: Bool, settings: VBSettingAttributes) {
-        // --- ADD THIS LOGGING BLOCK ---
+    func startReadingSession(flashcards: [Flashcard], mode: ReadingMode, showBaseText: Bool, settings: VBSettingAttributes) {
+        if isSpeaking { stopReadingSession(resetMode: false) }
+        
         let userLanguage = UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
         logger.debug("""
         
-        --- Starting SpeechManager Session ---
+        --- Starting SpeechManager Session (Mode: \(String(describing: mode))) ---
         - Target Language (from Config): '\(Config.learningTargetLanguageCode)'
         - Base Language: '\(userLanguage)'
         - Total flashcards: \(flashcards.count)
@@ -42,26 +67,46 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
         self.flashcards = flashcards
         self.showBaseText = showBaseText
+        self.readingMode = mode // This will now trigger the save to UserDefaults
         
         self.interval1 = settings.interval1
         self.interval2 = settings.interval2
         self.interval3 = settings.interval3
         
         self.isSpeaking = true
-        self.currentIndex = 0
+        self.currentIndex = (mode == .repeatWord && currentIndex >= 0 && currentIndex < flashcards.count) ? currentIndex : 0
         self.currentStep = .firstReadTarget
         readCurrentCard()
     }
 
-    func stopReadingSession() {
+    /// Stops speaking. Can optionally reset the mode to .inactive.
+    func stopReadingSession(resetMode: Bool = true) {
         synthesizer.stopSpeaking(at: .immediate)
         isSpeaking = false
         currentIndex = -1
+        if resetMode {
+            readingMode = .inactive
+        }
+    }
+    
+    func pause() {
+        synthesizer.stopSpeaking(at: .word)
+        isSpeaking = false
+        logger.debug("--- Playback Paused at index \(self.currentIndex) ---")
+    }
+    
+    func resume() {
+        guard !isSpeaking, readingMode != .inactive, currentIndex >= 0 else { return }
+        isSpeaking = true
+        logger.debug("--- Playback Resumed at index \(self.currentIndex) with mode \(String(describing: self.readingMode)) ---")
+        readCurrentCard()
     }
 
     private func readCurrentCard() {
         guard currentIndex < flashcards.count, isSpeaking else {
-            stopReadingSession()
+            if isSpeaking {
+                stopReadingSession()
+            }
             return
         }
 
@@ -73,13 +118,9 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         case .firstReadTarget, .secondReadTarget:
             textToSpeak = card.backContent
             languageCode = Config.learningTargetLanguageCode
-            logger.info("Reading TARGET text. Using language: '\(languageCode)'")
-
         case .readBase:
             textToSpeak = card.frontContent
             languageCode = UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en-US"
-            logger.info("Reading BASE text. Using language: '\(languageCode)'")
-
         case .finished:
             goToNextCard()
             return
@@ -130,11 +171,30 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
     
     private func goToNextCard() {
-        if currentIndex < flashcards.count - 1 {
-            currentIndex += 1
+        switch readingMode {
+        case .cyclePage:
+            if currentIndex < flashcards.count - 1 {
+                currentIndex += 1
+                currentStep = .firstReadTarget
+                readCurrentCard()
+            } else {
+                stopReadingSession()
+            }
+        
+        case .repeatWord:
             currentStep = .firstReadTarget
             readCurrentCard()
-        } else {
+            
+        case .cycleAll:
+            if currentIndex < flashcards.count - 1 {
+                currentIndex += 1
+                currentStep = .firstReadTarget
+                readCurrentCard()
+            } else {
+                stopReadingSession()
+            }
+            
+        case .inactive:
             stopReadingSession()
         }
     }

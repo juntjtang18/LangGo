@@ -435,9 +435,6 @@
         }
       }
     },
-    "Error: %@" : {
-
-    },
     "Exam" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1260,9 +1257,6 @@
           }
         }
       }
-    },
-    "Swipe to load content." : {
-
     },
     "Target (%@)" : {
 
