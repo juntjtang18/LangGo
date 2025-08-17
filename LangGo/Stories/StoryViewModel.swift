@@ -6,8 +6,6 @@ import AVFoundation // ADDED: For text-to-speech
 @MainActor
 class StoryViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StoryViewModel")
-    
-    // ADDED: The speech synthesizer for reading words aloud.
     private let speechSynthesizer = AVSpeechSynthesizer()
 
     // MARK: - Published Properties
@@ -45,17 +43,13 @@ class StoryViewModel: ObservableObject {
     private let storyService = DataServices.shared.storyService
     private let strapiService = DataServices.shared.strapiService
     
-    // This dependency is passed in, as it's a shared UI state object.
-    private let languageSettings: LanguageSettings
-
     // MARK: - Initialization
     // The initializer is now clean and only takes the dependencies it can't get globally.
-    init(languageSettings: LanguageSettings) {
-        self.languageSettings = languageSettings
-    }
+    init() {}
+    
     // Add this computed property
     private var baseLanguageCode: String {
-        languageSettings.selectedLanguageCode
+        UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
     }
     // MARK: - Public Methods
     
@@ -149,7 +143,7 @@ class StoryViewModel: ObservableObject {
         
         do {
             let learningLanguage = Config.learningTargetLanguageCode
-            let baseLanguage = languageSettings.selectedLanguageCode
+            let baseLanguage = UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
             
             guard learningLanguage != baseLanguage else {
                 contextualTranslation = ContextualTranslation(

@@ -10,7 +10,6 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
     private var synthesizer = AVSpeechSynthesizer()
     private var flashcards: [Flashcard] = []
-    private var languageSettings: LanguageSettings?
     private var showBaseText: Bool = true
     
     private var interval1: TimeInterval = 1.5
@@ -28,20 +27,20 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
         self.synthesizer.delegate = self
     }
 
-    func startReadingSession(flashcards: [Flashcard], showBaseText: Bool, languageSettings: LanguageSettings, settings: VBSettingAttributes) {
+    func startReadingSession(flashcards: [Flashcard], showBaseText: Bool, settings: VBSettingAttributes) {
         // --- ADD THIS LOGGING BLOCK ---
+        let userLanguage = UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
         logger.debug("""
         
         --- Starting SpeechManager Session ---
         - Target Language (from Config): '\(Config.learningTargetLanguageCode)'
-        - Base Language (from LanguageSettings): '\(languageSettings.selectedLanguageCode)'
+        - Base Language: '\(userLanguage)'
         - Total flashcards: \(flashcards.count)
         ------------------------------------
         
         """)
 
         self.flashcards = flashcards
-        self.languageSettings = languageSettings
         self.showBaseText = showBaseText
         
         self.interval1 = settings.interval1
@@ -78,7 +77,7 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
         case .readBase:
             textToSpeak = card.frontContent
-            languageCode = languageSettings?.selectedLanguageCode ?? "en-US"
+            languageCode = UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en-US"
             logger.info("Reading BASE text. Using language: '\(languageCode)'")
 
         case .finished:

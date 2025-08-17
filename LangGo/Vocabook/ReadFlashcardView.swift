@@ -17,10 +17,8 @@ struct ReadFlashcardView: View {
     }
 
     // MODIFIED: The initializer no longer requires strapiService.
-    init(languageSettings: LanguageSettings) {
-        // MODIFIED: The ViewModel is now initialized without strapiService.
-        // It will get the service from the DataServices singleton internally.
-        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel(languageSettings: languageSettings))
+    init() {
+        _viewModel = StateObject(wrappedValue: ReadFlashcardViewModel())
     }
 
     var body: some View {

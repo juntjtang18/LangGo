@@ -21,8 +21,6 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     
     // The service is now fetched directly from the DataServices singleton.
     private let strapiService = DataServices.shared.strapiService
-    
-    private var languageSettings: LanguageSettings
     private var showBaseTextBinding: Binding<Bool>?
     
     private enum ReadingStep {
@@ -32,8 +30,7 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
 
     // MARK: - Initialization
     // The initializer now only takes dependencies it can't get globally.
-    init(languageSettings: LanguageSettings) {
-        self.languageSettings = languageSettings
+    override init() {
         super.init()
         synthesizer.delegate = self
     }
@@ -52,12 +49,13 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     }
 
     func startReadingSession(showBaseTextBinding: Binding<Bool>) {
+        let baseLanguage = UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
         // --- ADD THIS LOGGING BLOCK ---
         logger.debug("""
         
         --- Starting Reading Session ---
         - Target Language (from Config): '\(Config.learningTargetLanguageCode)'
-        - Base Language (from LanguageSettings): '\(self.languageSettings.selectedLanguageCode)'
+        - Base Language (from UserSessionManager): '\(baseLanguage)'
         - Total flashcards: \(self.flashcards.count)
         ---------------------------------
         
@@ -142,7 +140,7 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
         case .baseText:
             textToSpeak = card.frontContent
             // Use the user's selected base language
-            languageCode = self.languageSettings.selectedLanguageCode
+            languageCode = UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
             readingState = .readingBaseText
             logger.info("Reading BASE text. Using language: '\(languageCode)'")
             

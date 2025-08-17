@@ -36,11 +36,6 @@ struct TranslationTabView: View {
 
 // MARK: - Main Translation View
 struct TranslationView: View {
-    @EnvironmentObject var languageSettings: LanguageSettings
-
-    // @StateObject is the correct property wrapper for creating and owning an
-    // ObservableObject instance within a view. It ensures the ViewModel's
-    // lifecycle is managed correctly by SwiftUI.
     @StateObject private var viewModel = FlashcardViewModel()
 
     @State private var inputText: String = ""
@@ -161,19 +156,19 @@ struct TranslationView: View {
     }
 
     private var inputLanguageCode: String {
-        inputDirection == .baseToTarget ? languageSettings.selectedLanguageCode : learningTargetLanguageCode
+        inputDirection == .baseToTarget ? (UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en" ) : learningTargetLanguageCode
     }
 
     private var translationLanguageCode: String {
-        inputDirection == .baseToTarget ? learningTargetLanguageCode : languageSettings.selectedLanguageCode
+        inputDirection == .baseToTarget ? learningTargetLanguageCode : (UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en" )
     }
 
     private var sourceTranslationLanguageCode: String {
-        inputDirection == .baseToTarget ? languageSettings.selectedLanguageCode : learningTargetLanguageCode
+        inputDirection == .baseToTarget ? (UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en") : learningTargetLanguageCode
     }
 
     private var targetTranslationLanguageCode: String {
-        inputDirection == .baseToTarget ? learningTargetLanguageCode : languageSettings.selectedLanguageCode
+        inputDirection == .baseToTarget ? learningTargetLanguageCode : (UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en")
     }
 
     private func swapLanguages() {
@@ -242,7 +237,7 @@ struct TranslationView: View {
                     targetText: targetOut,
                     baseText: baseOut,
                     partOfSpeech: partOfSpeech.rawValue,
-                    locale: languageSettings.selectedLanguageCode
+                    locale: UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
                 )
 
                 withAnimation { showSuccessMessage = true }

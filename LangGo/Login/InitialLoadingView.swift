@@ -35,12 +35,14 @@ struct InitialLoadingView: View {
             do {
                 // Use the service from the singleton
                 let user = try await strapiService.fetchCurrentUser()
-                
+                UserSessionManager.shared.login(user: user)
+
                 // SUCCESS: Token is valid. Refresh user details.
-                UserDefaults.standard.set(user.username, forKey: "username")
-                UserDefaults.standard.set(user.email, forKey: "email")
-                UserDefaults.standard.set(user.id, forKey: "userId")
-                
+                //UserDefaults.standard.set(user.username, forKey: "username")
+                //UserDefaults.standard.set(user.email, forKey: "email")
+                //UserDefaults.standard.set(user.id, forKey: "userId")
+                //UserDefaults.standard.set(user.user_profile?.baseLanguage, forKey: "selectedLanguage")
+
                 // Load critical app settings. The manager can now access
                 // the Strapi service internally via the singleton.
                 await reviewSettingsManager.loadSettings()

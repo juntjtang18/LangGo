@@ -5,10 +5,6 @@ import KeychainAccess
 
 struct MainView: View {
     @Binding var authState: AuthState
-    // REMOVED: The AppEnvironment is no longer needed here.
-    // @EnvironmentObject var appEnvironment: AppEnvironment
-    @EnvironmentObject var languageSettings: LanguageSettings
-
     @State private var selectedTab = 0
     @State private var isSideMenuShowing = false
     @State private var isShowingProfileSheet = false
@@ -45,7 +41,7 @@ struct MainView: View {
                     .tag(2)
                 
                 // The appEnvironment parameter is no longer passed
-                StoriesTabView(isSideMenuShowing: $isSideMenuShowing, languageSettings: languageSettings)
+                StoriesTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Stories", systemImage: "book.fill") }
                     .tag(3)
 
@@ -94,6 +90,5 @@ struct MainView: View {
     // We add the ReviewSettingsManager from our singleton so child views
     // that depend on it can access it in the preview.
     MainView(authState: .constant(.loggedIn))
-        .environmentObject(LanguageSettings())
         .environmentObject(DataServices.shared.reviewSettingsManager)
 }

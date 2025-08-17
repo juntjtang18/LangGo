@@ -82,21 +82,6 @@ struct LoginView: View {
                     .padding()
                     .navigationTitle("")
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Menu {
-                                Picker("Language", selection: $languageSettings.selectedLanguageCode) {
-                                    ForEach(languageSettings.availableLanguages) { language in
-                                        Text(language.name).tag(language.id)
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "globe")
-                                    .font(.title2)
-                                    .foregroundColor(.accentColor)
-                            }
-                        }
-                    }
                     .onAppear {
                         logger.info("LoginView appeared. Strapi Base URL: \(Config.strapiBaseUrl, privacy: .public)")
                         logger.info("LoginView appeared. Learning Target Language Code: \(Config.learningTargetLanguageCode, privacy: .public)")
@@ -124,12 +109,10 @@ struct LoginView: View {
             do {
                 let credentials = LoginCredentials(identifier: email, password: password)
                 let authResponse = try await strapiService.login(credentials: credentials)
-                
+                UserSessionManager.shared.login(user: authResponse.user)
                 keychain["jwt"] = authResponse.jwt
-                UserDefaults.standard.set(authResponse.user.username, forKey: "username")
-                UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
-                UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
-
+                languageSettings.selectedLanguageCode = authResponse.user.user_profile?.baseLanguage ?? "en"
+                
                 let vbSetting = try await strapiService.fetchVBSetting()
                 UserDefaults.standard.set(Double(vbSetting.attributes.wordsPerPage), forKey: "wordCountPerPage")
                 UserDefaults.standard.set(vbSetting.attributes.interval1, forKey: "interval1")

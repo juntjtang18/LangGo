@@ -41,7 +41,19 @@ struct SignupView: View {
             SecureField("Confirm Password", text: $confirmPassword)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
-
+            // 👇 New explicit picker row
+            HStack {
+                Label("Native language", systemImage: "globe")
+                Spacer()
+                Picker("Native language", selection: $languageSettings.selectedLanguageCode) {
+                    ForEach(LanguageSettings.availableLanguages) { language in
+                        Text(language.name).tag(language.id)
+                    }
+                }
+                .pickerStyle(.menu) // simple inline menu
+            }
+            .padding(.horizontal)
+            
             if !errorMessage.isEmpty {
                 Text(errorMessage)
                     .foregroundColor(.red)
@@ -64,19 +76,6 @@ struct SignupView: View {
                 Button(action: { currentView = .login }) {
                     Image(systemName: "chevron.left")
                     Text("Back")
-                }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Picker("Language", selection: $languageSettings.selectedLanguageCode) {
-                        ForEach(languageSettings.availableLanguages) { language in
-                            Text(language.name).tag(language.id)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "globe")
-                        .font(.title2)
-                        .foregroundColor(.accentColor)
                 }
             }
         }
@@ -110,9 +109,10 @@ struct SignupView: View {
 
                 let authResponse: AuthResponse = try await strapiService.signup(payload: payload)
                 keychain["jwt"] = authResponse.jwt
-                UserDefaults.standard.set(authResponse.user.username, forKey: "username")
-                UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
-                UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
+                UserSessionManager.shared.login(user: authResponse.user)
+                //UserDefaults.standard.set(authResponse.user.username, forKey: "username")
+                //UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
+                //UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
 
                 authState = .loggedIn
                 logger.info("Signup successful. User: \(authResponse.user.username, privacy: .public)")

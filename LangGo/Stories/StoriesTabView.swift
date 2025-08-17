@@ -6,14 +6,9 @@ struct StoriesTabView: View {
     // The ViewModel is now the only state object owned by this view.
     @StateObject private var viewModel: StoryViewModel
 
-    // The initializer is now clean. It receives the languageSettings
-    // state object from its parent view (MainView).
-    init(isSideMenuShowing: Binding<Bool>, languageSettings: LanguageSettings) {
+    init(isSideMenuShowing: Binding<Bool>) {
         _isSideMenuShowing = isSideMenuShowing
-        
-        // The ViewModel is initialized here, once, when the TabView is created.
-        // It will get its other service dependencies from the DataServices singleton.
-        _viewModel = StateObject(wrappedValue: StoryViewModel(languageSettings: languageSettings))
+        _viewModel = StateObject(wrappedValue: StoryViewModel())
     }
     
     var body: some View {

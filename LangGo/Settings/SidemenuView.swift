@@ -3,64 +3,44 @@ import SwiftUI
 import KeychainAccess
 
 struct SideMenuView: View {
-    @EnvironmentObject var languageSettings: LanguageSettings
     @Binding var isShowing: Bool
     @Binding var authState: AuthState
     @Binding var isShowingProfileSheet: Bool
     @Binding var isShowingSettingSheet: Bool
     @Binding var isShowingVocabookSettingSheet: Bool
 
-    @State private var username: String = ""
-    @State private var email: String = ""
-    
-    let keychain = Keychain(service: Config.keychainService)
+    @EnvironmentObject var userSession: UserSessionManager
+
+    private let keychain = Keychain(service: Config.keychainService)
+
+    private var displayUsername: String {
+        userSession.currentUser?.username ?? "User"
+    }
+    private var displayEmail: String {
+        userSession.currentUser?.email ?? "No email found"
+    }
 
     var body: some View {
-        // The HStack pushes the VStack to the right edge.
         HStack {
             Spacer()
-            
-            // The main vertical stack for the menu content.
+
             VStack(alignment: .leading, spacing: 0) {
-                // Header section with user info
+                // Header
                 VStack(alignment: .leading) {
                     Image(systemName: "person.crop.circle.fill")
                         .font(.system(size: 50))
-                    Text(username)
+                    Text(displayUsername)
                         .font(.title2.bold())
-                    Text(email)
+                    Text(displayEmail)
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
                 .padding(30)
-                .onAppear {
-                    self.username = UserDefaults.standard.string(forKey: "username") ?? "User"
-                    self.email = UserDefaults.standard.string(forKey: "email") ?? "No email found"
-                }
 
                 // Menu buttons
                 SideMenuButton(title: "Profile", iconName: "person.fill") {
                     isShowingProfileSheet.toggle()
-                    isShowing = false // Close side menu when opening profile
-                }
-                
-                // The language picker is now a Menu containing a Picker.
-                Menu {
-                    Picker("Language", selection: $languageSettings.selectedLanguageCode) {
-                        ForEach(languageSettings.availableLanguages) { language in
-                            Text(language.name).tag(language.id)
-                        }
-                    }
-                } label: {
-                    // The label is styled to look like the other side menu buttons.
-                    HStack(spacing: 15) {
-                        Image(systemName: "globe")
-                            .font(.title2)
-                        Text("Language")
-                            .font(.headline)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    isShowing = false
                 }
 
                 SideMenuButton(title: "Vocabulary Notebook Setting", iconName: "book.fill") {
@@ -72,18 +52,13 @@ struct SideMenuView: View {
                     isShowingSettingSheet.toggle()
                     isShowing = false
                 }
-                
+
                 Spacer()
-                
-                // Logout button at the bottom
+
+                // Logout
                 SideMenuButton(title: "Logout", iconName: "arrow.right.square.fill") {
-                    // Clear all user data from Keychain and UserDefaults
-                    keychain["jwt"] = nil
-                    UserDefaults.standard.removeObject(forKey: "username")
-                    UserDefaults.standard.removeObject(forKey: "userId")
-                    UserDefaults.standard.removeObject(forKey: "email")
-                    
-                    // Update state to reflect logout
+                    keychain["jwt"] = nil            // clear token
+                    userSession.logout()             // clear in-memory & persisted user bits
                     authState = .loggedOut
                     isShowing = false
                 }

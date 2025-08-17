@@ -6,7 +6,6 @@ struct VocabookView: View {
     @ObservedObject var flashcardViewModel: FlashcardViewModel
     @ObservedObject var vocabookViewModel: VocabookViewModel
 
-    @EnvironmentObject var languageSettings: LanguageSettings
     @EnvironmentObject var reviewSettings: ReviewSettingsManager
     @Environment(\.theme) var theme: Theme
 
@@ -98,7 +97,7 @@ struct VocabookView: View {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isListening) {
-             ReadFlashcardView(languageSettings: languageSettings)
+             ReadFlashcardView()
         }
         .sheet(isPresented: $isQuizzing, onDismiss: {
             Task {

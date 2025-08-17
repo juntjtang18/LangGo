@@ -10,6 +10,10 @@ struct UserProfileAttributes: Codable {
     let telephone: String?
 }
 
+struct Language: Hashable, Identifiable {
+    let id: String // The language code, e.g., "en", "ja"
+    let name: String // The display name, e.g., "English"
+}
 
 /// Represents the main user object returned from the `/api/users/me` endpoint.
 struct StrapiUser: Codable, Identifiable {
@@ -18,11 +22,24 @@ struct StrapiUser: Codable, Identifiable {
     let email: String
     // MODIFIED: This now correctly reflects the nested user_profile object.
     let user_profile: UserProfileAttributes?
-
+    
     enum CodingKeys: String, CodingKey {
         case id, username, email
         case user_profile
     }
+    /*
+    static var availableLanguages: [Language] {
+        return Bundle.main.localizations
+            .filter { $0 != "Base" }
+            .compactMap { langCode in
+                guard let languageName = Locale(identifier: "en").localizedString(forIdentifier: langCode) else {
+                    return nil
+                }
+                return Language(id: langCode, name: languageName.capitalized)
+            }
+            .sorted { $0.name < $1.name }
+    }
+     */
 }
 
 enum PartOfSpeech: String, CaseIterable, Identifiable {

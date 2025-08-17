@@ -11,7 +11,7 @@ import SwiftUI
 struct LanguageSelectionView: View {
     var onContinue: () -> Void
     @EnvironmentObject var languageSettings: LanguageSettings
-
+    
     var body: some View {
         VStack {
             Text("What is your native language?")
@@ -19,7 +19,7 @@ struct LanguageSelectionView: View {
                 .padding()
 
             Picker("Select a language", selection: $languageSettings.selectedLanguageCode) {
-                ForEach(languageSettings.availableLanguages) { language in
+                ForEach(LanguageSettings.availableLanguages) { language in
                     Text(language.name).tag(language.id)
                 }
             }

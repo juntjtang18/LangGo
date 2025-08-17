@@ -1,4 +1,4 @@
-// LangGo/Vocabook/NewWordInputView.swift
+// LangGo/Vocabook/NewWordInputVew.swift
 import SwiftUI
 import Combine
 import os
@@ -8,7 +8,9 @@ struct NewWordInputView: View {
     // MARK: - Environment & View Model
     @Environment(\.dismiss) var dismiss
     @ObservedObject var viewModel: FlashcardViewModel
-    @EnvironmentObject var languageSettings: LanguageSettings
+    
+    // --- CORRECTED: Observe the shared UserSessionManager ---
+    @StateObject private var session = UserSessionManager.shared
 
     // MARK: - State (Source of Truth)
     @State private var word: String = ""
@@ -48,7 +50,10 @@ struct NewWordInputView: View {
         var id: String { self.rawValue }
     }
 
-    private var baseLanguageCode: String { languageSettings.selectedLanguageCode }
+    // --- CORRECTED: Reads the base language from the session ---
+    private var baseLanguageCode: String {
+        session.currentUser?.user_profile?.baseLanguage ?? "en"
+    }
     private var targetLanguageCode: String { Config.learningTargetLanguageCode }
     private var baseLanguageName: String { languageName(for: baseLanguageCode) }
     private var targetLanguageName: String { languageName(for: targetLanguageCode) }
@@ -115,7 +120,6 @@ struct NewWordInputView: View {
             .onAppear {
                 focusedField = .top
             }
-            // MODIFIED: Used older, more compatible onChange syntax.
             .onChange(of: word, perform: { _ in
                 isTranslationStale = true
             })
@@ -204,7 +208,7 @@ struct NewWordInputView: View {
                     targetText: result.targetText,
                     baseText: result.baseText,
                     partOfSpeech: posRawValue,
-                    locale: baseLanguageCode // FIX 1: Add locale parameter
+                    locale: baseLanguageCode
                 )
                 word = ""
                 baseText = ""
@@ -224,7 +228,7 @@ struct NewWordInputView: View {
     }
 
     private func languageName(for code: String) -> String {
-        languageSettings.availableLanguages.first(where: { $0.id == code })?.name ?? code.uppercased()
+        LanguageSettings.availableLanguages.first(where: { $0.id == code })?.name ?? code.uppercased()
     }
     
     private func swapLanguages() {
@@ -281,7 +285,7 @@ struct NewWordInputView: View {
                     targetText: targetOut,
                     baseText: baseOut,
                     partOfSpeech: partOfSpeech?.rawValue ?? "",
-                    locale: baseLanguageCode // FIX 2: Add locale parameter
+                    locale: baseLanguageCode
                 )
                 word = ""
                 baseText = ""
@@ -328,7 +332,6 @@ struct NewWordInputView: View {
                 )
                 self.baseText = response.translation
                 
-                // Only set the part of speech if it's a single value
                 if !response.partOfSpeech.contains(",") {
                     if let newPartOfSpeech = PartOfSpeech(rawValue: response.partOfSpeech.trimmingCharacters(in: .whitespaces).lowercased()) {
                         self.partOfSpeech = newPartOfSpeech

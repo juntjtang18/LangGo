@@ -4,27 +4,34 @@ import os
 
 struct ProfileView: View {
     @Environment(\.dismiss) var dismiss
-    
+
+    // ✅ Use the session (single source of truth) instead of UserDefaults
+    @EnvironmentObject var userSession: UserSessionManager
+
     private let strapiService = DataServices.shared.strapiService
-    
+
     // State for existing fields
     @State private var username: String = ""
     @State private var email: String = ""
     @State private var currentPassword = ""
     @State private var newPassword = ""
     @State private var confirmNewPassword = ""
-    
+
     // State for new profile fields
     @State private var proficiencyId: Int = 0
     @State private var proficiencyLevels: [ProficiencyLevel] = []
-    
+
+    // Base language
+    @State private var baseLanguageCode: String = "en"
+    private let availableLanguages = LanguageSettings.availableLanguages
+
     @State private var remindersEnabled: Bool = false
-    
-    // State for UI and feedback
+
+    // UI state
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var isLoading = false
-    
+
     private let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ProfileView")
 
@@ -47,8 +54,14 @@ struct ProfileView: View {
                                 .foregroundColor(.gray)
                         }
                     }
-                    
+
                     Section(header: Text("LEARNING PREFERENCES")) {
+                        Picker("Base Language", selection: $baseLanguageCode) {
+                            ForEach(availableLanguages) { lang in
+                                Text(lang.name).tag(lang.id)
+                            }
+                        }
+
                         if proficiencyLevels.isEmpty {
                             Text("Proficiency levels could not be loaded.")
                                 .foregroundColor(.secondary)
@@ -59,6 +72,7 @@ struct ProfileView: View {
                                 }
                             }
                         }
+
                         Toggle("Review Reminders", isOn: $remindersEnabled)
                     }
 
@@ -67,7 +81,7 @@ struct ProfileView: View {
                         SecureField("New Password", text: $newPassword)
                         SecureField("Confirm New Password", text: $confirmNewPassword)
                     }
-                    
+
                     Button("Save Changes") {
                         Task { await updateProfile() }
                     }
@@ -76,8 +90,7 @@ struct ProfileView: View {
                 .disabled(isLoading)
 
                 if isLoading {
-                    ProgressView()
-                        .scaleEffect(1.5)
+                    ProgressView().scaleEffect(1.5)
                 }
             }
             .navigationTitle("Profile")
@@ -97,90 +110,103 @@ struct ProfileView: View {
             }
         }
     }
-    
+
+    // MARK: - Data loading
+
     private func loadUserProfile() async {
         isLoading = true
         defer { isLoading = false }
-        
+
         do {
-            async let userTask = strapiService.fetchCurrentUser()
-            async let levelsTask = strapiService.fetchProficiencyLevels(locale: UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en")
-            
-            let (user, levels) = try await (userTask, levelsTask)
-            
+            // Always fetch fresh and reflect into session
+            let user = try await strapiService.fetchCurrentUser()
+            UserSessionManager.shared.login(user: user) // keeps session in sync
+
+            // Use user's baseLanguage (fallback to "en") to fetch levels
+            let locale = user.user_profile?.baseLanguage ?? "en"
+            let levels = try await strapiService.fetchProficiencyLevels(locale: locale)
+
+            // Fill UI state
             self.proficiencyLevels = levels
             self.username = user.username
             self.email = user.email
-            
-            // CORRECTED: This logic is now crash-proof and correctly handles the string key.
-            // 1. Get the proficiency key (string) from the user data.
-            let userProficiencyKey = user.user_profile?.proficiency
-            
-            // 2. Find the corresponding ProficiencyLevel object in the levels array.
-            let selectedLevel = levels.first { $0.attributes.key == userProficiencyKey }
-            
-            // 3. Set the proficiencyId state from the found level's ID.
-            //    If no level is found or the levels array is empty, it safely defaults to 0.
-            self.proficiencyId = selectedLevel?.id ?? levels.first?.id ?? 0
-            
+            self.baseLanguageCode = user.user_profile?.baseLanguage ?? "en"
             self.remindersEnabled = user.user_profile?.reminder_enabled ?? false
-            
+
+            let selectedKey = user.user_profile?.proficiency
+            self.proficiencyId = levels.first(where: { $0.attributes.key == selectedKey })?.id
+                ?? levels.first?.id ?? 0
+
         } catch {
             logger.error("Failed to load user profile: \(error.localizedDescription, privacy: .public)")
             alertMessage = "Could not load your profile. Please try again."
             showAlert = true
         }
     }
-    
-    func updateProfile() async {
+
+    // MARK: - Save
+
+    private func updateProfile() async {
         isLoading = true
         defer { isLoading = false }
-        
-        let userId = UserDefaults.standard.integer(forKey: "userId")
-        guard userId != 0 else {
-            alertMessage = "Could not find user ID. Please log in again."
+
+        guard let currentUser = userSession.currentUser else {
+            alertMessage = "No active user. Please log in again."
             showAlert = true
             return
         }
-        
-        var messages: [String] = []
-        
-        await updateLearningPreferences(userId: userId, messages: &messages)
 
-        let originalUsername = UserDefaults.standard.string(forKey: "username") ?? ""
-        if !username.isEmpty && username != originalUsername {
-            await updateUsername(userId: userId, messages: &messages)
+        var messages: [String] = []
+
+        await updateLearningPreferences(userId: currentUser.id, messages: &messages)
+
+        // Only call username update if actually changed
+        if !username.isEmpty && username != currentUser.username {
+            await updateUsername(userId: currentUser.id, messages: &messages)
         }
-        
+
         if !newPassword.isEmpty {
             await changePassword(messages: &messages)
         }
-        
-        if !messages.isEmpty {
-            alertMessage = messages.joined(separator: "\n")
-        } else {
-            alertMessage = "No changes were made."
-        }
+
+        alertMessage = messages.isEmpty ? "No changes were made." : messages.joined(separator: "\n")
         showAlert = true
     }
-    
+
     private func updateLearningPreferences(userId: Int, messages: inout [String]) async {
-        // CORRECTED: Find the selected proficiency object based on the `proficiencyId`.
-        guard let selectedProficiency = proficiencyLevels.first(where: { $0.id == self.proficiencyId }) else {
+        guard let selectedLevel = proficiencyLevels.first(where: { $0.id == self.proficiencyId }) else {
             messages.append("Could not save proficiency, levels were not loaded correctly.")
             return
         }
-        
-        // Get the string `key` from the selected object.
-        let proficiencyKeyToSave = selectedProficiency.attributes.key
-        
+
+        let proficiencyKeyToSave = selectedLevel.attributes.key
+
         do {
-            // Pass the correct string `key` to the service.
-            try await strapiService.updateUserProfile(
-                userId: userId,
-                proficiencyKey: proficiencyKeyToSave,
-                remindersEnabled: remindersEnabled
+            let payload = UserProfileUpdatePayload(
+                baseLanguage: baseLanguageCode,
+                proficiency: proficiencyKeyToSave,
+                reminder_enabled: remindersEnabled
             )
+
+            try await strapiService.updateUserProfile(userId: userId, payload: payload)
+
+            // ✅ Reflect changes into the in-memory session user (so UI stays consistent)
+            if let old = userSession.currentUser {
+                let updatedProfile = UserProfileAttributes(
+                    proficiency: proficiencyKeyToSave,
+                    reminder_enabled: remindersEnabled,
+                    baseLanguage: baseLanguageCode,
+                    telephone: old.user_profile?.telephone
+                )
+                let updatedUser = StrapiUser(
+                    id: old.id,
+                    username: old.username,
+                    email: old.email,
+                    user_profile: updatedProfile
+                )
+                userSession.currentUser = updatedUser
+            }
+
             messages.append("Learning preferences updated.")
             logger.info("User preferences updated for user ID \(userId).")
         } catch {
@@ -189,51 +215,56 @@ struct ProfileView: View {
             logger.error("\(errorText, privacy: .public)")
         }
     }
-    
-    /// Handles the network request to update the username.
+
     private func updateUsername(userId: Int, messages: inout [String]) async {
         do {
             let updatedUser = try await strapiService.updateUsername(userId: userId, username: username)
-            UserDefaults.standard.set(updatedUser.username, forKey: "username")
+
+            // ✅ Update the in-memory session user
+            userSession.currentUser = updatedUser
+
             messages.append("Username updated successfully!")
             logger.info("Username updated to \(updatedUser.username, privacy: .public)")
         } catch {
-            var currentErrorText: String
+            let msg: String
             switch error {
             case let nsError as NSError where nsError.domain == "NetworkManager.StrapiError":
-                currentErrorText = nsError.localizedDescription
+                msg = nsError.localizedDescription
             default:
-                currentErrorText = "Failed to update username: \(error.localizedDescription)"
+                msg = "Failed to update username: \(error.localizedDescription)"
             }
-            messages.append(currentErrorText)
-            logger.error("Failed to update username: \(currentErrorText, privacy: .public)")
+            messages.append(msg)
+            logger.error("Failed to update username: \(msg, privacy: .public)")
         }
     }
-    
-    /// Handles the network request to change the password.
+
     private func changePassword(messages: inout [String]) async {
         guard newPassword == confirmNewPassword else {
             messages.append("Failed to change password: New passwords do not match.")
             return
         }
-        
+
         do {
-            let _: EmptyResponse = try await strapiService.changePassword(currentPassword: currentPassword, newPassword: newPassword, confirmNewPassword: confirmNewPassword)
+            let _: EmptyResponse = try await strapiService.changePassword(
+                currentPassword: currentPassword,
+                newPassword: newPassword,
+                confirmNewPassword: confirmNewPassword
+            )
             messages.append("Password changed successfully!")
             currentPassword = ""
             newPassword = ""
             confirmNewPassword = ""
             logger.info("Password changed successfully.")
         } catch {
-            var currentErrorText: String
+            let msg: String
             switch error {
             case let nsError as NSError where nsError.domain == "NetworkManager.StrapiError":
-                currentErrorText = nsError.localizedDescription
+                msg = nsError.localizedDescription
             default:
-                currentErrorText = "Failed to change password: \(error.localizedDescription)"
+                msg = "Failed to change password: \(error.localizedDescription)"
             }
-            messages.append(currentErrorText)
-            logger.error("Failed to change password: \(currentErrorText, privacy: .public)")
+            messages.append(msg)
+            logger.error("Failed to change password: \(msg, privacy: .public)")
         }
     }
 }

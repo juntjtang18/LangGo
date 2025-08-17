@@ -209,7 +209,6 @@ private struct VocapageActionButtons: View {
     @Binding var isShowingReviewView: Bool
     @ObservedObject var speechManager: SpeechManager
     
-    @EnvironmentObject var languageSettings: LanguageSettings
     private let strapiService = DataServices.shared.strapiService
 
     var body: some View {
@@ -229,7 +228,6 @@ private struct VocapageActionButtons: View {
                                 speechManager.startReadingSession(
                                     flashcards: sortedFlashcards,
                                     showBaseText: showBaseText,
-                                    languageSettings: languageSettings,
                                     settings: settings.attributes
                                 )
                             }

@@ -111,6 +111,9 @@
     "Base (%@)" : {
 
     },
+    "Base Language" : {
+
+    },
     "by %@" : {
 
     },
@@ -456,6 +459,7 @@
 
     },
     "Language" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -558,6 +562,9 @@
 
     },
     "My Vocabulary\nNote Book" : {
+
+    },
+    "Native language" : {
 
     },
     "New Password" : {

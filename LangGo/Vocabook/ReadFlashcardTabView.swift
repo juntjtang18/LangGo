@@ -2,14 +2,12 @@ import SwiftUI
 
 struct ReadFlashcardTabView: View {
     @Binding var isSideMenuShowing: Bool
-    @EnvironmentObject var languageSettings: LanguageSettings
-    // REMOVED: The AppEnvironment is no longer needed.
 
     var body: some View {
         NavigationStack {
             // MODIFIED: ReadFlashcardView is now initialized without strapiService.
             // It will get the service from the DataServices singleton internally.
-            ReadFlashcardView(languageSettings: languageSettings)
+            ReadFlashcardView()
                 .navigationTitle("Read Flashcards")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

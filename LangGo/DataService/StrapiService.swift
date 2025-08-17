@@ -1,4 +1,4 @@
-// LangGo/DataService/StrapiService.swift
+// LangGo/StrapiService.swift
 
 import Foundation
 import os
@@ -85,17 +85,11 @@ class StrapiService {
     }
 
     // This is the new function from the previous step, now corrected.
-    func updateUserProfile(userId: Int, proficiencyKey: String, remindersEnabled: Bool) async throws {
+    func updateUserProfile(userId: Int, payload: UserProfileUpdatePayload) async throws {
         logger.debug("StrapiService: Updating user profile for user ID: \(userId).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
 
-        let baseLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en"
-
-        let payload = UserProfileUpdatePayload(
-            baseLanguage: baseLanguage,
-            proficiency: proficiencyKey,
-            reminder_enabled: remindersEnabled
-        )
+        // The payload is now passed in directly.
         let body = UserProfileUpdatePayloadWrapper(data: payload)
 
         let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
@@ -231,11 +225,11 @@ class StrapiService {
     
     // MARK: - Flashcards Pagination
     
+//    func fetchFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
     func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false) async throws -> ([Flashcard], StrapiPagination?) {
         if dueOnly {
             return try await fetchReviewFlashcardsPage(page: page, pageSize: pageSize)
         }
-        
         // 1. Get the full list of flashcards, either from cache or network.
         let allFlashcards = try await getOrFetchAllMyFlashcards()
         
