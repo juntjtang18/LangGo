@@ -1,7 +1,7 @@
 // LangGo/Vocabook/Flashcard.swift
 import Foundation
 
-struct Flashcard: Codable, Identifiable {
+struct Flashcard: Codable, Identifiable, Equatable {
     let id: Int
     
     // This now holds the complete related WordDefinition object, including its ID and attributes.
@@ -32,5 +32,11 @@ struct Flashcard: Codable, Identifiable {
         self.wrongStreak = wrongStreak
         self.isRemembered = isRemembered
         self.reviewTire = reviewTire
+    }
+    
+    // --- MODIFICATION: Manually implement the Equatable conformance ---
+    // This tells Swift that two Flashcard objects are equal if their IDs are the same.
+    static func == (lhs: Flashcard, rhs: Flashcard) -> Bool {
+        lhs.id == rhs.id
     }
 }

@@ -2,6 +2,7 @@
 import SwiftUI
 import AVFoundation
 import os
+import Combine
 
 struct VocapageHostView: View {
     @Environment(\.dismiss) var dismiss
@@ -14,6 +15,8 @@ struct VocapageHostView: View {
     @StateObject private var speechManager = SpeechManager()
     
     @State private var showReadingMenu: Bool = false
+    
+    @AppStorage("readingMode") private var readingMode: ReadingMode = .cyclePage
     
     let originalAllVocapageIds: [Int]
     @State private var vocapageIds: [Int]
@@ -81,17 +84,17 @@ struct VocapageHostView: View {
                 HStack {
                     Spacer()
                     ReadingMenuView(
-                        activeMode: speechManager.readingMode,
+                        activeMode: readingMode,
                         onRepeatWord: {
-                            speechManager.readingMode = .repeatWord
+                            readingMode = .repeatWord
                             showReadingMenu = false
                         },
                         onCyclePage: {
-                            speechManager.readingMode = .cyclePage
+                            readingMode = .cyclePage
                             showReadingMenu = false
                         },
                         onCycleAll: {
-                            speechManager.readingMode = .cycleAll
+                            readingMode = .cycleAll
                             showReadingMenu = false
                         }
                     )
@@ -100,8 +103,35 @@ struct VocapageHostView: View {
                 .offset(y: -52)
             }
         }
+        .onChange(of: readingMode) { newMode in
+            speechManager.readingMode = newMode
+        }
+        .onAppear {
+            speechManager.readingMode = readingMode
+        }
         .onChange(of: currentPageIndex) { _ in
-            speechManager.stopReadingSession()
+            if speechManager.readingMode != .cycleAll {
+                speechManager.stopReadingSession()
+            }
+        }
+        .onReceive(speechManager.pageFinishedPublisher) { _ in
+            handleFinishedPage()
+        }
+        .onChange(of: sortedFlashcardsForCurrentPage) { newCards in
+            if speechManager.readingMode == .cycleAll && speechManager.isSpeaking {
+                if !newCards.isEmpty {
+                    Task {
+                        do {
+                            let settings = try await DataServices.shared.strapiService.fetchVBSetting()
+                            speechManager.startReadingSession(
+                                flashcards: newCards,
+                                showBaseText: showBaseText,
+                                settings: settings.attributes
+                            )
+                        } catch { print("Failed to fetch settings: \(error)") }
+                    }
+                }
+            }
         }
         .fullScreenCover(isPresented: $isShowingReviewView) {
             VocapageReviewView(
@@ -111,6 +141,19 @@ struct VocapageHostView: View {
         }
         .task {
             await updatePageIdsForFilter()
+        }
+    }
+    
+    private func handleFinishedPage() {
+        guard !vocapageIds.isEmpty else {
+            speechManager.stopReadingSession()
+            return
+        }
+        
+        if currentPageIndex < vocapageIds.count - 1 {
+            currentPageIndex += 1
+        } else {
+            currentPageIndex = 0
         }
     }
     
@@ -142,6 +185,8 @@ struct VocapageHostView: View {
     }
 }
 
+// MARK: - Helper Views for VocapageHostView
+
 private struct Callout: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -164,7 +209,6 @@ private struct Callout: Shape {
 
 private struct ReadingMenuView: View {
     let activeMode: ReadingMode
-    
     var onRepeatWord: () -> Void
     var onCyclePage: () -> Void
     var onCycleAll: () -> Void
@@ -176,16 +220,12 @@ private struct ReadingMenuView: View {
                 Image(systemName: "repeat.1")
                     .foregroundColor(activeMode == .repeatWord ? theme.accent : theme.text)
             }
-            
             Divider().frame(height: 20)
-            
             Button(action: onCyclePage) {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .foregroundColor(activeMode == .cyclePage ? theme.accent : theme.text)
             }
-            
             Divider().frame(height: 20)
-
             Button(action: onCycleAll) {
                 Image(systemName: "infinity")
                     .foregroundColor(activeMode == .cycleAll ? theme.accent : theme.text)
@@ -202,8 +242,6 @@ private struct ReadingMenuView: View {
         .transition(.scale.animation(.spring(response: 0.4, dampingFraction: 0.6)))
     }
 }
-
-// MARK: - Subviews
 
 private struct PageNavigationControls: View {
     @Binding var currentPageIndex: Int
@@ -278,21 +316,17 @@ private struct VocapageActionButtons: View {
                 isShowingReviewView = true
             }
 
-            // --- MODIFICATION: The main play/pause button logic is corrected ---
             VocapageActionButton(icon: speechManager.isSpeaking ? "pause.circle.fill" : "play.circle.fill") {
                 if speechManager.isSpeaking {
                     speechManager.pause()
                 } else {
-                    // Use currentIndex to determine if we should resume or start fresh.
                     if speechManager.currentIndex == -1 {
-                        // Start a new session using the persistent reading mode
                         Task {
                             do {
                                 let settings = try await strapiService.fetchVBSetting()
                                 if !sortedFlashcards.isEmpty {
                                     speechManager.startReadingSession(
                                         flashcards: sortedFlashcards,
-                                        mode: speechManager.readingMode, // Use the saved mode
                                         showBaseText: showBaseText,
                                         settings: settings.attributes
                                     )
@@ -302,7 +336,6 @@ private struct VocapageActionButtons: View {
                             }
                         }
                     } else {
-                        // If a session was paused, just resume it
                         speechManager.resume()
                     }
                 }
