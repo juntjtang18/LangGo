@@ -4,7 +4,8 @@ import SwiftUI
 struct VocapageView: View {
     let vocapage: Vocapage?
     @Binding var showBaseText: Bool
-    @ObservedObject var speechManager: SpeechManager
+    /// Index of the currently reading item for highlight/scroll.
+    let highlightIndex: Int
     let onLoad: () -> Void
 
     private var sortedFlashcards: [Flashcard] {
@@ -14,36 +15,32 @@ struct VocapageView: View {
     var body: some View {
         ZStack {
             Color(red: 0.98, green: 0.97, blue: 0.94).ignoresSafeArea()
-            
+
             VStack {
-                // Use a computed property for isLoading
                 if vocapage == nil {
                     ProgressView()
                 } else if let vocapage = vocapage {
                     VocapageContentListView(
                         sortedFlashcards: sortedFlashcards,
                         showBaseText: showBaseText,
-                        speechManager: speechManager
+                        highlightIndex: highlightIndex
                     )
-                    
+
                     Text("\(vocapage.order)")
                         .font(.system(.caption, design: .serif))
                         .foregroundColor(.secondary)
-                        .padding(.bottom, 60) // Space for the toolbar
-                    
+                        .padding(.bottom, 60)
                 }
             }
         }
-        .task {
-            onLoad()
-        }
+        .task { onLoad() }
     }
 }
 
 private struct VocapageContentListView: View {
     let sortedFlashcards: [Flashcard]
     let showBaseText: Bool
-    @ObservedObject var speechManager: SpeechManager
+    let highlightIndex: Int
 
     var body: some View {
         if sortedFlashcards.isEmpty {
@@ -62,7 +59,7 @@ private struct VocapageContentListView: View {
                                 Text(card.backContent)
                                     .font(.system(.title3, design: .serif))
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                
+
                                 if showBaseText {
                                     Text(card.frontContent)
                                         .font(.system(.body, design: .serif))
@@ -73,13 +70,13 @@ private struct VocapageContentListView: View {
                             .id(card.id)
                             .padding(.vertical, 8)
                             .listRowBackground(Color.clear)
-                            .background(speechManager.currentIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
+                            .background(highlightIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
                         }
                     }
                 }
                 .listStyle(.plain)
                 .background(Color.clear)
-                .onChange(of: speechManager.currentIndex) { newIndex in
+                .onChange(of: highlightIndex) { newIndex in
                     if newIndex >= 0 && newIndex < sortedFlashcards.count {
                         let cardIdToScroll = sortedFlashcards[newIndex].id
                         withAnimation {

@@ -7,25 +7,29 @@ import Combine
 struct VocapageHostView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.theme) var theme: Theme
-    
+
     @StateObject private var loader = VocapageLoader()
-    
     @AppStorage("showBaseTextInVocapage") private var showBaseText: Bool = true
-    
+
+    // Speaker now plays exactly one word; host manages "auto-play" loop and next index.
     @StateObject private var speechManager = SpeechManager()
-    
+    @State private var pendingAutoplayAfterLoad: Bool = false
+
     @State private var showReadingMenu: Bool = false
-    
     @AppStorage("readingMode") private var readingMode: ReadingMode = .cyclePage
-    
+
     let originalAllVocapageIds: [Int]
     @State private var vocapageIds: [Int]
     @State private var currentPageIndex: Int
 
     let flashcardViewModel: FlashcardViewModel
     @State private var isShowingReviewView: Bool = false
-    
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly: Bool = false
+
+    // New: host-owned auto-play state & index.
+    @State private var isAutoPlaying: Bool = false
+    @State private var currentWordIndex: Int = -1
+    @State private var vbSettings: VBSettingAttributes?
 
     init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
         self.originalAllVocapageIds = allVocapageIds
@@ -39,9 +43,9 @@ struct VocapageHostView: View {
         let currentId = vocapageIds[currentPageIndex]
         return loader.vocapages[currentId]
     }
-    
+
     private var sortedFlashcardsForCurrentPage: [Flashcard] {
-        return currentVocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
+        currentVocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
     }
 
     var body: some View {
@@ -51,14 +55,11 @@ struct VocapageHostView: View {
                 allVocapageIds: vocapageIds,
                 loader: loader,
                 showBaseText: $showBaseText,
-                speechManager: speechManager,
+                highlightIndex: speechManager.currentIndex,
                 isShowingDueWordsOnly: isShowingDueWordsOnly
             )
 
-            PageNavigationControls(
-                currentPageIndex: $currentPageIndex,
-                pageCount: vocapageIds.count
-            )
+            PageNavigationControls(currentPageIndex: $currentPageIndex, pageCount: vocapageIds.count)
         }
         .navigationTitle("My Vocabulary")
         .navigationBarTitleDisplayMode(.inline)
@@ -67,7 +68,8 @@ struct VocapageHostView: View {
             VocapageToolbar(
                 showBaseText: $showBaseText,
                 sortedFlashcards: sortedFlashcardsForCurrentPage,
-                speechManager: speechManager,
+                isAutoPlaying: isAutoPlaying,
+                onPlayPauseTapped: { playPauseTapped() },
                 onDismiss: { dismiss() },
                 isShowingReviewView: $isShowingReviewView,
                 isShowingDueWordsOnly: $isShowingDueWordsOnly,
@@ -85,94 +87,172 @@ struct VocapageHostView: View {
                     Spacer()
                     ReadingMenuView(
                         activeMode: readingMode,
-                        onRepeatWord: {
-                            readingMode = .repeatWord
-                            showReadingMenu = false
-                        },
-                        onCyclePage: {
-                            readingMode = .cyclePage
-                            showReadingMenu = false
-                        },
-                        onCycleAll: {
-                            readingMode = .cycleAll
-                            showReadingMenu = false
-                        }
+                        onRepeatWord: { readingMode = .repeatWord; showReadingMenu = false },
+                        onCyclePage: { readingMode = .cyclePage; showReadingMenu = false },
+                        onCycleAll: { readingMode = .cycleAll; showReadingMenu = false }
                     )
                 }
                 .padding(.trailing, 20)
                 .offset(y: -52)
             }
         }
-        .onChange(of: readingMode) { newMode in
-            speechManager.readingMode = newMode
-        }
-        .onAppear {
-            speechManager.readingMode = readingMode
-        }
         .onChange(of: currentPageIndex) { _ in
-            if speechManager.readingMode != .cycleAll {
-                speechManager.stopReadingSession()
+            // If user manually changes page and we're not in cycleAll autoplay, stop.
+            if readingMode != .cycleAll {
+                stopAutoplay()
             }
-        }
-        .onReceive(speechManager.pageFinishedPublisher) { _ in
-            handleFinishedPage()
         }
         .onChange(of: sortedFlashcardsForCurrentPage) { newCards in
-            if speechManager.readingMode == .cycleAll && speechManager.isSpeaking {
-                if !newCards.isEmpty {
-                    Task {
-                        do {
-                            let settings = try await DataServices.shared.strapiService.fetchVBSetting()
-                            speechManager.startReadingSession(
-                                flashcards: newCards,
-                                showBaseText: showBaseText,
-                                settings: settings.attributes
-                            )
-                        } catch { print("Failed to fetch settings: \(error)") }
-                    }
-                }
+            // Only trigger after a page change we initiated for cycleAll autoplay.
+            guard pendingAutoplayAfterLoad else { return }
+            guard readingMode == .cycleAll, isAutoPlaying, !newCards.isEmpty else { return }
+
+            pendingAutoplayAfterLoad = false
+
+            // Clamp in case due-only filter altered the count.
+            if currentWordIndex >= newCards.count { currentWordIndex = max(0, newCards.count - 1) }
+
+            // Defer one tick so the List is rendered; this ensures highlight and scroll are ready.
+            DispatchQueue.main.async {
+                playCurrent()
             }
         }
+
         .fullScreenCover(isPresented: $isShowingReviewView) {
-            VocapageReviewView(
-                cardsToReview: sortedFlashcardsForCurrentPage,
-                viewModel: flashcardViewModel
-            )
+            VocapageReviewView(cardsToReview: sortedFlashcardsForCurrentPage, viewModel: flashcardViewModel)
         }
-        .task {
-            await updatePageIdsForFilter()
-        }
+        .task { await updatePageIdsForFilter() }
     }
-    
-    private func handleFinishedPage() {
-        guard !vocapageIds.isEmpty else {
-            speechManager.stopReadingSession()
-            return
-        }
-        
-        if currentPageIndex < vocapageIds.count - 1 {
-            currentPageIndex += 1
+
+    // MARK: - Auto-play control owned by host
+
+    private func playPauseTapped() {
+        if isAutoPlaying {
+            // Pause current utterance and freeze loop.
+            isAutoPlaying = false
+            speechManager.pause()
         } else {
-            currentPageIndex = 0
+            isAutoPlaying = true
+            if speechManager.isPaused {
+                speechManager.resume()
+            } else {
+                startAutoplayIfNeeded()
+            }
         }
     }
-    
+
+    private func startAutoplayIfNeeded() {
+        guard !sortedFlashcardsForCurrentPage.isEmpty else { return }
+        Task {
+            if vbSettings == nil {
+                do { vbSettings = try await DataServices.shared.strapiService.fetchVBSetting().attributes }
+                catch { vbSettings = nil }
+            }
+            if currentWordIndex == -1 {
+                currentWordIndex = 0
+            }
+            playCurrent()
+        }
+    }
+
+    private func stopAutoplay() {
+        isAutoPlaying = false
+        speechManager.stop()
+        currentWordIndex = -1
+    }
+
+    private func playCurrent() {
+        guard isAutoPlaying else { return }
+        let cards = sortedFlashcardsForCurrentPage
+        guard !cards.isEmpty else { return }
+        guard currentWordIndex >= 0 && currentWordIndex < cards.count else { return }
+        guard let settings = vbSettings else { return }
+        
+        // Update highlight
+        speechManager.currentIndex = currentWordIndex
+        
+        speechManager.speak(
+            card: cards[currentWordIndex],
+            showBaseText: showBaseText,
+            settings: settings
+        ) {
+            onOneWordFinished()
+        }
+    }
+
+    private func onOneWordFinished() {
+        guard isAutoPlaying else { return }
+
+        let count = sortedFlashcardsForCurrentPage.count
+        if count == 0 { stopAutoplay(); return }
+
+        switch readingMode {
+        case .repeatWord:
+            if currentWordIndex == -1 { currentWordIndex = 0 }
+            // same index
+            playCurrent()
+
+        case .cyclePage:
+            currentWordIndex = (currentWordIndex + 1) % count
+            playCurrent()
+
+        case .cycleAll:
+            if currentWordIndex < count - 1 {
+                currentWordIndex += 1
+                playCurrent()
+            } else {
+                // move to next page and continue at index 0
+                advanceToNextPageAndContinue()
+            }
+
+        case .inactive:
+            stopAutoplay()
+        }
+    }
+
+    private func advanceToNextPageAndContinue() {
+        guard !vocapageIds.isEmpty else { stopAutoplay(); return }
+        let nextPage = (currentPageIndex + 1) % vocapageIds.count
+
+        // Prepare one-time autoplay after load.
+        pendingAutoplayAfterLoad = true
+        currentWordIndex = 0
+
+        // Stop any in-flight utterance to avoid chopping the “second read”.
+        speechManager.stop()
+
+        // Optimistically show highlight at 0 so the user sees it immediately.
+        speechManager.currentIndex = 0
+
+        // Switch page and load; DO NOT call playCurrent() here.
+        currentPageIndex = nextPage
+        Task {
+            await loader.loadPage(withId: vocapageIds[nextPage], dueWordsOnly: isShowingDueWordsOnly)
+            // onChange(sortedFlashcardsForCurrentPage) will fire and call playCurrent() exactly once.
+        }
+    }
+
+
+    // MARK: - Existing filter paging logic retained
+
     private func updatePageIdsForFilter() async {
         if isShowingDueWordsOnly {
             await flashcardViewModel.loadStatistics()
             let totalDueCards = flashcardViewModel.dueForReviewCount
-            
+
             do {
                 let vbSetting = try await DataServices.shared.strapiService.fetchVBSetting()
                 let pageSize = vbSetting.attributes.wordsPerPage
                 let totalPages = Int(ceil(Double(totalDueCards) / Double(pageSize)))
-                
+
                 vocapageIds = totalPages > 0 ? Array(1...totalPages) : []
-                
+
                 if currentPageIndex >= vocapageIds.count {
                     currentPageIndex = max(0, vocapageIds.count - 1)
                 }
-            } catch { vocapageIds = [] }
+            } catch {
+                vocapageIds = []
+            }
         } else {
             vocapageIds = originalAllVocapageIds
         }
@@ -182,30 +262,13 @@ struct VocapageHostView: View {
             let currentId = vocapageIds[currentPageIndex]
             await loader.loadPage(withId: currentId, dueWordsOnly: isShowingDueWordsOnly)
         }
+
+        // Any page structure change cancels autoplay if current page is empty.
+        if sortedFlashcardsForCurrentPage.isEmpty { stopAutoplay() }
     }
 }
 
-// MARK: - Helper Views for VocapageHostView
-
-private struct Callout: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let pointerHeight: CGFloat = 8
-        let pointerWidth: CGFloat = 16
-        
-        path.addRoundedRect(in: CGRect(x: 0, y: 0, width: rect.width, height: rect.height - pointerHeight), cornerSize: CGSize(width: 12, height: 12))
-        
-        let pointerTip = CGPoint(x: rect.midX, y: rect.maxY)
-        let pointerBaseLeft = CGPoint(x: rect.midX - (pointerWidth / 2), y: rect.maxY - pointerHeight)
-        let pointerBaseRight = CGPoint(x: rect.midX + (pointerWidth / 2), y: rect.maxY - pointerHeight)
-        
-        path.move(to: pointerBaseLeft)
-        path.addLine(to: pointerTip)
-        path.addLine(to: pointerBaseRight)
-        
-        return path
-    }
-}
+// MARK: - Helper Views (minor signature tweaks)
 
 private struct ReadingMenuView: View {
     let activeMode: ReadingMode
@@ -235,7 +298,7 @@ private struct ReadingMenuView: View {
         .padding(.horizontal, 25)
         .padding(.vertical, 10)
         .background(
-            Callout()
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.thinMaterial)
                 .shadow(radius: 5)
         )
@@ -306,9 +369,13 @@ private struct VocapageActionButtons: View {
     let sortedFlashcards: [Flashcard]
     let showBaseText: Bool
     @Binding var isShowingReviewView: Bool
-    @ObservedObject var speechManager: SpeechManager
+
+    // Replaced direct SpeechManager control with simple play/pause signal from host.
+    let isAutoPlaying: Bool
+    let onPlayPauseTapped: () -> Void
+
     @Binding var showReadingMenu: Bool
-    private let strapiService = DataServices.shared.strapiService
+    @Environment(\.theme) var theme: Theme
 
     var body: some View {
         HStack(spacing: 12) {
@@ -316,29 +383,8 @@ private struct VocapageActionButtons: View {
                 isShowingReviewView = true
             }
 
-            VocapageActionButton(icon: speechManager.isSpeaking ? "pause.circle.fill" : "play.circle.fill") {
-                if speechManager.isSpeaking {
-                    speechManager.pause()
-                } else {
-                    if speechManager.currentIndex == -1 {
-                        Task {
-                            do {
-                                let settings = try await strapiService.fetchVBSetting()
-                                if !sortedFlashcards.isEmpty {
-                                    speechManager.startReadingSession(
-                                        flashcards: sortedFlashcards,
-                                        showBaseText: showBaseText,
-                                        settings: settings.attributes
-                                    )
-                                }
-                            } catch {
-                                print("Failed to fetch vocabook settings: \(error)")
-                            }
-                        }
-                    } else {
-                        speechManager.resume()
-                    }
-                }
+            VocapageActionButton(icon: isAutoPlaying ? "pause.circle.fill" : "play.circle.fill") {
+                onPlayPauseTapped()
             }
 
             VocapageActionButton(icon: "gearshape.fill") {
@@ -355,7 +401,7 @@ private struct VocapagePagingView: View {
     let allVocapageIds: [Int]
     @ObservedObject var loader: VocapageLoader
     @Binding var showBaseText: Bool
-    @ObservedObject var speechManager: SpeechManager
+    let highlightIndex: Int
     let isShowingDueWordsOnly: Bool
 
     var body: some View {
@@ -364,7 +410,7 @@ private struct VocapagePagingView: View {
                 VocapageView(
                     vocapage: loader.vocapages[allVocapageIds[index]],
                     showBaseText: $showBaseText,
-                    speechManager: speechManager,
+                    highlightIndex: highlightIndex,
                     onLoad: {
                         Task {
                             await loader.loadPage(withId: allVocapageIds[index], dueWordsOnly: isShowingDueWordsOnly)
@@ -381,7 +427,11 @@ private struct VocapagePagingView: View {
 private struct VocapageToolbar: ToolbarContent {
     @Binding var showBaseText: Bool
     let sortedFlashcards: [Flashcard]
-    @ObservedObject var speechManager: SpeechManager
+
+    // New: we no longer pass the manager through; just the state and actions the UI needs.
+    let isAutoPlaying: Bool
+    var onPlayPauseTapped: () -> Void
+
     var onDismiss: () -> Void
     @Binding var isShowingReviewView: Bool
     @Binding var isShowingDueWordsOnly: Bool
@@ -406,7 +456,8 @@ private struct VocapageToolbar: ToolbarContent {
                     sortedFlashcards: sortedFlashcards,
                     showBaseText: showBaseText,
                     isShowingReviewView: $isShowingReviewView,
-                    speechManager: speechManager,
+                    isAutoPlaying: isAutoPlaying,
+                    onPlayPauseTapped: onPlayPauseTapped,
                     showReadingMenu: $showReadingMenu
                 )
                 Spacer()
