@@ -42,7 +42,10 @@ struct LangGoApp: App {
                     case .loggedIn:
                         MainView(authState: $authState)
                     case .loggedOut:
-                        LoginView(authState: $authState, onboardingData: onboardingData)
+                        // Start on Signup after onboarding
+                        LoginView(authState: $authState,
+                                  onboardingData: onboardingData,
+                                  startOn: .signup)
                     }
                 }
             }

@@ -69,18 +69,18 @@ struct SignupView: View {
                     .clipShape(Capsule())
             }
             .padding(.horizontal)
-        }
-        .padding()
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: { currentView = .login }) {
-                    Image(systemName: "chevron.left")
-                    Text("Back")
+            
+            // ⬇️ NEW: explicit login link; no navigation back arrow
+            HStack(spacing: 6) {
+                Text("Already have an account?")
+                    .foregroundColor(.secondary)
+                Button("Log in") {
+                    currentView = .login
                 }
             }
+            .font(.footnote)
         }
-        .navigationTitle("Sign Up")
-        .navigationBarTitleDisplayMode(.inline)
+        .padding()
         .navigationBarBackButtonHidden(true)
     }
 

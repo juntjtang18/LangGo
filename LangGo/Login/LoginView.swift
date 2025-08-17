@@ -10,10 +10,7 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var errorMessage = ""
-    
-    // State to track the loading process
     @State private var isLoading = false
-    
     @EnvironmentObject var languageSettings: LanguageSettings
 
     private let strapiService = DataServices.shared.strapiService
@@ -25,7 +22,14 @@ struct LoginView: View {
         case login
         case signup
     }
-
+    
+    // ⬇️ NEW: initializer to control the starting tab
+    init(authState: Binding<AuthState>, onboardingData: OnboardingData?, startOn: ViewState = .login) {
+        self._authState = authState
+        self.onboardingData = onboardingData
+        self._currentView = State(initialValue: startOn)
+    }
+    
     var body: some View {
         NavigationStack {
             Group {

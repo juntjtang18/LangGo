@@ -80,6 +80,9 @@
     "AI Conversation Partner" : {
 
     },
+    "Already have an account?" : {
+
+    },
     "Back" : {
       "localizations" : {
         "ja" : {
@@ -406,6 +409,9 @@
     "Explore lessons on specific topics" : {
 
     },
+    "Finish onboarding and get started" : {
+
+    },
     "Finished Onboarding" : {
 
     },
@@ -530,6 +536,9 @@
     "Loading stories..." : {
 
     },
+    "Log in" : {
+
+    },
     "Login" : {
       "localizations" : {
         "ja" : {
@@ -594,6 +603,12 @@
           }
         }
       }
+    },
+    "Next" : {
+
+    },
+    "Next page" : {
+
     },
     "No cards available for reading." : {
 
@@ -1030,6 +1045,12 @@
           }
         }
       }
+    },
+    "Skip" : {
+
+    },
+    "Skip onboarding" : {
+
     },
     "Start Reading" : {
 

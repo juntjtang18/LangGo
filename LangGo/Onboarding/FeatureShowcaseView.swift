@@ -11,37 +11,64 @@ import SwiftUI
 struct FeatureShowcaseView: View {
     var onComplete: () -> Void
 
+    @State private var page = 0
+    private let pageCount = 3
+
     var body: some View {
-        TabView {
-            FeaturePageView(
-                imageName: "sparkles",
-                title: "Scientific Vocabulary Notebook",
-                description: "Tracks memory level for each word and schedules optimal reviews to strengthen retention and minimize effort."
-            )
-            FeaturePageView(
-                imageName: "message.fill",
-                title: "AI Conversation Partner",
-                description: "Proactively starts conversations appropriate to your level and guides the discussion with relevant prompts."
-            )
-            FeaturePageView(
-                imageName: "book.fill",
-                title: "Contextual Reading & Listening",
-                description: "Famous short stories with tap-to-translate and integration with the Vocabulary Notebook for efficient retention."
-            )
-        }
-        .tabViewStyle(PageTabViewStyle())
-        .indexViewStyle(PageIndexViewStyle(backgroundDisplayMode: .always))
-        .overlay(
-            Button(action: onComplete) {
-                Text("LangGo to Pro, Ready to GO!")
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+        VStack(spacing: 0) {
+            TabView(selection: $page) {
+                FeaturePageView(
+                    imageName: "sparkles",
+                    title: "Scientific Vocabulary Notebook",
+                    description: "Tracks memory level for each word and schedules optimal reviews to strengthen retention and minimize effort."
+                )
+                .tag(0)
+
+                FeaturePageView(
+                    imageName: "message.fill",
+                    title: "AI Conversation Partner",
+                    description: "Proactively starts conversations appropriate to your level and guides the discussion with relevant prompts."
+                )
+                .tag(1)
+
+                FeaturePageView(
+                    imageName: "book.fill",
+                    title: "Contextual Reading & Listening",
+                    description: "Famous short stories with tap-to-translate and integration with the Vocabulary Notebook for efficient retention."
+                )
+                .tag(2)
             }
-            .padding(),
-            alignment: .bottom
-        )
+            .tabViewStyle(PageTabViewStyle())
+            .indexViewStyle(PageIndexViewStyle(backgroundDisplayMode: .always))
+
+            // Bottom controls
+            Group {
+                if page < pageCount - 1 {
+                    HStack {
+                        Button("Skip") {
+                            onComplete()
+                        }
+                        .accessibilityLabel("Skip onboarding")
+
+                        Spacer()
+
+                        Button("Next") {
+                            withAnimation { page += 1 }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityLabel("Next page")
+                    }
+                } else {
+                    Button("LangGo to Pro, Ready to GO!") {
+                        onComplete()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Finish onboarding and get started")
+                }
+            }
+            .padding()
+        }
     }
 }
 
@@ -62,5 +89,6 @@ struct FeaturePageView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
         }
+        .padding(.top, 24)
     }
 }
