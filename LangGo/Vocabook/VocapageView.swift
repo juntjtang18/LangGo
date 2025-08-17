@@ -25,13 +25,25 @@ struct VocapageView: View {
                         showBaseText: showBaseText,
                         highlightIndex: highlightIndex
                     )
-
+                    
+                    /*
                     Text("\(vocapage.order)")
                         .font(.system(.caption, design: .serif))
                         .foregroundColor(.secondary)
                         .padding(.bottom, 60)
+                     */
                 }
             }
+            // Inside VocapageView's ZStack (after the VStack)
+            .safeAreaInset(edge: .bottom) {
+                if let vocapage = vocapage {
+                    Text("\(vocapage.order)")
+                        .font(.system(.caption, design: .serif))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 6)
+                }
+            }
+
         }
         .task { onLoad() }
     }
