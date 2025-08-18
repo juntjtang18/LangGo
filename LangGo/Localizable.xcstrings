@@ -83,6 +83,9 @@
     "AI Conversation Partner" : {
 
     },
+    "All Words" : {
+
+    },
     "Already have an account?" : {
 
     },
@@ -392,6 +395,9 @@
           }
         }
       }
+    },
+    "Due Words" : {
+
     },
     "Email" : {
       "localizations" : {

@@ -16,6 +16,7 @@ struct VocapageHostView: View {
     @State private var pendingAutoplayAfterLoad: Bool = false
 
     @State private var showReadingMenu: Bool = false
+    @State private var showFilterMenu: Bool = false               // NEW
     @AppStorage("readingMode") private var readingMode: ReadingMode = .cyclePage
 
     let originalAllVocapageIds: [Int]
@@ -31,7 +32,10 @@ struct VocapageHostView: View {
     @State private var currentWordIndex: Int = -1
     @State private var vbSettings: VBSettingAttributes?
     @State private var selectedCard: Flashcard? = nil
+
+    // Popup anchors (measured in global space)
     @State private var gearFrameGlobal: CGRect = .zero
+    @State private var filterFrameGlobal: CGRect = .zero          // NEW
 
     init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
         self.originalAllVocapageIds = allVocapageIds
@@ -60,9 +64,9 @@ struct VocapageHostView: View {
                 highlightIndex: speechManager.currentIndex,
                 isShowingDueWordsOnly: isShowingDueWordsOnly,
                 onSelectCard: { card in
-                        // Stop autoplay so it doesn’t keep speaking behind the sheet
-                        stopAutoplay()
-                        selectedCard = card
+                    // Stop autoplay so it doesn’t keep speaking behind the sheet
+                    stopAutoplay()
+                    selectedCard = card
                 }
             )
 
@@ -71,7 +75,6 @@ struct VocapageHostView: View {
         .navigationTitle("My Vocabulary")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .onPreferenceChange(GearFrameKey.self) { gearFrameGlobal = $0 }
         .toolbar {
             VocapageToolbar(
                 showBaseText: $showBaseText,
@@ -85,42 +88,36 @@ struct VocapageHostView: View {
                     isShowingDueWordsOnly.toggle()
                     Task { await updatePageIdsForFilter() }
                 },
-                showReadingMenu: $showReadingMenu
+                showReadingMenu: $showReadingMenu,
+                showFilterMenu: $showFilterMenu         // NEW
             )
         }
         .toolbar(.hidden, for: .tabBar)
-        .onPreferenceChange(GearFrameKey.self) { newFrame in
-            gearFrameGlobal = newFrame
-        }
+        // Listen for anchor updates from toolbar buttons
+        .onPreferenceChange(GearFrameKey.self) { gearFrameGlobal = $0 }
+        .onPreferenceChange(FilterFrameKey.self) { filterFrameGlobal = $0 } // NEW
         .overlay {
             GeometryReader { rootProxy in
                 // Host view’s rect in global space
                 let rootGlobal = rootProxy.frame(in: .global)
+                let viewW = rootProxy.size.width
+                let viewH = rootProxy.size.height
 
-                // Convert gear’s global → host-local
-                let gearMidXLocal = gearFrameGlobal.midX - rootGlobal.minX
-                let gearTopLocal  = gearFrameGlobal.minY - rootGlobal.minY
-                let gearH         = gearFrameGlobal.height
-
-                // Tweak these two as needed:
-                //let H_NUDGE: CGFloat = 0            // move left(-)/right(+)
-                //let V_GAP:   CGFloat = gearH * 0.4  // how far above the gear (40% of its height)
+                // Popup layout constants
+                let H_NUDGE: CGFloat = 0
+                let V_GAP:   CGFloat = 32
 
                 ZStack {
+                    // ===== Reading-mode popup (anchored to gear) =====
                     if showReadingMenu && gearFrameGlobal != .zero {
-                        // X is the gear center (+ optional nudge);
-                        // Y is just above the gear’s top by a fraction of its height
-                        // inside the overlay GeometryReader
-                        let viewW = rootProxy.size.width
-                        let viewH = rootProxy.size.height
-
-                        let H_NUDGE: CGFloat = 0
-                        let V_GAP:   CGFloat = 32
+                        // Convert gear’s global → host-local
+                        let gearMidXLocal = gearFrameGlobal.midX - rootGlobal.minX
+                        let gearTopLocal  = gearFrameGlobal.minY - rootGlobal.minY
 
                         let unclampedX = gearMidXLocal + H_NUDGE
-                        let unclampedY = gearTopLocal - V_GAP
+                        let unclampedY = gearTopLocal  - V_GAP
 
-                        // keep menu inside the content's rectangle to avoid clipping under toolbar
+                        // keep inside visible content to avoid clipping under toolbar
                         let x = min(max(unclampedX, 16), viewW - 16)
                         let y = min(max(unclampedY, 16), viewH - 16)
 
@@ -135,8 +132,42 @@ struct VocapageHostView: View {
                         .zIndex(1000)
                         .transition(.scale.combined(with: .opacity))
                         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showReadingMenu)
-                        //.transition(.scale.combined(with: .opacity))
-                        //.animation(.spring(response: 0.35, dampingFraction: 0.8), value: showReadingMenu)
+                    }
+
+                    // ===== Filter popup (anchored to 3rd button) =====
+                    if showFilterMenu && filterFrameGlobal != .zero {
+                        // Convert filter button’s global → host-local
+                        let filterMidXLocal = filterFrameGlobal.midX - rootGlobal.minX
+                        let filterTopLocal  = filterFrameGlobal.minY - rootGlobal.minY
+
+                        let unclampedX = filterMidXLocal + H_NUDGE
+                        let unclampedY = filterTopLocal  - V_GAP
+
+                        let x = min(max(unclampedX, 16), viewW - 16)
+                        let y = min(max(unclampedY, 16), viewH - 16)
+
+                        FilterMenuView(
+                            isDueOnly: isShowingDueWordsOnly,
+                            onDueWords: {
+                                if !isShowingDueWordsOnly {
+                                    isShowingDueWordsOnly = true
+                                    Task { await updatePageIdsForFilter() }
+                                }
+                                showFilterMenu = false
+                            },
+                            onAllWords: {
+                                if isShowingDueWordsOnly {
+                                    isShowingDueWordsOnly = false
+                                    Task { await updatePageIdsForFilter() }
+                                }
+                                showFilterMenu = false
+                            }
+                        )
+                        .fixedSize()
+                        .position(x: x, y: y)
+                        .zIndex(1000)
+                        .transition(.scale.combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFilterMenu)
                     }
                 }
             }
@@ -162,7 +193,6 @@ struct VocapageHostView: View {
                 playCurrent()
             }
         }
-
         .fullScreenCover(isPresented: $isShowingReviewView) {
             VocapageReviewView(cardsToReview: sortedFlashcardsForCurrentPage, viewModel: flashcardViewModel)
         }
@@ -171,6 +201,7 @@ struct VocapageHostView: View {
             wordDetailSheet(for: card)
         }
     }
+
     @ViewBuilder
     private func wordDetailSheet(for card: Flashcard) -> some View {
         let onClose: () -> Void = { self.selectedCard = nil }
@@ -319,7 +350,6 @@ struct VocapageHostView: View {
         }
     }
 
-
     // MARK: - Existing filter paging logic retained
 
     private func updatePageIdsForFilter() async {
@@ -355,7 +385,7 @@ struct VocapageHostView: View {
     }
 }
 
-// MARK: - Helper Views (minor signature tweaks)
+// MARK: - Helper Views
 
 private struct ReadingMenuView: View {
     let activeMode: ReadingMode
@@ -406,8 +436,54 @@ private struct ReadingMenuView: View {
             }
             .buttonStyle(.plain)
         }
-        .font(.title2) // keeps icon size the same
+        .font(.title2)
         .padding(.horizontal, 25)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.thinMaterial)
+                .shadow(radius: 5)
+        )
+        .transition(.scale.animation(.spring(response: 0.4, dampingFraction: 0.6)))
+    }
+}
+
+private struct FilterMenuView: View {
+    let isDueOnly: Bool
+    var onDueWords: () -> Void
+    var onAllWords: () -> Void
+    @Environment(\.theme) var theme: Theme
+
+    var body: some View {
+        HStack(spacing: 24) {
+            // Due Words
+            Button(action: onDueWords) {
+                VStack(spacing: 6) {
+                    Image(systemName: "clock")
+                    Text("Due Words")
+                        .font(.caption2)
+                }
+            }
+            .foregroundColor(isDueOnly ? theme.accent : theme.text)
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+
+            Divider().frame(height: 32)
+
+            // All Words
+            Button(action: onAllWords) {
+                VStack(spacing: 6) {
+                    Image(systemName: "list.bullet")
+                    Text("All Words")
+                        .font(.caption2)
+                }
+            }
+            .foregroundColor(!isDueOnly ? theme.accent : theme.text)
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+        }
+        .font(.title3)
+        .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -494,6 +570,7 @@ private struct VocapageActionButtons: View {
     let onPlayPauseTapped: () -> Void
 
     @Binding var showReadingMenu: Bool
+    @Binding var showFilterMenu: Bool             // NEW
     @Environment(\.theme) var theme: Theme
     let isShowingDueWordsOnly: Bool
     let onToggleDueWords: () -> Void
@@ -501,32 +578,45 @@ private struct VocapageActionButtons: View {
     var body: some View {
         HStack(spacing: 12) {
             /*
-            VocapageActionButton(icon: "square.stack.3d.up.fill") {
+            VocapageActionButton(icon: "square.stack.3d.up.fill", label: "Review") {
                 isShowingReviewView = true
             }
-             */
+            */
 
             VocapageActionButton(icon: isAutoPlaying ? "pause.circle.fill" : "play.circle.fill", label: "Play") {
                 onPlayPauseTapped()
             }
 
-            VocapageActionButton(icon: "gearshape.fill", label: "repeat") {
+            // Gear (reading menu)
+            VocapageActionButton(icon: "gearshape.fill", label: "Repeat") {
                 showReadingMenu.toggle()
+                if showReadingMenu { showFilterMenu = false }
             }
-            .background(
+            .background( // publish from outside the button label (stable in toolbar)
                 GeometryReader { proxy in
                     Color.clear
                         .preference(key: GearFrameKey.self,
                                     value: proxy.frame(in: .global))
                 }
             )
+
+            // Filter (due/all) menu
             VocapageActionButton(
                 icon: isShowingDueWordsOnly
                     ? "line.3.horizontal.decrease.circle.fill"
-                : "line.3.horizontal.decrease.circle", label: "All Words"
+                    : "line.3.horizontal.decrease.circle",
+                label: "All Words"
             ) {
-                onToggleDueWords()
+                showFilterMenu.toggle()
+                if showFilterMenu { showReadingMenu = false }
             }
+            .background( // publish the 3rd button's frame
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: FilterFrameKey.self,
+                                    value: proxy.frame(in: .global))
+                }
+            )
         }
         .padding(.horizontal)
         .padding(.bottom, 8)
@@ -540,7 +630,7 @@ private struct VocapagePagingView: View {
     @Binding var showBaseText: Bool
     let highlightIndex: Int
     let isShowingDueWordsOnly: Bool
-    let onSelectCard: (Flashcard) -> Void   // <-- add this
+    let onSelectCard: (Flashcard) -> Void
 
     var body: some View {
         TabView(selection: $currentPageIndex) {
@@ -554,7 +644,7 @@ private struct VocapagePagingView: View {
                             await loader.loadPage(withId: allVocapageIds[index], dueWordsOnly: isShowingDueWordsOnly)
                         }
                     },
-                    onSelectCard: onSelectCard                 // <-- add this
+                    onSelectCard: onSelectCard
                 )
                 .tag(index)
             }
@@ -577,6 +667,7 @@ private struct VocapageToolbar: ToolbarContent {
     var onToggleDueWords: () -> Void
     @Environment(\.theme) var theme: Theme
     @Binding var showReadingMenu: Bool
+    @Binding var showFilterMenu: Bool             // NEW
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
@@ -598,6 +689,7 @@ private struct VocapageToolbar: ToolbarContent {
                     isAutoPlaying: isAutoPlaying,
                     onPlayPauseTapped: onPlayPauseTapped,
                     showReadingMenu: $showReadingMenu,
+                    showFilterMenu: $showFilterMenu,   // NEW
                     isShowingDueWordsOnly: isShowingDueWordsOnly,
                     onToggleDueWords: onToggleDueWords
                 )
@@ -606,7 +698,16 @@ private struct VocapageToolbar: ToolbarContent {
     }
 }
 
+// MARK: - Preference Keys
+
 private struct GearFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
+private struct FilterFrameKey: PreferenceKey {   // NEW
     static var defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         value = nextValue()
