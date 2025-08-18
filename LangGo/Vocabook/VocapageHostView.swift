@@ -447,12 +447,16 @@ private struct VocapageActionButtons: View {
 
     @Binding var showReadingMenu: Bool
     @Environment(\.theme) var theme: Theme
-
+    let isShowingDueWordsOnly: Bool
+    let onToggleDueWords: () -> Void
+    
     var body: some View {
         HStack(spacing: 12) {
+            /*
             VocapageActionButton(icon: "square.stack.3d.up.fill") {
                 isShowingReviewView = true
             }
+             */
 
             VocapageActionButton(icon: isAutoPlaying ? "pause.circle.fill" : "play.circle.fill") {
                 onPlayPauseTapped()
@@ -468,6 +472,13 @@ private struct VocapageActionButtons: View {
                                     value: proxy.frame(in: .global))
                 }
             )
+            VocapageActionButton(
+                icon: isShowingDueWordsOnly
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "line.3.horizontal.decrease.circle"
+            ) {
+                onToggleDueWords()
+            }
         }
         .padding(.horizontal)
         .padding(.bottom, 8)
@@ -538,14 +549,10 @@ private struct VocapageToolbar: ToolbarContent {
                     isShowingReviewView: $isShowingReviewView,
                     isAutoPlaying: isAutoPlaying,
                     onPlayPauseTapped: onPlayPauseTapped,
-                    showReadingMenu: $showReadingMenu
+                    showReadingMenu: $showReadingMenu,
+                    isShowingDueWordsOnly: isShowingDueWordsOnly,
+                    onToggleDueWords: onToggleDueWords
                 )
-                Spacer()
-                Button(action: onToggleDueWords) {
-                    Image(systemName: isShowingDueWordsOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        .font(.title2)
-                        .foregroundColor(theme.accent)
-                }
             }
         }
     }
