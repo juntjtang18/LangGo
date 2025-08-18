@@ -7,6 +7,7 @@ struct VocapageView: View {
     /// Index of the currently reading item for highlight/scroll.
     let highlightIndex: Int
     let onLoad: () -> Void
+    let onSelectCard: (Flashcard) -> Void      // <-- add this
 
     private var sortedFlashcards: [Flashcard] {
         vocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
@@ -23,7 +24,8 @@ struct VocapageView: View {
                     VocapageContentListView(
                         sortedFlashcards: sortedFlashcards,
                         showBaseText: showBaseText,
-                        highlightIndex: highlightIndex
+                        highlightIndex: highlightIndex,
+                        onSelectCard: onSelectCard              // <-- pass down
                     )
                     
                     /*
@@ -53,6 +55,7 @@ private struct VocapageContentListView: View {
     let sortedFlashcards: [Flashcard]
     let showBaseText: Bool
     let highlightIndex: Int
+    let onSelectCard: (Flashcard) -> Void      // <-- add this
 
     var body: some View {
         if sortedFlashcards.isEmpty {
@@ -83,6 +86,10 @@ private struct VocapageContentListView: View {
                             .padding(.vertical, 8)
                             .listRowBackground(Color.clear)
                             .background(highlightIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
+                            // 👇 make the whole row tappable
+                            .contentShape(Rectangle())
+                            .onTapGesture { onSelectCard(card) }
+
                         }
                     }
                 }

@@ -468,7 +468,7 @@ class StrapiService {
         urlComponents.queryItems = [
             URLQueryItem(name: "pagination[page]", value: "\(page)"),
             URLQueryItem(name: "pagination[pageSize]", value: "\(pageSize)"),
-            URLQueryItem(name: "populate[word_definition][populate]", value: "word")
+            URLQueryItem(name: "populate[word_definition][populate]", value: "word,partOfSpeech")
         ]
         
         guard let url = urlComponents.url else {
@@ -485,7 +485,7 @@ class StrapiService {
     private func fetchFlashcardsPageFromNetwork(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize) from network.")
         guard let url = URL(string:
-            "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate[word_definition][populate]=word")
+            "\(Config.strapiBaseUrl)/api/flashcards/mine?pagination[page]=\(page)&pagination[pageSize]=\(pageSize)&populate[word_definition][populate]=word,partOfSpeech")
         else {
             throw URLError(.badURL)
         }

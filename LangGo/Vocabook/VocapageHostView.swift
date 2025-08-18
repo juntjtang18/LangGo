@@ -30,6 +30,7 @@ struct VocapageHostView: View {
     @State private var isAutoPlaying: Bool = false
     @State private var currentWordIndex: Int = -1
     @State private var vbSettings: VBSettingAttributes?
+    @State private var selectedCard: Flashcard? = nil
 
     init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
         self.originalAllVocapageIds = allVocapageIds
@@ -56,7 +57,12 @@ struct VocapageHostView: View {
                 loader: loader,
                 showBaseText: $showBaseText,
                 highlightIndex: speechManager.currentIndex,
-                isShowingDueWordsOnly: isShowingDueWordsOnly
+                isShowingDueWordsOnly: isShowingDueWordsOnly,
+                onSelectCard: { card in
+                        // Stop autoplay so it doesn’t keep speaking behind the sheet
+                        stopAutoplay()
+                        selectedCard = card
+                }
             )
 
             PageNavigationControls(currentPageIndex: $currentPageIndex, pageCount: vocapageIds.count)
@@ -122,6 +128,27 @@ struct VocapageHostView: View {
             VocapageReviewView(cardsToReview: sortedFlashcardsForCurrentPage, viewModel: flashcardViewModel)
         }
         .task { await updatePageIdsForFilter() }
+        .sheet(item: $selectedCard) { card in
+            WordDetailSheet(
+                card: card,
+                showBaseText: showBaseText,
+                onClose: { selectedCard = nil },
+                onSpeak: {
+                    Task {
+                        if vbSettings == nil {
+                            vbSettings = try? await DataServices.shared.strapiService.fetchVBSetting().attributes
+                        }
+                        if let settings = vbSettings {
+                            // speak exactly one card; no loop
+                            speechManager.stop()
+                            speechManager.speak(card: card, showBaseText: showBaseText, settings: settings) { }
+                        }
+                    }
+                }
+            )
+            // optional: medium size feels nice for this
+            .presentationDetents([.medium, .large])
+        }
     }
 
     // MARK: - Auto-play control owned by host
@@ -403,6 +430,7 @@ private struct VocapagePagingView: View {
     @Binding var showBaseText: Bool
     let highlightIndex: Int
     let isShowingDueWordsOnly: Bool
+    let onSelectCard: (Flashcard) -> Void   // <-- add this
 
     var body: some View {
         TabView(selection: $currentPageIndex) {
@@ -415,7 +443,8 @@ private struct VocapagePagingView: View {
                         Task {
                             await loader.loadPage(withId: allVocapageIds[index], dueWordsOnly: isShowingDueWordsOnly)
                         }
-                    }
+                    },
+                    onSelectCard: onSelectCard                 // <-- add this
                 )
                 .tag(index)
             }

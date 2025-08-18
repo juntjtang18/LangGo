@@ -10,10 +10,37 @@ struct ExamView: View {
         // It will get the service from the DataServices singleton internally.
         _viewModel = StateObject(wrappedValue: ExamViewModel(flashcards: flashcards))
     }
-
+    // Progress helpers
+    private var progressValue: Double {
+        guard viewModel.flashcards.count > 0 else { return 0 }
+        return Double(viewModel.currentCardIndex + 1)
+    }
+    private var progressTotal: Double {
+        Double(max(1, viewModel.flashcards.count))
+    }
+    private var progressCountString: String {
+        let formatter = NumberFormatter()
+        formatter.locale = .current
+        let format = NSLocalizedString("%lld of %lld", comment: "Progress count format (e.g., 1 of 10)")
+        return String(format: format, viewModel.currentCardIndex + 1, viewModel.flashcards.count)
+    }
     var body: some View {
         NavigationStack {
             VStack {
+                if !viewModel.flashcards.isEmpty {
+                    VStack {
+                        ProgressView(value: progressValue, total: progressTotal) {
+                            Text("Progress")
+                        }
+                        .progressViewStyle(.linear)
+
+                        Text(progressCountString)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                }
                 if let question = viewModel.questionText, let options = viewModel.examOptions {
                     VStack(alignment: .leading, spacing: 20) {
                         Text(question)
