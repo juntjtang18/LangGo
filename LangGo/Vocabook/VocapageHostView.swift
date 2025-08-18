@@ -31,6 +31,7 @@ struct VocapageHostView: View {
     @State private var currentWordIndex: Int = -1
     @State private var vbSettings: VBSettingAttributes?
     @State private var selectedCard: Flashcard? = nil
+    @State private var gearFrameGlobal: CGRect = .zero
 
     init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
         self.originalAllVocapageIds = allVocapageIds
@@ -87,19 +88,29 @@ struct VocapageHostView: View {
             )
         }
         .toolbar(.hidden, for: .tabBar)
-        .overlay(alignment: .bottom) {
-            if showReadingMenu {
-                HStack {
-                    Spacer()
-                    ReadingMenuView(
-                        activeMode: readingMode,
-                        onRepeatWord: { readingMode = .repeatWord; showReadingMenu = false },
-                        onCyclePage: { readingMode = .cyclePage; showReadingMenu = false },
-                        onCycleAll: { readingMode = .cycleAll; showReadingMenu = false }
-                    )
+        .onPreferenceChange(GearFrameKey.self) { newFrame in
+            gearFrameGlobal = newFrame
+        }
+        .overlay {
+            GeometryReader { rootProxy in
+                // Convert the global gear frame into this view’s local space
+                let rootGlobal = rootProxy.frame(in: .global)
+                let localMidX = gearFrameGlobal.midX - rootGlobal.minX
+                let localMinY = gearFrameGlobal.minY - rootGlobal.minY
+                
+                ZStack(alignment: .topLeading) {
+                    if showReadingMenu && gearFrameGlobal != .zero {
+                        // Tune vertical/horizontal offsets to taste
+                        ReadingMenuView(
+                            activeMode: readingMode,
+                            onRepeatWord: { readingMode = .repeatWord; showReadingMenu = false },
+                            onCyclePage: { readingMode = .cyclePage; showReadingMenu = false },
+                            onCycleAll: { readingMode = .cycleAll; showReadingMenu = false }
+                        )
+                        .fixedSize() // prevent unexpected stretching
+                        .position(x: localMidX, y: localMinY - 12) // 12pt above the top of the gear
+                    }
                 }
-                .padding(.trailing, 20)
-                .offset(y: -52)
             }
         }
         .onChange(of: currentPageIndex) { _ in
@@ -417,6 +428,13 @@ private struct VocapageActionButtons: View {
             VocapageActionButton(icon: "gearshape.fill") {
                 showReadingMenu.toggle()
             }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: GearFrameKey.self,
+                                    value: proxy.frame(in: .global))
+                }
+            )
         }
         .padding(.horizontal)
         .padding(.bottom, 8)
@@ -497,5 +515,12 @@ private struct VocapageToolbar: ToolbarContent {
                 }
             }
         }
+    }
+}
+
+private struct GearFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }
