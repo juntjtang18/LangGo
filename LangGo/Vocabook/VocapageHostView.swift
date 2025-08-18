@@ -71,6 +71,7 @@ struct VocapageHostView: View {
         .navigationTitle("My Vocabulary")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .onPreferenceChange(GearFrameKey.self) { gearFrameGlobal = $0 }
         .toolbar {
             VocapageToolbar(
                 showBaseText: $showBaseText,
@@ -93,22 +94,33 @@ struct VocapageHostView: View {
         }
         .overlay {
             GeometryReader { rootProxy in
-                // Convert the global gear frame into this view’s local space
+                // Host view’s rect in global space
                 let rootGlobal = rootProxy.frame(in: .global)
-                let localMidX = gearFrameGlobal.midX - rootGlobal.minX
-                let localMinY = gearFrameGlobal.minY - rootGlobal.minY
-                
-                ZStack(alignment: .topLeading) {
+
+                // Convert gear’s global → host-local
+                let gearMidXLocal = gearFrameGlobal.midX - rootGlobal.minX
+                let gearTopLocal  = gearFrameGlobal.minY - rootGlobal.minY
+                let gearH         = gearFrameGlobal.height
+
+                // Tweak these two as needed:
+                let H_NUDGE: CGFloat = 0            // move left(-)/right(+)
+                let V_GAP:   CGFloat = gearH * 0.4  // how far above the gear (40% of its height)
+
+                ZStack {
                     if showReadingMenu && gearFrameGlobal != .zero {
-                        // Tune vertical/horizontal offsets to taste
                         ReadingMenuView(
                             activeMode: readingMode,
                             onRepeatWord: { readingMode = .repeatWord; showReadingMenu = false },
-                            onCyclePage: { readingMode = .cyclePage; showReadingMenu = false },
-                            onCycleAll: { readingMode = .cycleAll; showReadingMenu = false }
+                            onCyclePage:  { readingMode = .cyclePage;  showReadingMenu = false },
+                            onCycleAll:   { readingMode = .cycleAll;   showReadingMenu = false }
                         )
-                        .fixedSize() // prevent unexpected stretching
-                        .position(x: localMidX, y: localMinY - 12) // 12pt above the top of the gear
+                        .fixedSize()
+                        // X is the gear center (+ optional nudge);
+                        // Y is just above the gear’s top by a fraction of its height
+                        .position(x: gearMidXLocal + H_NUDGE,
+                                  y: gearTopLocal - V_GAP)
+                        .transition(.scale.combined(with: .opacity))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showReadingMenu)
                     }
                 }
             }
@@ -140,26 +152,47 @@ struct VocapageHostView: View {
         }
         .task { await updatePageIdsForFilter() }
         .sheet(item: $selectedCard) { card in
-            WordDetailSheet(
-                card: card,
-                showBaseText: showBaseText,
-                onClose: { selectedCard = nil },
-                onSpeak: {
-                    Task {
-                        if vbSettings == nil {
-                            vbSettings = try? await DataServices.shared.strapiService.fetchVBSetting().attributes
-                        }
-                        if let settings = vbSettings {
-                            // speak exactly one card; no loop
-                            speechManager.stop()
-                            speechManager.speak(card: card, showBaseText: showBaseText, settings: settings) { }
-                        }
-                    }
-                }
-            )
-            // optional: medium size feels nice for this
-            .presentationDetents([.medium, .large])
+            wordDetailSheet(for: card)
         }
+    }
+    @ViewBuilder
+    private func wordDetailSheet(for card: Flashcard) -> some View {
+        let onClose: () -> Void = { self.selectedCard = nil }
+
+        let onSpeakOnce: (@escaping () -> Void) -> Void = { completion in
+            Task {
+                if self.vbSettings == nil {
+                    self.vbSettings = try? await DataServices.shared.strapiService.fetchVBSetting().attributes
+                }
+                if let settings = self.vbSettings {
+                    // Ensure only one utterance sequence at a time
+                    self.speechManager.stop()
+                    self.speechManager.speak(
+                        card: card,
+                        showBaseText: self.showBaseText,
+                        settings: settings
+                    ) {
+                        completion()
+                    }
+                } else {
+                    // If settings fail to load, still unblock the loop
+                    completion()
+                }
+            }
+        }
+
+        WordDetailSheet(
+            card: card,
+            showBaseText: showBaseText,
+            onClose: onClose,
+            onSpeak: onSpeakOnce     // <-- updated signature
+        )
+        .presentationDetents([.medium, .large])
+    }
+    
+    private func vbRepeatGapSeconds() -> TimeInterval {
+        guard let s = vbSettings else { return 1.0 } // sensible fallback
+        return TimeInterval(s.interval1) / 1000.0
     }
 
     // MARK: - Auto-play control owned by host

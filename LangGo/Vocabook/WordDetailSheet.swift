@@ -11,7 +11,10 @@ struct WordDetailSheet: View {
     let card: Flashcard
     let showBaseText: Bool
     let onClose: () -> Void
-    let onSpeak: () -> Void
+    
+    @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled: Bool = false
+    let onSpeak: (@escaping () -> Void) -> Void   // speak one word, then call completion
+    @State private var isRepeating: Bool = false   // event-driven loop flag
     
     // MARK: - Resolved fields from your models
     private var def: WordDefinitionAttributes? {
@@ -137,12 +140,20 @@ struct WordDetailSheet: View {
             // Controls row
             HStack(spacing: 28) {
                 CircleIcon(systemName: "mic.fill") { /* TODO: record later */ }
-                CircleIcon(systemName: "speaker.wave.2.fill") { onSpeak() }
-                CircleIcon(systemName: "arrow.counterclockwise") { onSpeak() }
+                CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") {
+                    readButtonTapped()
+                }
+                CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") {
+                    toggleRepeat()
+                }
             }
             .padding(.bottom, 20)
         }
         .padding(.top, 8)
+        .onDisappear {
+            stopRepeating()
+            repeatReadingEnabled = false
+        }
     }
     
     // MARK: - Small helpers
@@ -164,6 +175,46 @@ struct WordDetailSheet: View {
         default: return name   // fallback: show the raw value
         }
     }
+
+    // MARK: - Reading logic
+
+    private func readButtonTapped() {
+        if repeatReadingEnabled {
+            // Toggle start/stop of repeating
+            if isRepeating {
+                stopRepeating()
+            } else {
+                startRepeating()
+            }
+        } else {
+            // Single cycle (SpeechManager already reads target twice, + base if enabled)
+            onSpeak({})
+        }
+    }
+    private func startRepeating() {
+        guard !isRepeating else { return }
+        isRepeating = true
+
+        func loop() {
+            guard isRepeating else { return }
+            onSpeak {
+                // Chain the next read only after one word fully finishes
+                DispatchQueue.main.async {
+                    if self.isRepeating { loop() }
+                }
+            }
+        }
+        loop()
+    }
+    private func stopRepeating() {
+        isRepeating = false
+    }
+
+    private func toggleRepeat() {
+        repeatReadingEnabled.toggle()
+        if !repeatReadingEnabled { stopRepeating() }
+    }
+
 }
 
 private struct CapsulePill: View {
