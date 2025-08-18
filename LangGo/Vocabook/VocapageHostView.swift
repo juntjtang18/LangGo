@@ -103,11 +103,27 @@ struct VocapageHostView: View {
                 let gearH         = gearFrameGlobal.height
 
                 // Tweak these two as needed:
-                let H_NUDGE: CGFloat = 0            // move left(-)/right(+)
-                let V_GAP:   CGFloat = gearH * 0.4  // how far above the gear (40% of its height)
+                //let H_NUDGE: CGFloat = 0            // move left(-)/right(+)
+                //let V_GAP:   CGFloat = gearH * 0.4  // how far above the gear (40% of its height)
 
                 ZStack {
                     if showReadingMenu && gearFrameGlobal != .zero {
+                        // X is the gear center (+ optional nudge);
+                        // Y is just above the gear’s top by a fraction of its height
+                        // inside the overlay GeometryReader
+                        let viewW = rootProxy.size.width
+                        let viewH = rootProxy.size.height
+
+                        let H_NUDGE: CGFloat = 0
+                        let V_GAP:   CGFloat = 32
+
+                        let unclampedX = gearMidXLocal + H_NUDGE
+                        let unclampedY = gearTopLocal - V_GAP
+
+                        // keep menu inside the content's rectangle to avoid clipping under toolbar
+                        let x = min(max(unclampedX, 16), viewW - 16)
+                        let y = min(max(unclampedY, 16), viewH - 16)
+
                         ReadingMenuView(
                             activeMode: readingMode,
                             onRepeatWord: { readingMode = .repeatWord; showReadingMenu = false },
@@ -115,12 +131,12 @@ struct VocapageHostView: View {
                             onCycleAll:   { readingMode = .cycleAll;   showReadingMenu = false }
                         )
                         .fixedSize()
-                        // X is the gear center (+ optional nudge);
-                        // Y is just above the gear’s top by a fraction of its height
-                        .position(x: gearMidXLocal + H_NUDGE,
-                                  y: gearTopLocal - V_GAP)
+                        .position(x: x, y: y)
+                        .zIndex(1000)
                         .transition(.scale.combined(with: .opacity))
                         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showReadingMenu)
+                        //.transition(.scale.combined(with: .opacity))
+                        //.animation(.spring(response: 0.35, dampingFraction: 0.8), value: showReadingMenu)
                     }
                 }
             }
@@ -350,22 +366,47 @@ private struct ReadingMenuView: View {
 
     var body: some View {
         HStack(spacing: 20) {
+            // Word Repeat
             Button(action: onRepeatWord) {
-                Image(systemName: "repeat.1")
-                    .foregroundColor(activeMode == .repeatWord ? theme.accent : theme.text)
+                VStack(spacing: 6) {
+                    Image(systemName: "repeat.1")
+                    Text("Word Repeat")
+                        .font(.caption2)
+                }
+                .foregroundColor(activeMode == .repeatWord ? theme.accent : theme.text)
+                .contentShape(Rectangle())
             }
-            Divider().frame(height: 20)
+            .buttonStyle(.plain)
+
+            Divider().frame(height: 32)
+
+            // Cycle Page
             Button(action: onCyclePage) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundColor(activeMode == .cyclePage ? theme.accent : theme.text)
+                VStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Text("Cycle Page")
+                        .font(.caption2)
+                }
+                .foregroundColor(activeMode == .cyclePage ? theme.accent : theme.text)
+                .contentShape(Rectangle())
             }
-            Divider().frame(height: 20)
+            .buttonStyle(.plain)
+
+            Divider().frame(height: 32)
+
+            // Cycle All
             Button(action: onCycleAll) {
-                Image(systemName: "infinity")
-                    .foregroundColor(activeMode == .cycleAll ? theme.accent : theme.text)
+                VStack(spacing: 6) {
+                    Image(systemName: "infinity")
+                    Text("Cycle All")
+                        .font(.caption2)
+                }
+                .foregroundColor(activeMode == .cycleAll ? theme.accent : theme.text)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
-        .font(.title2)
+        .font(.title2) // keeps icon size the same
         .padding(.horizontal, 25)
         .padding(.vertical, 10)
         .background(
@@ -421,16 +462,23 @@ private struct PageNavigationButtonStyle: ButtonStyle {
 
 private struct VocapageActionButton: View {
     let icon: String
+    let label: String
     let action: () -> Void
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(theme.accent)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(theme.accent)
+                Text(label)
+                    .font(.caption2)
+                    .foregroundColor(theme.text)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -458,11 +506,11 @@ private struct VocapageActionButtons: View {
             }
              */
 
-            VocapageActionButton(icon: isAutoPlaying ? "pause.circle.fill" : "play.circle.fill") {
+            VocapageActionButton(icon: isAutoPlaying ? "pause.circle.fill" : "play.circle.fill", label: "Play") {
                 onPlayPauseTapped()
             }
 
-            VocapageActionButton(icon: "gearshape.fill") {
+            VocapageActionButton(icon: "gearshape.fill", label: "repeat") {
                 showReadingMenu.toggle()
             }
             .background(
@@ -475,7 +523,7 @@ private struct VocapageActionButtons: View {
             VocapageActionButton(
                 icon: isShowingDueWordsOnly
                     ? "line.3.horizontal.decrease.circle.fill"
-                    : "line.3.horizontal.decrease.circle"
+                : "line.3.horizontal.decrease.circle", label: "All Words"
             ) {
                 onToggleDueWords()
             }

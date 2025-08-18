@@ -303,6 +303,12 @@
         }
       }
     },
+    "Cycle All" : {
+
+    },
+    "Cycle Page" : {
+
+    },
     "Data Options" : {
       "localizations" : {
         "ja" : {
@@ -1506,6 +1512,9 @@
 
     },
     "Without review, most people forget 90% of new words in 2 days. Our smart Vocabulary Notebook reminds you only when you’re about to forget — not too soon, not too late." : {
+
+    },
+    "Word Repeat" : {
 
     },
     "Wrong" : {
