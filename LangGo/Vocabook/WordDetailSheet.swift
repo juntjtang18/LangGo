@@ -150,9 +150,17 @@ struct WordDetailSheet: View {
             .padding(.bottom, 20)
         }
         .padding(.top, 8)
+        .onAppear {
+            // @AppStorage loads the last saved toggle automatically.
+            // Do NOT auto-start; user taps Read to begin looping.
+            isRepeating = false
+
+            // If you prefer auto-start when Repeat is ON, uncomment:
+            // if repeatReadingEnabled { startRepeating() }
+        }
         .onDisappear {
+            // Stop any in-flight loop, but keep the saved toggle as-is.
             stopRepeating()
-            repeatReadingEnabled = false
         }
     }
     
