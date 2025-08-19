@@ -663,6 +663,9 @@
         }
       }
     },
+    "Microphone Access Needed" : {
+
+    },
     "My Vocabulary" : {
       "localizations" : {
         "zh-Hans" : {
@@ -882,6 +885,12 @@
         }
       }
     },
+    "Playback Error" : {
+
+    },
+    "Please allow microphone access in Settings to record your voice." : {
+
+    },
     "Proficiency" : {
 
     },
@@ -979,6 +988,9 @@
 
     },
     "Reading Session" : {
+
+    },
+    "Recording Error" : {
 
     },
     "REFRESH mode" : {
@@ -1207,6 +1219,9 @@
     "Start Reading" : {
 
     },
+    "Start recording" : {
+
+    },
     "Statistics" : {
       "localizations" : {
         "ja" : {
@@ -1245,6 +1260,9 @@
         }
       }
     },
+    "Stop recording" : {
+
+    },
     "Stories" : {
       "localizations" : {
         "ja" : {
@@ -1280,6 +1298,9 @@
 
     },
     "The correct answer is: **%@**" : {
+
+    },
+    "The top row plays the standard voice; the bottom and right buttons play your recording. Both save a reference waveform." : {
 
     },
     "This will control data refreshing behavior in a future update." : {

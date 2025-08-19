@@ -15,7 +15,8 @@ struct WordDetailSheet: View {
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled: Bool = false
     let onSpeak: (@escaping () -> Void) -> Void   // speak one word, then call completion
     @State private var isRepeating: Bool = false   // event-driven loop flag
-    
+    @State private var showRecorder: Bool = false   // NEW
+
     // MARK: - Resolved fields from your models
     private var def: WordDefinitionAttributes? {
         card.wordDefinition?.attributes
@@ -51,117 +52,134 @@ struct WordDetailSheet: View {
         }
     }
     var body: some View {
-        VStack(spacing: 12) {
-            // Close button
-            HStack {
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                        .padding(8)
+        ZStack{
+            VStack(spacing: 12) {
+                // Close button
+                HStack {
+                    Spacer()
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(8)
+                    }
                 }
-            }
-            
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Title: word + POS
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(card.wordDefinition?.attributes.word?.data?.attributes.targetText ?? "")
-                            .font(.title).bold()
-                            .lineLimit(1)
-                        if let posFull = card.wordDefinition?.attributes.partOfSpeech?.data?.attributes.name {
-                            Text("(\(posAbbrev(from: posFull)))")
-                                .font(.title3)
-                                .italic()
-                                .foregroundStyle(.secondary)
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Title: word + POS
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(card.wordDefinition?.attributes.word?.data?.attributes.targetText ?? "")
+                                .font(.title).bold()
                                 .lineLimit(1)
-                                .fixedSize()
+                            if let posFull = card.wordDefinition?.attributes.partOfSpeech?.data?.attributes.name {
+                                Text("(\(posAbbrev(from: posFull)))")
+                                    .font(.title3)
+                                    .italic()
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .fixedSize()
+                            }
+                            Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
-                    }
-                    
-                    if let base = baseText, !base.isEmpty {
-                        Text(base)
-                            .font(.title3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    // Register / Gender / Article (inline pills if present)
-                    HStack(spacing: 8) {
-                        if let reg = register, !reg.isEmpty {
-                            CapsulePill(text: reg)
+                        
+                        if let base = baseText, !base.isEmpty {
+                            Text(base)
+                                .font(.title3)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        if let gen = gender, !gen.isEmpty {
-                            CapsulePill(text: gen)
+                        // Register / Gender / Article (inline pills if present)
+                        HStack(spacing: 8) {
+                            if let reg = register, !reg.isEmpty {
+                                CapsulePill(text: reg)
+                            }
+                            if let gen = gender, !gen.isEmpty {
+                                CapsulePill(text: gen)
+                            }
+                            if let art = article, !art.isEmpty {
+                                CapsulePill(text: art)
+                            }
                         }
-                        if let art = article, !art.isEmpty {
-                            CapsulePill(text: art)
+                        
+                        // Verb forms
+                        if let vm = verbMeta, hasAnyVerbForm(vm) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Verb forms").font(.headline)
+                                VerbRow(label: "Simple past", value: vm.simplePast)
+                                VerbRow(label: "Past participle", value: vm.pastParticiple)
+                                VerbRow(label: "Present participle", value: vm.presentParticiple)
+                                VerbRow(label: "3rd person singular", value: vm.thirdpersonSingular)
+                                VerbRow(label: "Auxiliary", value: vm.auxiliaryVerb)
+                            }
                         }
-                    }
-                    
-                    // Verb forms
-                    if let vm = verbMeta, hasAnyVerbForm(vm) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Verb forms").font(.headline)
-                            VerbRow(label: "Simple past", value: vm.simplePast)
-                            VerbRow(label: "Past participle", value: vm.pastParticiple)
-                            VerbRow(label: "Present participle", value: vm.presentParticiple)
-                            VerbRow(label: "3rd person singular", value: vm.thirdpersonSingular)
-                            VerbRow(label: "Auxiliary", value: vm.auxiliaryVerb)
+                        
+                        // Example sentence
+                        if let ex = example, !ex.isEmpty {
+                            Divider().opacity(0.5)
+                            Text(ex)
+                                .font(.body)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        
+                        // (Optional) Exam options – uncomment if you want them visible
+                        /*
+                         if let opts = examTarget, !opts.isEmpty {
+                         Divider().opacity(0.5)
+                         Text("Target-side options").font(.headline)
+                         ExamList(options: opts)
+                         }
+                         if let opts = examBase, !opts.isEmpty {
+                         Divider().opacity(0.5)
+                         Text("Base-side options").font(.headline)
+                         ExamList(options: opts)
+                         }
+                         */
                     }
-                    
-                    // Example sentence
-                    if let ex = example, !ex.isEmpty {
-                        Divider().opacity(0.5)
-                        Text(ex)
-                            .font(.body)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    
-                    // (Optional) Exam options – uncomment if you want them visible
-                    /*
-                     if let opts = examTarget, !opts.isEmpty {
-                     Divider().opacity(0.5)
-                     Text("Target-side options").font(.headline)
-                     ExamList(options: opts)
-                     }
-                     if let opts = examBase, !opts.isEmpty {
-                     Divider().opacity(0.5)
-                     Text("Base-side options").font(.headline)
-                     ExamList(options: opts)
-                     }
-                     */
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+                
+                // Controls row
+                HStack(spacing: 28) {
+                    CircleIcon(systemName: "mic.fill") { showRecorder = true }
+                    CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") {
+                        readButtonTapped()
+                    }
+                    CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") {
+                        toggleRepeat()
+                    }
+                }
+                .padding(.bottom, 20)
             }
-            
-            // Controls row
-            HStack(spacing: 28) {
-                CircleIcon(systemName: "mic.fill") { /* TODO: record later */ }
-                CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") {
-                    readButtonTapped()
-                }
-                CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") {
-                    toggleRepeat()
-                }
+            .padding(.top, 8)
+            .blur(radius: showRecorder ? 8 : 0)
+            .disabled(showRecorder)
+            .onAppear {
+                // @AppStorage loads the last saved toggle automatically.
+                // Do NOT auto-start; user taps Read to begin looping.
+                isRepeating = false
+                
+                // If you prefer auto-start when Repeat is ON, uncomment:
+                // if repeatReadingEnabled { startRepeating() }
             }
-            .padding(.bottom, 20)
+            .onDisappear {
+                // Stop any in-flight loop, but keep the saved toggle as-is.
+                stopRepeating()
+            }
+            if showRecorder {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                
+                RecordModalView(
+                    phrase: wordText,
+                    onClose: { showRecorder = false }
+                )
+                .transition(.scale.combined(with: .opacity))
+            }
         }
-        .padding(.top, 8)
-        .onAppear {
-            // @AppStorage loads the last saved toggle automatically.
-            // Do NOT auto-start; user taps Read to begin looping.
-            isRepeating = false
-
-            // If you prefer auto-start when Repeat is ON, uncomment:
-            // if repeatReadingEnabled { startRepeating() }
-        }
-        .onDisappear {
-            // Stop any in-flight loop, but keep the saved toggle as-is.
-            stopRepeating()
-        }
+        .interactiveDismissDisabled(true)     // <- prevents swipe-to-dismiss
+        .animation(.spring(response: 0.35, dampingFraction: 0.88), value: showRecorder)
     }
     
     // MARK: - Small helpers
@@ -283,3 +301,4 @@ private struct CircleIcon: View {
         .buttonStyle(.plain)
     }
 }
+
