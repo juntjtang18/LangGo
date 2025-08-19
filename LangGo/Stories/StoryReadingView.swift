@@ -18,7 +18,8 @@ struct StoryReadingView: View {
     @State private var showSaveSuccess: Bool = false
     @State private var showSaveError: Bool = false
     @State private var feedbackMessage: String = ""
-    
+    @State private var showVoiceSelectionSheet = false
+
     @AppStorage("storyFontSize") private var fontSize: Double = 17.0
 
     private var storyContent: [(paragraph: String, imageURL: URL?)] {
@@ -45,6 +46,47 @@ struct StoryReadingView: View {
     }
 
     var body: some View {
+        content
+            .background(theme.background.ignoresSafeArea())
+            .navigationTitle(story.attributes.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { dismiss() }) {
+                        HStack { Image(systemName: "chevron.left"); Text("Back") }
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        isLiked.toggle()
+                        Task { await viewModel.toggleLike(for: story) }
+                    }) {
+                        Image(systemName: isLiked ? "heart.fill" : "heart")
+                            .foregroundColor(isLiked ? .red : nil)
+                    }
+                }
+                ToolbarItemGroup(placement: .bottomBar) {
+                    bottomBarContent
+                }
+            }
+            .sheet(isPresented: $showVoiceSelectionSheet) {
+                VoiceSelectionView()
+            }
+            .onChange(of: viewModel.selectedStory) { newStory in
+                if let newStory = newStory, newStory.id == story.id {
+                    isLiked = (newStory.attributes.like_count ?? 0) > 0
+                }
+            }
+            .onAppear {
+                viewModel.selectedStory = self.story
+            }
+            .onDisappear {
+                viewModel.stopReadingAloud()
+            }
+    }
+    
+    private var content: some View {
         GeometryReader { screenGeometry in
             ZStack(alignment: .bottom) {
                 ScrollView {
@@ -66,6 +108,7 @@ struct StoryReadingView: View {
                                 .foregroundColor(.secondary)
                             Divider()
 
+                            // MODIFIED: The content of the ForEach loop is now restored.
                             ForEach(storyContent.indices, id: \.self) { index in
                                 let content = storyContent[index]
                                 SelectableTextView(
@@ -92,113 +135,90 @@ struct StoryReadingView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .overlay(
-                    ZStack {
-                        if showTranslationPopover {
-                            Color.black.opacity(0.001)
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    showTranslationPopover = false
-                                    selectedWordRange = nil
-                                }
-
-                            TranslationPopover(
-                                originalWord: selectedWord,
-                                translationData: viewModel.contextualTranslation,
-                                isLoading: viewModel.isTranslating,
-                                onSave: saveToVocabook,
-                                // ADDED: Connecting the button's action to the view model.
-                                onPlayAudio: {
-                                    viewModel.speak(word: selectedWord)
-                                }
-                            )
-                            .modifier(PopoverPositioner(wordFrame: wordFrame))
-                            .transition(.scale.combined(with: .opacity))
-                        }
-                    }
-                    .frame(width: screenGeometry.size.width, height: screenGeometry.size.height)
-                    .allowsHitTesting(showTranslationPopover)
-                )
-
-                if showSaveSuccess || showSaveError {
-                    Text(feedbackMessage)
-                        .padding()
-                        .background(showSaveSuccess ? Color.green : Color.red)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                        .shadow(radius: 5)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .padding(.bottom, 50)
+                .overlay {
+                    translationPopoverOverlay(screenGeometry: screenGeometry)
                 }
+                feedbackToast
             }
-        }
-        .background(theme.background.ignoresSafeArea())
-        .navigationTitle(story.attributes.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: { dismiss() }) {
-                    HStack {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    isLiked.toggle()
-                    Task { await viewModel.toggleLike(for: story) }
-                }) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .foregroundColor(isLiked ? .red : nil)
-                }
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .bottomBar) {
-                // Font size controls
-                HStack {
-                    Button(action: { if fontSize > 12 { fontSize -= 1 } }) { Image(systemName: "minus") }
-                    Text("Font Size").font(.caption)
-                    Button(action: { if fontSize < 28 { fontSize += 1 } }) { Image(systemName: "plus") }
-                }
-
-                Spacer()
-
-                // ADDED: The "Read Aloud" button
-                Button(action: {
-                    // This action will be handled by the ViewModel
-                    if viewModel.isSpeaking {
-                        viewModel.stopReadingAloud()
-                    } else {
-                        let paragraphs = storyContent.map { $0.paragraph }
-                        viewModel.startReadingAloud(paragraphs: paragraphs)
-                    }
-                }) {
-                    // The icon toggles based on the speaking state from the ViewModel
-                    Image(systemName: viewModel.isSpeaking ? "stop.circle.fill" : "speaker.wave.2.fill")
-                        .font(.title2)
-                        .foregroundColor(theme.accent)
-                }
-
-                Spacer()
-            }
-        }
-        .onChange(of: viewModel.selectedStory) { newStory in
-            if let newStory = newStory, newStory.id == story.id {
-                isLiked = (newStory.attributes.like_count ?? 0) > 0
-            }
-        }
-        .onAppear {
-            viewModel.selectedStory = self.story
-        }
-        // ADDED: Ensure reading stops if the user navigates away
-        .onDisappear {
-            viewModel.stopReadingAloud()
         }
     }
-    
+    // ADDED: The full implementation for the translation popover overlay.
+    // This is now a function so we can pass in the `screenGeometry`.
+    private func translationPopoverOverlay(screenGeometry: GeometryProxy) -> some View {
+        ZStack {
+            if showTranslationPopover {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showTranslationPopover = false
+                        selectedWordRange = nil
+                    }
+
+                TranslationPopover(
+                    originalWord: selectedWord,
+                    translationData: viewModel.contextualTranslation,
+                    isLoading: viewModel.isTranslating,
+                    onSave: saveToVocabook,
+                    onPlayAudio: {
+                        viewModel.speak(word: selectedWord)
+                    }
+                )
+                .modifier(PopoverPositioner(wordFrame: wordFrame))
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .frame(width: screenGeometry.size.width, height: screenGeometry.size.height)
+        .allowsHitTesting(showTranslationPopover)
+    }
+
+    // ADDED: The full implementation for the feedback toast.
+    @ViewBuilder
+    private var feedbackToast: some View {
+        if showSaveSuccess || showSaveError {
+            Text(feedbackMessage)
+                .padding()
+                .background(showSaveSuccess ? Color.green : Color.red)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+                .shadow(radius: 5)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.bottom, 50)
+        }
+    }
+    // ADDED: The bottom bar content is also extracted for clarity.
+    private var bottomBarContent: some View {
+        HStack {
+            // Font size controls
+            Button(action: { if fontSize > 12 { fontSize -= 1 } }) { Image(systemName: "minus") }
+            Text("Font Size").font(.caption)
+            Button(action: { if fontSize < 28 { fontSize += 1 } }) { Image(systemName: "plus") }
+
+            Spacer()
+
+            // Read Aloud button
+            Button(action: {
+                if viewModel.isSpeaking {
+                    viewModel.stopReadingAloud()
+                } else {
+                    let paragraphs = storyContent.map { $0.paragraph }
+                    viewModel.startReadingAloud(paragraphs: paragraphs)
+                }
+            }) {
+                Image(systemName: viewModel.isSpeaking ? "stop.circle.fill" : "speaker.wave.2.fill")
+                    .font(.title2)
+                    .foregroundColor(theme.accent)
+            }
+
+            Spacer()
+
+            // Voice selection button
+            Button(action: {
+                showVoiceSelectionSheet.toggle()
+            }) {
+                Image(systemName: "gearshape.fill")
+            }
+        }
+    }
     private func saveToVocabook() {
         guard let translation = viewModel.contextualTranslation else { return }
         let targetText = selectedWord

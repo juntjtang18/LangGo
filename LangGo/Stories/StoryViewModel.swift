@@ -6,7 +6,7 @@ import AVFoundation // ADDED: For text-to-speech
 @MainActor
 class StoryViewModel: NSObject, ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StoryViewModel")
-
+    
     // MARK: - Published Properties
     @Published var stories: [Story] = []
     @Published var recommendedStories: [Story] = []
@@ -23,7 +23,13 @@ class StoryViewModel: NSObject, ObservableObject {
     private var speechQueue: [AVSpeechUtterance] = []
     
     @Published var isSpeaking: Bool = false
-
+    // MARK: - Voice Selection
+    //@Published var availableStandardVoices: [AVSpeechSynthesisVoice] = []
+    
+    // Use AppStorage to save the user's choice persistently
+    //@AppStorage("selectedVoiceIdentifier") var selectedVoiceIdentifier: String = AVSpeechSynthesisVoice(language: "en-US")?.identifier ?? ""
+    
+    private let voiceService: VoiceSelectionService
 
     struct ContextualTranslation {
         let translatedWord: String
@@ -51,7 +57,8 @@ class StoryViewModel: NSObject, ObservableObject {
     
     // MARK: - Initialization
     // The initializer is now clean and only takes the dependencies it can't get globally.
-    override init() {
+    init(voiceService: VoiceSelectionService) {
+        self.voiceService = voiceService
         super.init()
         speechSynthesizer.delegate = self
     }
@@ -64,7 +71,8 @@ class StoryViewModel: NSObject, ObservableObject {
         // Create a queue of utterances to speak
         speechQueue = paragraphs.map { paragraph in
             let utterance = AVSpeechUtterance(string: paragraph)
-            utterance.voice = AVSpeechSynthesisVoice(language: "en-US") // Or your target language
+            //utterance.voice = AVSpeechSynthesisVoice(language: Config.learningTargetLanguageCode)
+            utterance.voice = AVSpeechSynthesisVoice(identifier: voiceService.selectedVoiceIdentifier)
             utterance.rate = AVSpeechUtteranceDefaultSpeechRate
             return utterance
         }
@@ -98,7 +106,8 @@ class StoryViewModel: NSObject, ObservableObject {
     func speak(word: String) {
         let utterance = AVSpeechUtterance(string: word)
         // This automatically uses the system's voice for the device's language.
-        utterance.voice = AVSpeechSynthesisVoice(language: Config.learningTargetLanguageCode)
+        //utterance.voice = AVSpeechSynthesisVoice(language: Config.learningTargetLanguageCode)
+        utterance.voice = AVSpeechSynthesisVoice(identifier: voiceService.selectedVoiceIdentifier)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         
         speechSynthesizer.speak(utterance)
@@ -123,7 +132,7 @@ class StoryViewModel: NSObject, ObservableObject {
             
             self.recommendedStoryRows = generateLayout(for: self.recommendedStories)
             await loadMoreStoriesIfNeeded(currentItem: nil)
-
+            
         } catch {
             errorMessage = "Failed to load stories: \(error.localizedDescription)"
         }
@@ -135,11 +144,11 @@ class StoryViewModel: NSObject, ObservableObject {
         if let item = item, item.id != stories.last?.id {
             return
         }
-
+        
         guard !isFetchingMore, (totalPages == nil || currentPage <= totalPages!) else {
             return
         }
-
+        
         isFetchingMore = true
         
         do {
@@ -150,20 +159,20 @@ class StoryViewModel: NSObject, ObservableObject {
             self.stories.append(contentsOf: fetchedStories)
             self.storyRows = generateLayout(for: self.stories)
             currentPage += 1
-
+            
         } catch {
             errorMessage = "Failed to load more stories: \(error.localizedDescription)"
         }
         
         isFetchingMore = false
     }
-
+    
     func fetchStoryDetails(id: Int) async {
         if let story = recommendedStories.first(where: { $0.id == id }) ?? stories.first(where: { $0.id == id }) {
             self.selectedStory = story
             return
         }
-
+        
         if selectedStory?.id != id {
             selectedStory = nil
             isLoading = true
@@ -195,7 +204,7 @@ class StoryViewModel: NSObject, ObservableObject {
                 isTranslating = false
                 return
             }
-
+            
             let response = try await strapiService.translateWordInContext(
                 word: word,
                 sentence: sentence,
@@ -214,13 +223,13 @@ class StoryViewModel: NSObject, ObservableObject {
         
         isTranslating = false
     }
-
+    
     @MainActor
     func saveWordToVocabook(targetText: String, baseText: String, partOfSpeech: String) async throws {
         do {
             let tgt = targetText.trimmingCharacters(in: .whitespacesAndNewlines)
             let base = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
-
+            
             logger.info("Saving new word from story -> target:'\(tgt, privacy: .public)' | base:'\(base, privacy: .public)' | pos:'\(partOfSpeech, privacy: .public)'")
             _ = try await strapiService.saveNewWord(
                 targetText: tgt,
@@ -234,7 +243,7 @@ class StoryViewModel: NSObject, ObservableObject {
             throw error
         }
     }
-
+    
     func toggleLike(for story: Story) async {
         do {
             let response = try await storyService.likeStory(id: story.id)
@@ -256,7 +265,7 @@ class StoryViewModel: NSObject, ObservableObject {
     }
     
     // In Stories/StoryViewModel.swift
-
+    
     private func generateLayout(for stories: [Story]) -> [StoryRow] {
         var rows: [StoryRow] = []
         
@@ -266,7 +275,7 @@ class StoryViewModel: NSObject, ObservableObject {
         
         return rows
     }
-
+    
     private func updateStoryLikeCount(storyId: Int, newLikeCount: Int?) {
         if let index = stories.firstIndex(where: { $0.id == storyId }) {
             stories[index].attributes.like_count = newLikeCount

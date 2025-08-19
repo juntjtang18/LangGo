@@ -21,6 +21,7 @@ struct LangGoApp: App {
 
     @StateObject private var themeManager = ThemeManager()
     @StateObject private var languageSettings = LanguageSettings()
+    @StateObject private var voiceService = VoiceSelectionService()
 
     // ✅ Add this: make the session observable at the root
     @StateObject private var userSession = UserSessionManager.shared
@@ -54,6 +55,7 @@ struct LangGoApp: App {
             .environmentObject(languageSettings)
             .environmentObject(DataServices.shared.reviewSettingsManager)
             .environment(\.theme, themeManager.currentTheme)
+            .environmentObject(voiceService)
         }
     }
 }

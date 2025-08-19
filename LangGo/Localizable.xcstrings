@@ -13,6 +13,16 @@
     "%@ " : {
 
     },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
@@ -892,6 +902,9 @@
     "Please allow microphone access in Settings to record your voice." : {
 
     },
+    "Premium Voices" : {
+
+    },
     "Proficiency" : {
 
     },
@@ -1124,6 +1137,9 @@
     "Select a Theme" : {
 
     },
+    "Select a Voice" : {
+
+    },
     "Settings" : {
       "localizations" : {
         "ja" : {
@@ -1218,6 +1234,9 @@
 
     },
     "Speaking" : {
+
+    },
+    "Standard Voices" : {
 
     },
     "Start Reading" : {
@@ -1408,6 +1427,12 @@
           }
         }
       }
+    },
+    "Unlock higher quality, more natural voices with a Premium Subscription." : {
+
+    },
+    "Unlock with Premium" : {
+
     },
     "USER PROFILE" : {
       "localizations" : {

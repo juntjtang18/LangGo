@@ -10,6 +10,7 @@ struct MainView: View {
     @State private var isShowingProfileSheet = false
     @State private var isShowingSettingSheet = false
     @State private var isShowingVocabookSettingSheet = false
+    @EnvironmentObject var voiceService: VoiceSelectionService
 
     init(authState: Binding<AuthState>) {
         _authState = authState
@@ -41,7 +42,7 @@ struct MainView: View {
                     .tag(2)
                 
                 // The appEnvironment parameter is no longer passed
-                StoriesTabView(isSideMenuShowing: $isSideMenuShowing)
+                StoriesTabView(isSideMenuShowing: $isSideMenuShowing, voiceService: voiceService)
                     .tabItem { Label("Stories", systemImage: "book.fill") }
                     .tag(3)
 
