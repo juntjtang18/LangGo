@@ -17,6 +17,8 @@ class StoryViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
     @Published var isFetchingMore: Bool = false
     @Published var errorMessage: String?
+    @Published var sentencePause: Double = 1.35   // pause after a sentence within a paragraph
+    @Published var paragraphPause: Double = 2.7   // slightly longer pause at paragraph breaks
     
     // MARK: - Text to Speech
     private var speechSynthesizer = AVSpeechSynthesizer()
@@ -63,21 +65,48 @@ class StoryViewModel: NSObject, ObservableObject {
         speechSynthesizer.delegate = self
     }
     func startReadingAloud(paragraphs: [String]) {
-        guard !isSpeaking, !paragraphs.isEmpty else {
+        guard !paragraphs.isEmpty else {
             stopReadingAloud()
             return
         }
-        
-        // Create a queue of utterances to speak
-        speechQueue = paragraphs.map { paragraph in
-            let utterance = AVSpeechUtterance(string: paragraph)
-            //utterance.voice = AVSpeechSynthesisVoice(language: Config.learningTargetLanguageCode)
-            utterance.voice = AVSpeechSynthesisVoice(identifier: voiceService.selectedVoiceIdentifier)
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-            return utterance
+        // If already speaking, stop and restart to apply new queue/pause settings
+        if isSpeaking {
+            stopReadingAloud()
         }
-        
-        isSpeaking = true
+
+        var allUtterances: [AVSpeechUtterance] = []
+
+        for (pi, paragraph) in paragraphs.enumerated() {
+            let sentences = paragraph.lg_splitIntoSentences()
+
+            for (si, s) in sentences.enumerated() {
+                let utter = AVSpeechUtterance(string: s)
+                utter.voice = AVSpeechSynthesisVoice(identifier: voiceService.selectedVoiceIdentifier)
+                utter.rate  = AVSpeechUtteranceDefaultSpeechRate
+
+                // Add a natural pause after sentences that really end (., !, ?, …, 。！？)
+                if s.lg_endsWithFullStop {
+                    let isLastInParagraph = (si == sentences.count - 1)
+                    utter.postUtteranceDelay = isLastInParagraph ? paragraphPause : sentencePause
+                } else {
+                    utter.postUtteranceDelay = 0
+                }
+                allUtterances.append(utter)
+            }
+
+            // Edge case: empty paragraph ⇒ inject a paragraph pause so the break is audible
+            if sentences.isEmpty && pi < paragraphs.count - 1 {
+                let spacer = AVSpeechUtterance(string: " ")
+                spacer.voice = AVSpeechSynthesisVoice(identifier: voiceService.selectedVoiceIdentifier)
+                spacer.rate  = AVSpeechUtteranceDefaultSpeechRate
+                spacer.volume = 0
+                spacer.postUtteranceDelay = paragraphPause
+                allUtterances.append(spacer)
+            }
+        }
+
+        speechQueue = allUtterances
+        isSpeaking = !allUtterances.isEmpty
         speakNextInQueue()
     }
     
@@ -299,5 +328,37 @@ extension StoryViewModel: AVSpeechSynthesizerDelegate {
         DispatchQueue.main.async {
             self.isSpeaking = false
         }
+    }
+}
+
+private let _lgFullStopScalars = CharacterSet(charactersIn: ".!?。！？…")
+
+extension String {
+    /// True if the string ends with a sentence-ending punctuation mark.
+    fileprivate var lg_endsWithFullStop: Bool {
+        guard let last = unicodeScalars.last else { return false }
+        return _lgFullStopScalars.contains(last)
+    }
+
+    /// Split into sentences; uses Apple's sentence iterator and falls back to a regex that keeps punctuation.
+    fileprivate func lg_splitIntoSentences() -> [String] {
+        var out: [String] = []
+        enumerateSubstrings(in: startIndex..<endIndex, options: .bySentences) { sub, _, _, _ in
+            if let s = sub?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
+                out.append(s)
+            }
+        }
+        if out.isEmpty {
+            // Fallback: keep trailing punctuation with each sentence.
+            let pattern = #"([^.!?。！？…]+[\.!\?。！？…]+)|([^.!?。！？…]+$)"#
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let ns = self as NSString
+                let range = NSRange(location: 0, length: ns.length)
+                out = regex.matches(in: self, range: range)
+                    .map { ns.substring(with: $0.range).trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            }
+        }
+        return out
     }
 }
