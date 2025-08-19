@@ -157,9 +157,32 @@ struct StoryReadingView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .bottomBar) {
-                Button(action: { if fontSize > 12 { fontSize -= 1 } }) { Image(systemName: "minus") }
-                Text("Font Size").font(.caption)
-                Button(action: { if fontSize < 28 { fontSize += 1 } }) { Image(systemName: "plus") }
+                // Font size controls
+                HStack {
+                    Button(action: { if fontSize > 12 { fontSize -= 1 } }) { Image(systemName: "minus") }
+                    Text("Font Size").font(.caption)
+                    Button(action: { if fontSize < 28 { fontSize += 1 } }) { Image(systemName: "plus") }
+                }
+
+                Spacer()
+
+                // ADDED: The "Read Aloud" button
+                Button(action: {
+                    // This action will be handled by the ViewModel
+                    if viewModel.isSpeaking {
+                        viewModel.stopReadingAloud()
+                    } else {
+                        let paragraphs = storyContent.map { $0.paragraph }
+                        viewModel.startReadingAloud(paragraphs: paragraphs)
+                    }
+                }) {
+                    // The icon toggles based on the speaking state from the ViewModel
+                    Image(systemName: viewModel.isSpeaking ? "stop.circle.fill" : "speaker.wave.2.fill")
+                        .font(.title2)
+                        .foregroundColor(theme.accent)
+                }
+
+                Spacer()
             }
         }
         .onChange(of: viewModel.selectedStory) { newStory in
@@ -169,6 +192,10 @@ struct StoryReadingView: View {
         }
         .onAppear {
             viewModel.selectedStory = self.story
+        }
+        // ADDED: Ensure reading stops if the user navigates away
+        .onDisappear {
+            viewModel.stopReadingAloud()
         }
     }
     

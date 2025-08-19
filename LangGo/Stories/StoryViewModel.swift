@@ -4,9 +4,8 @@ import os
 import AVFoundation // ADDED: For text-to-speech
 
 @MainActor
-class StoryViewModel: ObservableObject {
+class StoryViewModel: NSObject, ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StoryViewModel")
-    private let speechSynthesizer = AVSpeechSynthesizer()
 
     // MARK: - Published Properties
     @Published var stories: [Story] = []
@@ -19,6 +18,13 @@ class StoryViewModel: ObservableObject {
     @Published var isFetchingMore: Bool = false
     @Published var errorMessage: String?
     
+    // MARK: - Text to Speech
+    private var speechSynthesizer = AVSpeechSynthesizer()
+    private var speechQueue: [AVSpeechUtterance] = []
+    
+    @Published var isSpeaking: Bool = false
+
+
     struct ContextualTranslation {
         let translatedWord: String
         let translatedSentence: String
@@ -45,8 +51,43 @@ class StoryViewModel: ObservableObject {
     
     // MARK: - Initialization
     // The initializer is now clean and only takes the dependencies it can't get globally.
-    init() {}
+    override init() {
+        super.init()
+        speechSynthesizer.delegate = self
+    }
+    func startReadingAloud(paragraphs: [String]) {
+        guard !isSpeaking, !paragraphs.isEmpty else {
+            stopReadingAloud()
+            return
+        }
+        
+        // Create a queue of utterances to speak
+        speechQueue = paragraphs.map { paragraph in
+            let utterance = AVSpeechUtterance(string: paragraph)
+            utterance.voice = AVSpeechSynthesisVoice(language: "en-US") // Or your target language
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+            return utterance
+        }
+        
+        isSpeaking = true
+        speakNextInQueue()
+    }
     
+    func stopReadingAloud() {
+        speechSynthesizer.stopSpeaking(at: .immediate)
+        speechQueue.removeAll()
+        isSpeaking = false
+    }
+    
+    private func speakNextInQueue() {
+        guard !speechQueue.isEmpty else {
+            // Finished reading
+            isSpeaking = false
+            return
+        }
+        let utterance = speechQueue.removeFirst()
+        speechSynthesizer.speak(utterance)
+    }
     // Add this computed property
     private var baseLanguageCode: String {
         UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
@@ -235,6 +276,19 @@ class StoryViewModel: ObservableObject {
         }
         if selectedStory?.id == storyId {
             selectedStory?.attributes.like_count = newLikeCount
+        }
+    }
+}
+extension StoryViewModel: AVSpeechSynthesizerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        // When one paragraph finishes, speak the next one.
+        speakNextInQueue()
+    }
+    
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        // Ensure state is correct if cancelled.
+        DispatchQueue.main.async {
+            self.isSpeaking = false
         }
     }
 }

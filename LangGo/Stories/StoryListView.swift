@@ -256,6 +256,9 @@ private struct StoryCardView: View {
     let story: Story
     let style: CardStyle
     @Environment(\.theme) var theme: Theme
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+
+    @State private var cardWidth: CGFloat = 0
 
     private let gradientPairs: [[Color]] = [
         [Color(hex: "#6a11cb"), Color(hex: "#2575fc")],
@@ -276,15 +279,43 @@ private struct StoryCardView: View {
     }
 
     private var fullWidthCard: some View {
-        VStack(spacing: 0) {
-            imageSection(height: 232)
+        let imageHeight = calculateImageHeight(for: cardWidth)
+
+        // FIX 1: Explicit 'return' is now required because of the 'let' statement above.
+        return VStack(spacing: 0) {
+            imageSection(height: imageHeight)
                 .clipShape(RoundedCorner(radius: 20, corners: [.topLeft, .topRight]))
             textSection(briefLineLimit: 3)
                 .clipShape(RoundedCorner(radius: 20, corners: [.bottomLeft, .bottomRight]))
         }
         .storyCardStyle()
+        .background(
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear {
+                        self.cardWidth = geometry.size.width
+                    }
+                    // FIX 2: Use the older, more compatible version of onChange.
+                    .onChange(of: geometry.size.width) { newWidth in
+                        self.cardWidth = newWidth
+                    }
+            }
+        )
     }
     
+    private func calculateImageHeight(for width: CGFloat) -> CGFloat {
+        guard width > 0 else { return 232 }
+
+        let isPad = horizontalSizeClass == .regular
+        
+        if isPad {
+            return width * (9.0 / 16.0)
+        } else {
+            return 232
+        }
+    }
+    
+    // No changes needed for the methods below
     private func imageSection(height: CGFloat) -> some View {
         ZStack(alignment: .bottomLeading) {
             if let url = story.attributes.coverImageURL {
@@ -306,20 +337,16 @@ private struct StoryCardView: View {
                 Text(story.attributes.difficultyName.uppercased()).storyStyle(.cardSubtitle)
                 Text(story.attributes.title).storyStyle(.cardTitle)
             }
-            .frame(maxWidth: .infinity, alignment: .leading) // Ensures the VStack expands
-            .padding(EdgeInsets(top: 0, leading: 16, bottom: 12, trailing: 16)) // Precise padding
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(EdgeInsets(top: 0, leading: 16, bottom: 12, trailing: 16))
         )
     }
     
-    // In Stories/StoryListView.swift, inside StoryCardView
-
     private func textSection(briefLineLimit: Int) -> some View {
         ZStack {
             cardGradient
             
             VStack(alignment: .leading) {
-                // --- Top Group: Author & Brief ---
-                // This group will take the space it needs for its text.
                 VStack(alignment: .leading, spacing: 4) {
                     Text(story.attributes.author)
                         .storyStyle(.cardAuthor)
@@ -328,15 +355,13 @@ private struct StoryCardView: View {
                     Text(story.attributes.brief ?? "No brief available.")
                         .storyStyle(.cardBrief)
                         .lineLimit(briefLineLimit)
-                        // This tells the text view to take up vertical space as needed.
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 
-                Spacer(minLength: 8) // Pushes the button to the bottom.
+                Spacer(minLength: 8)
                 
-                // --- Bottom Group: Button ---
                 HStack {
-                    Spacer() // Pushes the button to the right.
+                    Spacer()
                     HStack {
                         Image(systemName: "play.fill"); Text("Read")
                     }

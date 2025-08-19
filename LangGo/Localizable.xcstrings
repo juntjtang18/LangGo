@@ -71,6 +71,7 @@
       }
     },
     "AI Conversation" : {
+      "extractionState" : "stale",
       "localizations" : {
         "hi" : {
           "stringUnit" : {
@@ -1216,6 +1217,9 @@
     "Skip onboarding" : {
 
     },
+    "Speaking" : {
+
+    },
     "Start Reading" : {
 
     },
@@ -1495,7 +1499,7 @@
     "View Mode" : {
 
     },
-    "Vocabulary Book" : {
+    "Vocabulary" : {
 
     },
     "Vocabulary Notebook Settings" : {

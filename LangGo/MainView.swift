@@ -32,12 +32,12 @@ struct MainView: View {
                     .tag(0)
 
                 VocabookTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Vocabulary Book", systemImage: "square.stack.3d.up.fill") }
+                    .tabItem { Label("Vocabulary", systemImage: "square.stack.3d.up.fill") }
                     .tag(1)
 
                 // The appEnvironment parameter is no longer passed
                 ConversationTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("AI Conversation", systemImage: "message.fill") }
+                    .tabItem { Label("Speaking", systemImage: "message.fill") }
                     .tag(2)
                 
                 // The appEnvironment parameter is no longer passed
