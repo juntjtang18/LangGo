@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import os
-import AVFoundation // ADDED: For text-to-speech
+import AVFoundation
 
 @MainActor
 class StoryViewModel: NSObject, ObservableObject {
@@ -17,20 +17,29 @@ class StoryViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
     @Published var isFetchingMore: Bool = false
     @Published var errorMessage: String?
-    @Published var sentencePause: Double = 1.35   // pause after a sentence within a paragraph
-    @Published var paragraphPause: Double = 2.7   // slightly longer pause at paragraph breaks
+    
+    // Natural rhythm controls (seconds)
+    @Published var sentencePause: Double = 0.75   // pause after a sentence within a paragraph
+    @Published var paragraphPause: Double = 1.5   // slightly longer pause at paragraph breaks
     
     // MARK: - Text to Speech
     private var speechSynthesizer = AVSpeechSynthesizer()
     private var speechQueue: [AVSpeechUtterance] = []
     
+    // Metadata to enable highlighting in the UI
+    private struct SentenceMeta {
+        let paragraphIndex: Int
+        let sentence: String
+    }
+    private var metadataQueue: [SentenceMeta] = []
+    
     @Published var isSpeaking: Bool = false
+    
+    // Which sentence/paragraph is being spoken (for highlighting)
+    @Published var currentlySpokenSentence: String? = nil
+    @Published var currentlySpokenParagraphIndex: Int? = nil
+
     // MARK: - Voice Selection
-    //@Published var availableStandardVoices: [AVSpeechSynthesisVoice] = []
-    
-    // Use AppStorage to save the user's choice persistently
-    //@AppStorage("selectedVoiceIdentifier") var selectedVoiceIdentifier: String = AVSpeechSynthesisVoice(language: "en-US")?.identifier ?? ""
-    
     private let voiceService: VoiceSelectionService
 
     struct ContextualTranslation {
@@ -53,17 +62,18 @@ class StoryViewModel: NSObject, ObservableObject {
     private var currentPage = 1
     private var totalPages: Int?
     
-    // Services are now fetched directly from the DataServices singleton.
+    // Services
     private let storyService = DataServices.shared.storyService
     private let strapiService = DataServices.shared.strapiService
     
     // MARK: - Initialization
-    // The initializer is now clean and only takes the dependencies it can't get globally.
     init(voiceService: VoiceSelectionService) {
         self.voiceService = voiceService
         super.init()
         speechSynthesizer.delegate = self
     }
+    
+    // MARK: - Reading Aloud
     func startReadingAloud(paragraphs: [String]) {
         guard !paragraphs.isEmpty else {
             stopReadingAloud()
@@ -75,6 +85,7 @@ class StoryViewModel: NSObject, ObservableObject {
         }
 
         var allUtterances: [AVSpeechUtterance] = []
+        var allMeta: [SentenceMeta] = []
 
         for (pi, paragraph) in paragraphs.enumerated() {
             let sentences = paragraph.lg_splitIntoSentences()
@@ -84,7 +95,7 @@ class StoryViewModel: NSObject, ObservableObject {
                 utter.voice = AVSpeechSynthesisVoice(identifier: voiceService.selectedVoiceIdentifier)
                 utter.rate  = AVSpeechUtteranceDefaultSpeechRate
 
-                // Add a natural pause after sentences that really end (., !, ?, …, 。！？)
+                // Natural pause after sentence-ending punctuation (., !, ?, …, 。, ！, ？)
                 if s.lg_endsWithFullStop {
                     let isLastInParagraph = (si == sentences.count - 1)
                     utter.postUtteranceDelay = isLastInParagraph ? paragraphPause : sentencePause
@@ -92,6 +103,7 @@ class StoryViewModel: NSObject, ObservableObject {
                     utter.postUtteranceDelay = 0
                 }
                 allUtterances.append(utter)
+                allMeta.append(SentenceMeta(paragraphIndex: pi, sentence: s))
             }
 
             // Edge case: empty paragraph ⇒ inject a paragraph pause so the break is audible
@@ -102,10 +114,12 @@ class StoryViewModel: NSObject, ObservableObject {
                 spacer.volume = 0
                 spacer.postUtteranceDelay = paragraphPause
                 allUtterances.append(spacer)
+                allMeta.append(SentenceMeta(paragraphIndex: pi, sentence: ""))
             }
         }
 
         speechQueue = allUtterances
+        metadataQueue = allMeta
         isSpeaking = !allUtterances.isEmpty
         speakNextInQueue()
     }
@@ -113,32 +127,43 @@ class StoryViewModel: NSObject, ObservableObject {
     func stopReadingAloud() {
         speechSynthesizer.stopSpeaking(at: .immediate)
         speechQueue.removeAll()
+        metadataQueue.removeAll()
         isSpeaking = false
+        currentlySpokenSentence = nil
+        currentlySpokenParagraphIndex = nil
     }
     
     private func speakNextInQueue() {
         guard !speechQueue.isEmpty else {
             // Finished reading
             isSpeaking = false
+            currentlySpokenSentence = nil
+            currentlySpokenParagraphIndex = nil
             return
         }
         let utterance = speechQueue.removeFirst()
+        // Pop matching metadata (safe even if counts drift)
+        if !metadataQueue.isEmpty {
+            let meta = metadataQueue.removeFirst()
+            currentlySpokenSentence = meta.sentence.isEmpty ? nil : meta.sentence
+            currentlySpokenParagraphIndex = meta.sentence.isEmpty ? nil : meta.paragraphIndex
+        } else {
+            currentlySpokenSentence = nil
+            currentlySpokenParagraphIndex = nil
+        }
         speechSynthesizer.speak(utterance)
     }
+    
     // Add this computed property
     private var baseLanguageCode: String {
         UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
     }
-    // MARK: - Public Methods
     
-    // ADDED: A new method to handle speaking text.
+    // MARK: - Public Methods
     func speak(word: String) {
         let utterance = AVSpeechUtterance(string: word)
-        // This automatically uses the system's voice for the device's language.
-        //utterance.voice = AVSpeechSynthesisVoice(language: Config.learningTargetLanguageCode)
         utterance.voice = AVSpeechSynthesisVoice(identifier: voiceService.selectedVoiceIdentifier)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-        
         speechSynthesizer.speak(utterance)
     }
     
@@ -264,7 +289,7 @@ class StoryViewModel: NSObject, ObservableObject {
                 targetText: tgt,
                 baseText: base,
                 partOfSpeech: partOfSpeech,
-                locale: baseLanguageCode // FIX 1: Add locale parameter
+                locale: baseLanguageCode
             )
             logger.info("Saved new word successfully from story view.")
         } catch {
@@ -293,15 +318,11 @@ class StoryViewModel: NSObject, ObservableObject {
         }
     }
     
-    // In Stories/StoryViewModel.swift
-    
     private func generateLayout(for stories: [Story]) -> [StoryRow] {
         var rows: [StoryRow] = []
-        
         for story in stories {
             rows.append(StoryRow(stories: [story], style: .full))
         }
-        
         return rows
     }
     
@@ -317,9 +338,10 @@ class StoryViewModel: NSObject, ObservableObject {
         }
     }
 }
+
 extension StoryViewModel: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        // When one paragraph finishes, speak the next one.
+        // When one sentence finishes, speak the next one.
         speakNextInQueue()
     }
     
@@ -327,10 +349,15 @@ extension StoryViewModel: AVSpeechSynthesizerDelegate {
         // Ensure state is correct if cancelled.
         DispatchQueue.main.async {
             self.isSpeaking = false
+            self.currentlySpokenSentence = nil
+            self.currentlySpokenParagraphIndex = nil
+            self.speechQueue.removeAll()
+            self.metadataQueue.removeAll()
         }
     }
 }
 
+// MARK: - Sentence Utilities
 private let _lgFullStopScalars = CharacterSet(charactersIn: ".!?。！？…")
 
 extension String {

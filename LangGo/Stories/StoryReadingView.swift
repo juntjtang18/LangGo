@@ -108,13 +108,29 @@ struct StoryReadingView: View {
                                 .foregroundColor(.secondary)
                             Divider()
 
-                            // MODIFIED: The content of the ForEach loop is now restored.
+                            // Paragraphs
                             ForEach(storyContent.indices, id: \.self) { index in
                                 let content = storyContent[index]
+                                
+                                // Compute the spoken sentence range for this paragraph, if any
+                                let spokenRange: NSRange? = {
+                                    guard let pIndex = viewModel.currentlySpokenParagraphIndex,
+                                          pIndex == index,
+                                          let sentence = viewModel.currentlySpokenSentence,
+                                          !sentence.isEmpty
+                                    else { return nil }
+                                    
+                                    if let r = content.paragraph.range(of: sentence) {
+                                        return NSRange(r, in: content.paragraph)
+                                    }
+                                    return nil
+                                }()
+                                
                                 SelectableTextView(
                                     text: content.paragraph,
                                     fontSize: fontSize,
-                                    selectedWordRange: selectedWordRange
+                                    selectedWordRange: selectedWordRange,
+                                    spokenSentenceRange: spokenRange
                                 ) { word, sentence, frame, range in
                                     self.selectedWord = word
                                     self.wordFrame = frame
@@ -142,8 +158,7 @@ struct StoryReadingView: View {
             }
         }
     }
-    // ADDED: The full implementation for the translation popover overlay.
-    // This is now a function so we can pass in the `screenGeometry`.
+    // Translation popover overlay
     private func translationPopoverOverlay(screenGeometry: GeometryProxy) -> some View {
         ZStack {
             if showTranslationPopover {
@@ -171,7 +186,7 @@ struct StoryReadingView: View {
         .allowsHitTesting(showTranslationPopover)
     }
 
-    // ADDED: The full implementation for the feedback toast.
+    // Feedback toast
     @ViewBuilder
     private var feedbackToast: some View {
         if showSaveSuccess || showSaveError {
@@ -185,7 +200,8 @@ struct StoryReadingView: View {
                 .padding(.bottom, 50)
         }
     }
-    // ADDED: The bottom bar content is also extracted for clarity.
+    
+    // Bottom bar
     private var bottomBarContent: some View {
         HStack {
             // Font size controls
@@ -219,6 +235,7 @@ struct StoryReadingView: View {
             }
         }
     }
+    
     private func saveToVocabook() {
         guard let translation = viewModel.contextualTranslation else { return }
         let targetText = selectedWord
@@ -263,15 +280,29 @@ struct SelectableTextView: View {
     let text: String
     let fontSize: Double
     let selectedWordRange: NSRange?
+    let spokenSentenceRange: NSRange?        // highlight during TTS
     let onSelectWord: (String, String, CGRect, NSRange) -> Void
 
     @State private var height: CGFloat = .zero
+
+    init(text: String,
+         fontSize: Double,
+         selectedWordRange: NSRange?,
+         spokenSentenceRange: NSRange? = nil,
+         onSelectWord: @escaping (String, String, CGRect, NSRange) -> Void) {
+        self.text = text
+        self.fontSize = fontSize
+        self.selectedWordRange = selectedWordRange
+        self.spokenSentenceRange = spokenSentenceRange
+        self.onSelectWord = onSelectWord
+    }
 
     var body: some View {
         InternalSelectableTextView(
             text: text,
             fontSize: fontSize,
             selectedWordRange: selectedWordRange,
+            spokenSentenceRange: spokenSentenceRange,
             onSelectWord: onSelectWord,
             dynamicHeight: $height
         )
@@ -282,6 +313,7 @@ struct SelectableTextView: View {
         let text: String
         let fontSize: Double
         let selectedWordRange: NSRange?
+        let spokenSentenceRange: NSRange?
         let onSelectWord: (String, String, CGRect, NSRange) -> Void
         @Binding var dynamicHeight: CGFloat
 
@@ -324,16 +356,24 @@ struct SelectableTextView: View {
             paragraphStyle.lineSpacing = 5
             attributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: attributedString.length))
             
+            // First: add spoken-sentence background so later word selection can override within the range.
+            if let sRange = spokenSentenceRange {
+                let full = NSRange(location: 0, length: attributedString.length)
+                if NSIntersectionRange(full, sRange).length == sRange.length {
+                    attributedString.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.25), range: sRange)
+                }
+            }
+            
+            // Add tap targets for each word
             text.enumerateSubstrings(in: text.startIndex..<text.endIndex, options: .byWords) { (substring, substringRange, _, _) in
                 guard let substring = substring else { return }
-
-                // **CRASH FIX**: URL-encode the substring to handle special characters safely.
                 if let encodedSubstring = substring.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
                    let url = URL(string: "word-select://\(encodedSubstring)") {
                     attributedString.addAttribute(.link, value: url, range: NSRange(substringRange, in: text))
                 }
             }
             
+            // Then: selected word emphasis (stronger color + foreground flip)
             if let range = selectedWordRange {
                 let stringRange = NSRange(location: 0, length: attributedString.length)
                 if NSIntersectionRange(stringRange, range).length == range.length {
