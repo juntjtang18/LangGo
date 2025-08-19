@@ -108,8 +108,11 @@ struct VocapageHostView: View {
                 let V_GAP:   CGFloat = 32
 
                 ZStack {
-                    // ===== Reading-mode popup (anchored to gear) =====
-                    if showReadingMenu && gearFrameGlobal != .zero {
+                    // ===== Reading-mode popup (anchored to gear, with fallback) =====
+                    if showReadingMenu {
+                        // Decide if the toolbar-provided anchor is usable; if not, we'll float bottom-trailing.
+                        let anchorUsable = gearFrameGlobal.width > 1 && gearFrameGlobal.height > 1 && gearFrameGlobal.intersects(rootGlobal.insetBy(dx: -20, dy: -20))
+
                         // Convert gear’s global → host-local
                         let gearMidXLocal = gearFrameGlobal.midX - rootGlobal.minX
                         let gearTopLocal  = gearFrameGlobal.minY - rootGlobal.minY
@@ -121,21 +124,40 @@ struct VocapageHostView: View {
                         let x = min(max(unclampedX, 16), viewW - 16)
                         let y = min(max(unclampedY, 16), viewH - 16)
 
-                        ReadingMenuView(
-                            activeMode: readingMode,
-                            onRepeatWord: { readingMode = .repeatWord; showReadingMenu = false },
-                            onCyclePage:  { readingMode = .cyclePage;  showReadingMenu = false },
-                            onCycleAll:   { readingMode = .cycleAll;   showReadingMenu = false }
-                        )
-                        .fixedSize()
-                        .position(x: x, y: y)
-                        .zIndex(1000)
-                        .transition(.scale.combined(with: .opacity))
-                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showReadingMenu)
+                        if anchorUsable {
+                            ReadingMenuView(
+                                activeMode: readingMode,
+                                onRepeatWord: { readingMode = .repeatWord; showReadingMenu = false },
+                                onCyclePage:  { readingMode = .cyclePage;  showReadingMenu = false },
+                                onCycleAll:   { readingMode = .cycleAll;   showReadingMenu = false }
+                            )
+                            .fixedSize()
+                            .position(x: x, y: y)
+                            .zIndex(1000)
+                            .transition(.scale.combined(with: .opacity))
+                            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showReadingMenu)
+                        } else {
+                            ReadingMenuView(
+                                activeMode: readingMode,
+                                onRepeatWord: { readingMode = .repeatWord; showReadingMenu = false },
+                                onCyclePage:  { readingMode = .cyclePage;  showReadingMenu = false },
+                                onCycleAll:   { readingMode = .cycleAll;   showReadingMenu = false }
+                            )
+                            .fixedSize()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            .padding(.bottom, 16)
+                            .padding(.trailing, 16)
+                            .zIndex(1000)
+                            .transition(.scale.combined(with: .opacity))
+                            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showReadingMenu)
+                        }
                     }
 
-                    // ===== Filter popup (anchored to 3rd button) =====
-                    if showFilterMenu && filterFrameGlobal != .zero {
+                    // ===== Filter popup (anchored to 3rd button, with fallback) =====
+                    if showFilterMenu {
+                        // Decide if the toolbar-provided anchor is usable; if not, we'll float bottom-trailing.
+                        let anchorUsable = filterFrameGlobal.width > 1 && filterFrameGlobal.height > 1 && filterFrameGlobal.intersects(rootGlobal.insetBy(dx: -20, dy: -20))
+
                         // Convert filter button’s global → host-local
                         let filterMidXLocal = filterFrameGlobal.midX - rootGlobal.minX
                         let filterTopLocal  = filterFrameGlobal.minY - rootGlobal.minY
@@ -146,28 +168,55 @@ struct VocapageHostView: View {
                         let x = min(max(unclampedX, 16), viewW - 16)
                         let y = min(max(unclampedY, 16), viewH - 16)
 
-                        FilterMenuView(
-                            isDueOnly: isShowingDueWordsOnly,
-                            onDueWords: {
-                                if !isShowingDueWordsOnly {
-                                    isShowingDueWordsOnly = true
-                                    Task { await updatePageIdsForFilter() }
+                        if anchorUsable {
+                            FilterMenuView(
+                                isDueOnly: isShowingDueWordsOnly,
+                                onDueWords: {
+                                    if !isShowingDueWordsOnly {
+                                        isShowingDueWordsOnly = true
+                                        Task { await updatePageIdsForFilter() }
+                                    }
+                                    showFilterMenu = false
+                                },
+                                onAllWords: {
+                                    if isShowingDueWordsOnly {
+                                        isShowingDueWordsOnly = false
+                                        Task { await updatePageIdsForFilter() }
+                                    }
+                                    showFilterMenu = false
                                 }
-                                showFilterMenu = false
-                            },
-                            onAllWords: {
-                                if isShowingDueWordsOnly {
-                                    isShowingDueWordsOnly = false
-                                    Task { await updatePageIdsForFilter() }
+                            )
+                            .fixedSize()
+                            .position(x: x, y: y)
+                            .zIndex(1000)
+                            .transition(.scale.combined(with: .opacity))
+                            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFilterMenu)
+                        } else {
+                            FilterMenuView(
+                                isDueOnly: isShowingDueWordsOnly,
+                                onDueWords: {
+                                    if !isShowingDueWordsOnly {
+                                        isShowingDueWordsOnly = true
+                                        Task { await updatePageIdsForFilter() }
+                                    }
+                                    showFilterMenu = false
+                                },
+                                onAllWords: {
+                                    if isShowingDueWordsOnly {
+                                        isShowingDueWordsOnly = false
+                                        Task { await updatePageIdsForFilter() }
+                                    }
+                                    showFilterMenu = false
                                 }
-                                showFilterMenu = false
-                            }
-                        )
-                        .fixedSize()
-                        .position(x: x, y: y)
-                        .zIndex(1000)
-                        .transition(.scale.combined(with: .opacity))
-                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFilterMenu)
+                            )
+                            .fixedSize()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            .padding(.bottom, 16)
+                            .padding(.trailing, 16)
+                            .zIndex(1000)
+                            .transition(.scale.combined(with: .opacity))
+                            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFilterMenu)
+                        }
                     }
                 }
             }
