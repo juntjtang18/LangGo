@@ -48,10 +48,32 @@ class VocabookViewModel: ObservableObject {
     
     @Published var totalFlashcards: Int = 0
     @Published var totalPages: Int = 1
+    @Published var totalCards: Int = 0
+    @Published var rememberedCount: Int = 0
+    @Published var dueForReviewCount: Int = 0
+    @Published var reviewedCount: Int = 0
+    @Published var hardToRememberCount: Int = 0
+    @Published var newCardCount: Int = 0
+    @Published var tierStats: [StrapiTierStat] = []
     
     // The initializer is now clean and parameter-less.
     init() {}
-    
+    // Add this method anywhere inside the class:
+    func loadStatistics() async {
+        do {
+            let stats = try await strapiService.fetchFlashcardStatistics()
+            totalCards            = stats.totalCards
+            rememberedCount       = stats.remembered
+            dueForReviewCount     = stats.dueForReview
+            reviewedCount         = stats.reviewed
+            hardToRememberCount   = stats.hardToRemember
+            newCardCount          = stats.newCardCount ?? stats.byTier.first(where: { $0.tier == "new" })?.count ?? 0
+            tierStats             = stats.byTier.sorted { $0.min_streak < $1.min_streak }
+        } catch {
+            Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
+                .error("loadStatistics failed: \(error.localizedDescription)")
+        }
+    }
     func loadVocabookPages() async {
         isLoadingVocabooks = true
         defer { isLoadingVocabooks = false }

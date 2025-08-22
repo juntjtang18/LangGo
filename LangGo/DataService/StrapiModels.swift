@@ -87,7 +87,16 @@ struct ReviewTireAttributes: Codable {
     let max_streak: Int
     let cooldown_hours: Int
     let demote_bar: Int
+    let displayName: String?   // NEW
+
+    enum CodingKeys: String, CodingKey {
+        case tier, min_streak, max_streak, cooldown_hours, demote_bar
+        case displayName = "display_name"
+    }
 }
+
+
+
 
 // MARK: - Authentication Models
 struct LoginCredentials: Encodable {
@@ -219,13 +228,28 @@ struct StrapiStatisticsResponse: Codable {
 struct StrapiStatistics: Codable {
     let totalCards: Int
     let remembered: Int
-    let newCards: Int
-    let warmUp: Int
-    let weekly: Int
-    let monthly: Int
-    let hardToRemember: Int
     let dueForReview: Int
     let reviewed: Int
+    let hardToRemember: Int
+    let newCardCount: Int?
+    let byTier: [StrapiTierStat]
+}
+struct StrapiTierStat: Codable, Identifiable {
+    let id: Int
+    let tier: String
+    let displayName: String?
+    let min_streak: Int
+    let max_streak: Int
+    let cooldown_hours: Int
+    let count: Int
+    let dueCount: Int
+    let hardToRememberCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, tier
+        case displayName = "display_name"
+        case min_streak, max_streak, cooldown_hours, count, dueCount, hardToRememberCount
+    }
 }
 
 // MARK: - Review Models

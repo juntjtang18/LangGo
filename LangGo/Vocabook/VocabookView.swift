@@ -56,11 +56,11 @@ struct VocabookView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 30) {
-                HeaderTitleView(viewModel: flashcardViewModel)
+                HeaderTitleView(viewModel: vocabookViewModel)
 
                 OverallProgressView(
                     progress: weightedProgress,
-                    viewModel: flashcardViewModel
+                    viewModel: vocabookViewModel
                 )
                 .padding(.horizontal)
 
@@ -81,7 +81,7 @@ struct VocabookView: View {
         .background(theme.background.ignoresSafeArea())
         .onAppear {
             Task {
-                await flashcardViewModel.loadStatistics()
+                await vocabookViewModel.loadStatistics()
             }
         }
         .fullScreenCover(isPresented: $isAddingNewWord) {
@@ -89,7 +89,7 @@ struct VocabookView: View {
         }
         .fullScreenCover(isPresented: $isReviewing, onDismiss: {
             Task {
-                await flashcardViewModel.loadStatistics()
+                await vocabookViewModel.loadStatistics()
             }
         }) {
             FlashcardReviewView(viewModel: flashcardViewModel)
@@ -97,7 +97,7 @@ struct VocabookView: View {
         // The .fullScreenCover for 'isListening' has been removed.
         .sheet(isPresented: $isQuizzing, onDismiss: {
             Task {
-                await flashcardViewModel.loadStatistics()
+                await vocabookViewModel.loadStatistics()
             }
         }) {
             if !flashcardViewModel.reviewCards.isEmpty {
@@ -117,6 +117,8 @@ struct VocabookView: View {
             VocabookSettingView()
         }
         .task {
+            await vocabookViewModel.loadVocabookPages()
+            await vocabookViewModel.loadStatistics()
             if flashcardViewModel.reviewCards.isEmpty {
                 await flashcardViewModel.prepareReviewSession()
             }
@@ -163,7 +165,7 @@ private struct TwoButtonConnector: Shape {
 }
 
 private struct HeaderTitleView: View {
-    @ObservedObject var viewModel: FlashcardViewModel
+    @ObservedObject var viewModel: VocabookViewModel
 
     var body: some View {
         HStack {
@@ -175,7 +177,7 @@ private struct HeaderTitleView: View {
 
                 Spacer()
 
-                Text("\(viewModel.totalCardCount)")
+                Text("\(viewModel.totalCards)")
                     .font(.headline.weight(.bold))
                     .foregroundColor(Color(red: 0.29, green: 0.82, blue: 0.4))
                     .frame(minWidth: 40, minHeight: 40)
@@ -194,18 +196,21 @@ private struct HeaderTitleView: View {
 
 private struct OverallProgressView: View {
     let progress: Double
-    @ObservedObject var viewModel: FlashcardViewModel
+    @ObservedObject var viewModel: VocabookViewModel
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 16) {
             VocabookProgressCircleView(progress: progress)
                 .frame(width: 100, height: 100)
-            VStack(alignment: .leading, spacing: 4) {
-                StatRow(label: "Remembered", value: "\(viewModel.rememberedCount)")
-                StatRow(label: "Reviewed", value: "\(viewModel.reviewedCount)")
-                StatRow(label: "Due for Review", value: "\(viewModel.dueForReviewCount)")
+
+            VStack(alignment: .leading, spacing: 8) {
+                StatRow(label: "Remembered",       value: "\(viewModel.rememberedCount)")
+                StatRow(label: "Reviewed (Not Due)", value: "\(viewModel.reviewedCount)")
+                StatRow(label: "Due for Review",   value: "\(viewModel.dueForReviewCount)")
             }
+            // Ensure the text column is allowed to grow and not collapse
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
         .background(theme.secondary.opacity(0.1))
@@ -213,6 +218,7 @@ private struct OverallProgressView: View {
     }
 }
 
+// Keep StatRow, but make its label resilient to compression:
 private struct StatRow: View {
     let label: String
     let value: String
@@ -220,14 +226,96 @@ private struct StatRow: View {
 
     var body: some View {
         HStack {
-            Text(label).foregroundColor(theme.text.opacity(0.7))
-            Spacer()
-            Text(value).fontWeight(.medium)
+            Text(label)
+                .foregroundColor(theme.text.opacity(0.7))
+                .lineLimit(1)                 // don't wrap vertically
+                .minimumScaleFactor(0.85)     // shrink slightly if tight
+                .layoutPriority(1)            // protect from being compressed to 1-char width
+            Spacer(minLength: 8)
+            Text(value)
+                .fontWeight(.medium)
+                .monospacedDigit()
         }
         .font(.subheadline)
     }
 }
+// MARK: - Quick stats (New + Hard to Remember)
+private struct QuickStatsView: View {
+    @ObservedObject var viewModel: VocabookViewModel
+    @Environment(\.theme) var theme: Theme
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Quick Stats")
+                .font(.headline)
+            StatRow(label: "New", value: "\(viewModel.newCardCount)")
+            StatRow(label: "Hard to Remember", value: "\(viewModel.hardToRememberCount)")
+        }
+        .padding()
+        .background(theme.secondary.opacity(0.08))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Tier breakdown (data-driven)
+private struct TierBreakdownView: View {
+    @ObservedObject var viewModel: VocabookViewModel
+    @Environment(\.theme) var theme: Theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Tier Breakdown").font(.headline)
+                Spacer()
+                Button {
+                    Task { await viewModel.loadStatistics() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.body)
+                        .foregroundColor(.accentColor)
+                }
+                .accessibilityLabel("Refresh statistics")
+            }
+
+            if viewModel.tierStats.isEmpty {
+                Text("No tier data yet.")
+                    .foregroundColor(.secondary)
+                    .font(.subheadline)
+            } else {
+                ForEach(viewModel.tierStats) { tier in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tier.displayName ?? tier.tier.capitalized)
+                                .font(.subheadline.weight(.semibold))
+                            HStack(spacing: 6) {
+                                if tier.dueCount > 0 {
+                                    Label("\(tier.dueCount) due",
+                                          systemImage: "clock.badge.exclamationmark")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Text("Streak \(tier.min_streak)–\(tier.max_streak)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Text("\(tier.count)")
+                            .font(.headline)
+                    }
+                    .padding(.vertical, 6)
+
+                    if tier.id != viewModel.tierStats.last?.id {
+                        Divider().opacity(0.3)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(theme.secondary.opacity(0.08))
+        .cornerRadius(12)
+    }
+}
 private struct VocabookProgressCircleView: View {
     let progress: Double
     @Environment(\.theme) var theme: Theme

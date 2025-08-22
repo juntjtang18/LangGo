@@ -331,13 +331,17 @@ struct VocapageHostView: View {
     // MARK: - Filter paging
     private func updatePageIdsForFilter() async {
         if isShowingDueWordsOnly {
-            await flashcardViewModel.loadStatistics()
-            let totalDue = flashcardViewModel.dueForReviewCount
             do {
+                // Pull fresh stats directly from the service (VM no longer owns stats)
+                let stats = try await DataServices.shared.strapiService.fetchFlashcardStatistics()
+                let totalDue = stats.dueForReview
+
                 let vb = try await DataServices.shared.strapiService.fetchVBSetting()
                 let pageSize = vb.attributes.wordsPerPage
                 let totalPages = Int(ceil(Double(totalDue) / Double(pageSize)))
+
                 vocapageIds = totalPages > 0 ? Array(1...totalPages) : []
+
                 if currentPageIndex >= vocapageIds.count {
                     currentPageIndex = max(0, vocapageIds.count - 1)
                 }
@@ -353,6 +357,8 @@ struct VocapageHostView: View {
             let currentId = vocapageIds[currentPageIndex]
             await loader.loadPage(withId: currentId, dueWordsOnly: isShowingDueWordsOnly)
         }
+
         if sortedFlashcardsForCurrentPage.isEmpty { stopAutoplay() }
     }
+
 }

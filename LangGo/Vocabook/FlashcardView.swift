@@ -1,6 +1,6 @@
 // LangGo/Vocabook/FlashcardView.swift
 import SwiftUI
-
+/*
 struct FlashcardTabView: View {
     @Binding var isSideMenuShowing: Bool
     
@@ -128,31 +128,42 @@ private struct ActionButtonsView: View {
 
 private struct StatisticsView: View {
     @ObservedObject var viewModel: FlashcardViewModel
-    
+
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Statistics")
                     .font(.title2).bold()
                 Spacer()
-                Button(action: {
-                    Task {
-                        await viewModel.loadStatistics()
-                    }
-                }) {
+                Button {
+                    Task { await viewModel.loadStatistics() }
+                } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.title2)
                         .foregroundColor(.accentColor)
                 }
             }
-            .padding(.bottom, 10)
 
-            StatRow(label: "Total Words", value: "\(viewModel.totalCardCount)")
-            StatRow(label: "Mastered", value: "\(viewModel.rememberedCount)")
-            StatRow(label: "Nearly Mastered", value: "\(viewModel.monthlyCardCount)")
-            StatRow(label: "Well Practiced", value: "\(viewModel.weeklyReviewCardCount)")
-            StatRow(label: "Warming Up", value: "\(viewModel.warmUpCardCount)")
-            StatRow(label: "Just Added", value: "\(viewModel.newCardCount)")
+            // ✅ New topline rows (tier-driven; no legacy buckets)
+            StatRow(label: "Total Words",        value: "\(viewModel.totalCardCount)")
+            StatRow(label: "Mastered",           value: "\(viewModel.rememberedCount)")
+            StatRow(label: "Due for Review",     value: "\(viewModel.dueForReviewCount)")
+            StatRow(label: "Reviewed (Not Due)", value: "\(viewModel.reviewedCount)")
+            StatRow(label: "Hard to Remember",   value: "\(viewModel.hardToRememberCount)")
+
+            // ✅ Dynamic tier breakdown
+            if !viewModel.tierStats.isEmpty {
+                Divider().padding(.vertical, 4)
+                Text("By Tier")
+                    .font(.headline)
+
+                ForEach(viewModel.tierStats) { tier in
+                    StatRow(
+                        label: (tier.displayName ?? tier.tier.capitalized),
+                        value: "\(tier.count)"
+                    )
+                }
+            }
         }
         .padding()
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -194,3 +205,4 @@ private struct StatRow: View {
         .padding(.vertical, 4)
     }
 }
+*/

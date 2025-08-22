@@ -27,16 +27,8 @@ struct VocapageView: View {
                         highlightIndex: highlightIndex,
                         onSelectCard: onSelectCard              // <-- pass down
                     )
-                    
-                    /*
-                    Text("\(vocapage.order)")
-                        .font(.system(.caption, design: .serif))
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, 60)
-                     */
                 }
             }
-            // Inside VocapageView's ZStack (after the VStack)
             .safeAreaInset(edge: .bottom) {
                 if let vocapage = vocapage {
                     Text("\(vocapage.order)")
