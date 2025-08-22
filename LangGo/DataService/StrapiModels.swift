@@ -231,7 +231,6 @@ struct StrapiStatistics: Codable {
     let dueForReview: Int
     let reviewed: Int
     let hardToRemember: Int
-    let newCardCount: Int?
     let byTier: [StrapiTierStat]
 }
 struct StrapiTierStat: Codable, Identifiable {

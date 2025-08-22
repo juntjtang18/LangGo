@@ -53,7 +53,7 @@ class VocabookViewModel: ObservableObject {
     @Published var dueForReviewCount: Int = 0
     @Published var reviewedCount: Int = 0
     @Published var hardToRememberCount: Int = 0
-    @Published var newCardCount: Int = 0
+    //@Published var newCardCount: Int = 0
     @Published var tierStats: [StrapiTierStat] = []
     
     // The initializer is now clean and parameter-less.
@@ -67,7 +67,7 @@ class VocabookViewModel: ObservableObject {
             dueForReviewCount     = stats.dueForReview
             reviewedCount         = stats.reviewed
             hardToRememberCount   = stats.hardToRemember
-            newCardCount          = stats.newCardCount ?? stats.byTier.first(where: { $0.tier == "new" })?.count ?? 0
+            //newCardCount          = stats.newCardCount ?? stats.byTier.first(where: { $0.tier == "new" })?.count ?? 0
             tierStats             = stats.byTier.sorted { $0.min_streak < $1.min_streak }
         } catch {
             Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")

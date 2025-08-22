@@ -199,20 +199,41 @@ private struct OverallProgressView: View {
     @ObservedObject var viewModel: VocabookViewModel
     @Environment(\.theme) var theme: Theme
 
-    var body: some View {
-        HStack(spacing: 16) {
-            VocabookProgressCircleView(progress: progress)
-                .frame(width: 100, height: 100)
+    // Detect compact devices (SE/8/mini heights)
+    private var isCompactPhone: Bool {
+        UIScreen.main.bounds.height <= 667
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                StatRow(label: "Remembered",       value: "\(viewModel.rememberedCount)")
-                StatRow(label: "Reviewed (Not Due)", value: "\(viewModel.reviewedCount)")
-                StatRow(label: "Due for Review",   value: "\(viewModel.dueForReviewCount)")
+    // Sort tiers high → low so ranks render (5)…(1)
+    private var tiersHighToLow: [StrapiTierStat] {
+        viewModel.tierStats.sorted { $0.min_streak > $1.min_streak }
+    }
+
+    var body: some View {
+        HStack(spacing: isCompactPhone ? 2 : 16) {
+            VocabookProgressCircleView(progress: progress)
+                .frame(width: isCompactPhone ? 84 : 100,
+                       height: isCompactPhone ? 84 : 100)
+            //let isCompactPhone = UIScreen.main.bounds.height <= 667
+
+            VStack(alignment: .leading, spacing: isCompactPhone ? 2 : 8) {
+                StatRow(label: "Total Words", value: "\(viewModel.totalCards)")
+
+                ForEach(Array(tiersHighToLow.enumerated()), id: \.element.id) { idx, t in
+                    let rank = tiersHighToLow.count - idx // 5…1
+                    StatRow(
+                        label: "\(t.displayName ?? t.tier.capitalized) (\(rank))",
+                        value: "\(t.count)"
+                    )
+                }
+
+                StatRow(label: "Due for Review", value: "\(viewModel.dueForReviewCount)")
             }
-            // Ensure the text column is allowed to grow and not collapse
+            // Apply smaller font only to the right column on compact screens
+            .font(isCompactPhone ? .footnote : .subheadline)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
+        .padding(isCompactPhone ? 2 : 16)
         .background(theme.secondary.opacity(0.1))
         .cornerRadius(16)
     }
@@ -225,35 +246,20 @@ private struct StatRow: View {
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
-                .foregroundColor(theme.text.opacity(0.7))
-                .lineLimit(1)                 // don't wrap vertically
-                .minimumScaleFactor(0.85)     // shrink slightly if tight
-                .layoutPriority(1)            // protect from being compressed to 1-char width
+                .foregroundColor(theme.text.opacity(0.75))
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+                .layoutPriority(1) // prevents squished letters
+
             Spacer(minLength: 8)
+
             Text(value)
-                .fontWeight(.medium)
+                .fontWeight(.semibold)
                 .monospacedDigit()
         }
-        .font(.subheadline)
-    }
-}
-// MARK: - Quick stats (New + Hard to Remember)
-private struct QuickStatsView: View {
-    @ObservedObject var viewModel: VocabookViewModel
-    @Environment(\.theme) var theme: Theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Quick Stats")
-                .font(.headline)
-            StatRow(label: "New", value: "\(viewModel.newCardCount)")
-            StatRow(label: "Hard to Remember", value: "\(viewModel.hardToRememberCount)")
-        }
-        .padding()
-        .background(theme.secondary.opacity(0.08))
-        .cornerRadius(12)
+        .padding(.vertical, 1)   // tighter row height
     }
 }
 

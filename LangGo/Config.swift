@@ -13,7 +13,7 @@ struct Config {
             #if USE_LOCAL_IP
                 return "http://192.168.1.69:1338" // Use your actual IP
             #else
-                return "http://localhost:1338"
+                return "http://192.168.1.69:1338"
             #endif
         #else
             return "https://langgo-en-strapi.geniusparentingai.ca"
