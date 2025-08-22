@@ -26,8 +26,11 @@ struct LanguageSelectionView: View {
             .pickerStyle(WheelPickerStyle())
 
 
-            Button("Continue", action: onContinue)
-                .padding()
+            Button("Continue") {
+                UserDefaults.standard.set(languageSettings.selectedLanguageCode, forKey: "selectedLanguage") // 👈 persist for ProficiencyViewModel
+                onContinue()
+            }
+            .padding()
         }
     }
 }

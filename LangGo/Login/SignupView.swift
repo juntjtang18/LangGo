@@ -9,6 +9,7 @@ struct SignupView: View {
     @Binding var currentView: LoginView.ViewState
     @Binding var authState: AuthState
     var onboardingData: OnboardingData?
+    @AppStorage("hasSignedUp") private var hasSignedUp = false
 
     // The view now gets its service dependency directly from the singleton.
     private let strapiService = DataServices.shared.strapiService
@@ -110,9 +111,7 @@ struct SignupView: View {
                 let authResponse: AuthResponse = try await strapiService.signup(payload: payload)
                 keychain["jwt"] = authResponse.jwt
                 UserSessionManager.shared.login(user: authResponse.user)
-                //UserDefaults.standard.set(authResponse.user.username, forKey: "username")
-                //UserDefaults.standard.set(authResponse.user.email,    forKey: "email")
-                //UserDefaults.standard.set(authResponse.user.id,       forKey: "userId")
+                hasSignedUp = true  // 👈 remember that this device/account has gone through signup once
 
                 authState = .loggedIn
                 logger.info("Signup successful. User: \(authResponse.user.username, privacy: .public)")

@@ -407,6 +407,9 @@
         }
       }
     },
+    "Due Only" : {
+
+    },
     "Due Words" : {
 
     },
@@ -474,6 +477,9 @@
     "Explore lessons on specific topics" : {
 
     },
+    "Filter" : {
+
+    },
     "Finish onboarding and get started" : {
 
     },
@@ -512,6 +518,9 @@
 
     },
     "Hi, %@" : {
+
+    },
+    "Hide Base Text" : {
 
     },
     "Home" : {
@@ -896,6 +905,12 @@
         }
       }
     },
+    "Pause" : {
+
+    },
+    "Play" : {
+
+    },
     "Playback Error" : {
 
     },
@@ -1001,6 +1016,9 @@
     "Read Flashcards" : {
 
     },
+    "Reading Mode" : {
+
+    },
     "Reading Session" : {
 
     },
@@ -1035,6 +1053,9 @@
         }
       }
     },
+    "Repeat Word" : {
+
+    },
     "Resume Learning" : {
       "localizations" : {
         "ja" : {
@@ -1062,6 +1083,9 @@
           }
         }
       }
+    },
+    "Review" : {
+
     },
     "Review Reminders" : {
 
@@ -1167,6 +1191,9 @@
           }
         }
       }
+    },
+    "Show Base Text" : {
+
     },
     "Show Topics" : {
 
