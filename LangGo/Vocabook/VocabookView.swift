@@ -193,75 +193,74 @@ private struct HeaderTitleView: View {
         }
     }
 }
-
+// MARK: - Overall progress (shift text right; tight gap; right-aligned numbers)
 private struct OverallProgressView: View {
     let progress: Double
     @ObservedObject var viewModel: VocabookViewModel
     @Environment(\.theme) var theme: Theme
 
-    // Detect compact devices (SE/8/mini heights)
-    private var isCompactPhone: Bool {
-        UIScreen.main.bounds.height <= 667
-    }
+    private var isCompactPhone: Bool { UIScreen.main.bounds.height <= 667 }
+    private var rightColumnMaxWidth: CGFloat { isCompactPhone ? 230 : 300 } // cap so gap never grows too wide
 
-    // Sort tiers high → low so ranks render (5)…(1)
     private var tiersHighToLow: [StrapiTierStat] {
         viewModel.tierStats.sorted { $0.min_streak > $1.min_streak }
     }
 
     var body: some View {
-        HStack(spacing: isCompactPhone ? 2 : 16) {
+        HStack(spacing: isCompactPhone ? 12 : 16) {
+            // Left: circle, protected from squeezing
             VocabookProgressCircleView(progress: progress)
                 .frame(width: isCompactPhone ? 84 : 100,
                        height: isCompactPhone ? 84 : 100)
-            //let isCompactPhone = UIScreen.main.bounds.height <= 667
+                .layoutPriority(1)
 
-            VStack(alignment: .leading, spacing: isCompactPhone ? 2 : 8) {
-                StatRow(label: "Total Words", value: "\(viewModel.totalCards)")
+            // Right: shifted a bit to the right; tight internal spacing; values right-aligned
+            VStack(alignment: .leading, spacing: isCompactPhone ? 3 : 6) {
+                StatRowTight(label: "Total Words", value: "\(viewModel.totalCards)")
 
-                ForEach(Array(tiersHighToLow.enumerated()), id: \.element.id) { idx, t in
-                    let rank = tiersHighToLow.count - idx // 5…1
-                    StatRow(
-                        label: "\(t.displayName ?? t.tier.capitalized) (\(rank))",
-                        value: "\(t.count)"
-                    )
+                ForEach(tiersHighToLow, id: \.id) { t in
+                    StatRowTight(label: t.displayName ?? t.tier.capitalized,
+                                 value: "\(t.count)")
                 }
 
-                StatRow(label: "Due for Review", value: "\(viewModel.dueForReviewCount)")
+                StatRowTight(label: "Due for Review", value: "\(viewModel.dueForReviewCount)")
             }
-            // Apply smaller font only to the right column on compact screens
             .font(isCompactPhone ? .footnote : .subheadline)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, isCompactPhone ? 4 : 6)          // ← move the text block a little to the right
+            .frame(maxWidth: rightColumnMaxWidth, alignment: .leading) // ← cap width so label–value gap stays small
         }
-        .padding(isCompactPhone ? 2 : 16)
+        .padding(isCompactPhone ? 10 : 16)
         .background(theme.secondary.opacity(0.1))
         .cornerRadius(16)
     }
 }
 
-// Keep StatRow, but make its label resilient to compression:
-private struct StatRow: View {
+
+private struct StatRowTight: View {
     let label: String
     let value: String
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {   // ← tight base spacing
             Text(label)
                 .foregroundColor(theme.text.opacity(0.75))
                 .lineLimit(1)
                 .minimumScaleFactor(0.9)
-                .layoutPriority(1) // prevents squished letters
+                .layoutPriority(1)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)                               // ← minimal gap, expands only within capped width
 
             Text(value)
                 .fontWeight(.semibold)
                 .monospacedDigit()
+                .frame(alignment: .trailing)                   // ← right-aligned within the row
         }
-        .padding(.vertical, 1)   // tighter row height
+        .frame(maxWidth: .infinity, alignment: .leading)       // rows fill the right column width, values align
     }
 }
+
+
 
 // MARK: - Tier breakdown (data-driven)
 private struct TierBreakdownView: View {
