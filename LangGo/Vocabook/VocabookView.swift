@@ -15,10 +15,15 @@ struct VocabookView: View {
     // 'isListening' state is removed as the button is no longer used.
     @State private var isQuizzing: Bool = false
     @State private var isShowingSettings: Bool = false
+    
     @State private var badgeAnchor: Anchor<CGPoint>? = nil
     @State private var flightTrigger: Int = 0
+    
     @State private var isFlyingStar: Bool = false
-    @State private var starPosition: CGPoint = .zero
+    @State private var starProgress: CGFloat = 0
+    @State private var bezier: (p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint)? = nil
+
+    
     var body: some View {
         ZStack {
             VStack(spacing: 30) {
@@ -55,40 +60,54 @@ struct VocabookView: View {
         .overlay {
             GeometryReader { proxy in
                 ZStack {
-                    if isFlyingStar {
+                    if isFlyingStar, let b = bezier {
                         Image(systemName: "star.fill")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.yellow)
                             .shadow(color: .orange.opacity(0.5), radius: 6)
-                            .position(starPosition)
+                            .modifier(BezierFlight(t: starProgress, p0: b.p0, p1: b.p1, p2: b.p2, p3: b.p3))
                             .transition(.opacity)
                     }
                 }
                 .onChange(of: flightTrigger) { _ in
                     guard let anchor = badgeAnchor else { return }
 
-                    // Start at screen center
-                    let start = CGPoint(x: proxy.size.width / 2.0, y: proxy.size.height / 2.0)
-                    // End at the published header circle center
+                    // ✅ Use the *screen* center (global), then convert into this GeometryReader's local space
+                    let screenBounds = UIScreen.main.bounds
+                    let screenCenterGlobal = CGPoint(x: screenBounds.midX, y: screenBounds.midY)
+                    let containerFrameGlobal = proxy.frame(in: .global)
+                    let start = CGPoint(
+                        x: screenCenterGlobal.x - containerFrameGlobal.minX,
+                        y: screenCenterGlobal.y - containerFrameGlobal.minY
+                    )
+
+                    // End stays the same (local to this GeometryReader)
                     let end = proxy[anchor]
 
-                    isFlyingStar = true
-                    starPosition = start
+                    // --- Build a left-bending arc ---
+                    let bendX = -min(proxy.size.width, proxy.size.height) * 0.25
+                    let dy = end.y - start.y
+                    let lift = max(24, abs(dy) * 0.15)
 
-                    withAnimation(.easeInOut(duration: 0.9)) {
-                        starPosition = end
+                    let c1 = CGPoint(x: start.x + bendX, y: start.y - lift)
+                    let c2 = CGPoint(x: end.x   + bendX, y: end.y   + lift)
+
+                    bezier = (p0: start, p1: c1, p2: c2, p3: end)
+                    isFlyingStar = true
+                    starProgress = 0
+
+                    withAnimation(.easeInOut(duration: 0.95)) {
+                        starProgress = 1
                     }
 
-                    // Optional: tiny sparkle using SPConfetti at arrival
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) {
                         SPConfetti.startAnimating(.fullWidthToDown, particles: [.star], duration: 0.6)
                     }
-
-                    // Hide the star after the animation
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                         isFlyingStar = false
                     }
                 }
+
             }
         }
 
@@ -565,5 +584,35 @@ private struct PagesListView: View {
         }
         .navigationTitle("Vocabulary Pages")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct BezierFlight: AnimatableModifier {
+    var t: CGFloat
+    let p0: CGPoint
+    let p1: CGPoint
+    let p2: CGPoint
+    let p3: CGPoint
+
+    var animatableData: CGFloat {
+        get { t }
+        set { t = newValue }
+    }
+
+    private func point(at t: CGFloat) -> CGPoint {
+        let u  = 1 - t
+        let tt = t * t
+        let uu = u * u
+        let uuu = uu * u
+        let ttt = tt * t
+        var p = CGPoint.zero
+        p.x = uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x
+        p.y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y
+        return p
+    }
+
+    func body(content: Content) -> some View {
+        let pos = point(at: t)
+        content.position(pos)
     }
 }
