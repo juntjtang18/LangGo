@@ -1,6 +1,47 @@
 import SwiftUI
 import SPConfetti // NEW: Import the confetti package
+import AVFoundation   // ← add
+import Combine
 
+
+// Replace your speaker class signature:
+final class ReviewSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    private let tts = AVSpeechSynthesizer()
+    private var completion: (() -> Void)?
+
+    override init() {
+        super.init()
+        tts.delegate = self
+    }
+
+    func speakOnce(card: Flashcard, completion: @escaping () -> Void) {
+        self.completion = completion
+        var parts: [String] = []
+        if let word = card.wordDefinition?.attributes.word?.data?.attributes.targetText, !word.isEmpty {
+            parts.append(word)
+        } else {
+            parts.append(card.frontContent)
+        }
+        if let base = card.wordDefinition?.attributes.baseText, !base.isEmpty {
+            parts.append(base)
+        }
+        if let ex = card.wordDefinition?.attributes.exampleSentence, !ex.isEmpty {
+            parts.append(ex)
+        }
+
+        let u = AVSpeechUtterance(string: parts.joined(separator: ". "))
+        u.voice = AVSpeechSynthesisVoice(language: "en-US")
+        u.rate  = AVSpeechUtteranceDefaultSpeechRate
+        tts.speak(u)
+    }
+
+    func stop() { tts.stopSpeaking(at: .immediate) }
+
+    // AVSpeechSynthesizerDelegate
+    func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        completion?(); completion = nil
+    }
+}
 extension Notification.Name {
     static let reviewCelebrationClosed = Notification.Name("reviewCelebrationClosed")
 }
@@ -16,6 +57,13 @@ struct FlashcardReviewView: View {
     @State private var isSessionComplete = false
     @State private var showFireworks = false
     @State private var showBadge = false
+    
+    
+    @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled = false
+    @State private var isRepeating = false
+    @State private var showRecorder = false
+    @StateObject private var speaker = ReviewSpeaker()   // local TTS helper
+
 
     var body: some View {
         // NEW: ZStack to allow the celebration view to overlay the main content
@@ -77,6 +125,24 @@ struct FlashcardReviewView: View {
                         }
                         
                         Spacer()
+                        // Controls row (Mic / Speaker / Repeat)
+                        HStack(spacing: 28) {
+                            // Mic: show recorder
+                            CircleIcon(systemName: "mic.fill") { showRecorder = true }
+
+                            // Speaker: single cycle (or toggle repeat loop if repeat is ON)
+                            CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") {
+                                readButtonTapped()
+                            }
+
+                            // Repeat toggle
+                            CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") {
+                                toggleRepeat()
+                            }
+                        }
+                        .padding(.bottom, 8)
+
+                        Spacer()
                         
                         // Action Buttons
                         HStack(spacing: 20) {
@@ -133,9 +199,64 @@ struct FlashcardReviewView: View {
                           particles: [.star, .arc, .circle],
                           duration: 3.0)
             }
+            if showRecorder {
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+
+                RecordModalView(
+                    phrase: currentWordText,
+                    onClose: { showRecorder = false }
+                )
+                .transition(.scale.combined(with: .opacity))
+            }
+
         }
     }
-    
+    private var currentCard: Flashcard? { viewModel.reviewCards[safe: currentIndex] }
+    private var currentWordText: String {
+        currentCard?.wordDefinition?.attributes.word?.data?.attributes.targetText
+        ?? currentCard?.frontContent ?? ""
+    }
+    // MARK: - Reading logic (mirrors WordDetailSheet behavior)
+    private func readButtonTapped() {
+        guard let card = currentCard else { return }
+        if repeatReadingEnabled {
+            if isRepeating {
+                stopRepeating()
+            } else {
+                startRepeating(card: card)
+            }
+        } else {
+            speaker.speakOnce(card: card) { /* no-op */ }
+        }
+    }
+
+    private func startRepeating(card: Flashcard) {
+        guard !isRepeating else { return }
+        isRepeating = true
+
+        func loop() {
+            guard isRepeating, let liveCard = currentCard else { return }
+            speaker.speakOnce(card: liveCard) {
+                DispatchQueue.main.async {
+                    if self.isRepeating { loop() }
+                }
+            }
+        }
+        loop()
+    }
+
+    private func stopRepeating() {
+        isRepeating = false
+        speaker.stop()
+    }
+
+    private func toggleRepeat() {
+        repeatReadingEnabled.toggle()
+        if !repeatReadingEnabled { stopRepeating() }
+    }
+
     private var progressCountString: String {
         let formatter = NumberFormatter()
         formatter.locale = Locale.current
@@ -256,5 +377,22 @@ private struct CardFace: View {
             .cornerRadius(20)
             .shadow(radius: 5)
             .padding(.horizontal)
+    }
+}
+
+
+private struct CircleIcon: View {
+    let systemName: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title3)
+                .foregroundColor(.white)
+                .frame(width: 48, height: 48)
+                .background(Circle().fill(Color.black))
+                .shadow(radius: 2, y: 1)
+        }
+        .buttonStyle(.plain)
     }
 }
