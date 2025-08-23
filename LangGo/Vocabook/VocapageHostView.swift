@@ -194,27 +194,42 @@ struct VocapageHostView: View {
 
     // MARK: - Detail Sheet
     @ViewBuilder
-    private func wordDetailSheet(for: Flashcard) -> some View {
-        let card = `for`
-        let onClose: () -> Void = { self.selectedCard = nil }
-        let onSpeakOnce: (@escaping () -> Void) -> Void = { completion in
+    private func wordDetailSheet(for card: Flashcard) -> some View {
+        let cards = sortedFlashcardsForCurrentPage
+        let idx = cards.firstIndex(where: { $0.id == card.id }) ?? 0
+
+        // speak helper that takes a card
+        let onSpeakOnce: (_ c: Flashcard, _ completion: @escaping () -> Void) -> Void = { c, completion in
             Task {
                 if self.vbSettings == nil {
                     self.vbSettings = try? await DataServices.shared.strapiService.fetchVBSetting().attributes
                 }
                 if let settings = self.vbSettings {
                     self.speechManager.stop()
-                    self.speechManager.speak(card: card, showBaseText: self.showBaseText, settings: settings) {
-                        completion()
-                    }
+                    self.speechManager.speak(
+                        card: c,
+                        showBaseText: self.showBaseText,
+                        settings: settings
+                    ) { completion() }
                 } else {
                     completion()
                 }
             }
         }
-        WordDetailSheet(card: card, showBaseText: showBaseText, onClose: onClose, onSpeak: onSpeakOnce)
-            .presentationDetents([.medium, .large])
+
+        WordDetailSheet(
+            cards: cards,
+            initialIndex: idx,
+            showBaseText: showBaseText,
+            onClose: { self.selectedCard = nil },
+            onSpeak: onSpeakOnce
+        )
+        // 🔒 keep half height even when paging
+        .presentationDetents([.fraction(0.5)])
+        .presentationDragIndicator(.visible)
     }
+
+
 
     // MARK: - Reading Mode
     private func toggleReading(_ target: ReadingMode) {

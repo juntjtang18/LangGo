@@ -1,288 +1,218 @@
-//
-//  WordDetailSheet.swift
-//  LangGo
-//
-//  Created by James Tang on 2025/8/17.
-//
-import Foundation
 import SwiftUI
 
 struct WordDetailSheet: View {
-    let card: Flashcard
+    // NEW: pass whole list + starting index
+    let cards: [Flashcard]
     let showBaseText: Bool
     let onClose: () -> Void
-    
+    let onSpeak: (_ card: Flashcard, _ completion: @escaping () -> Void) -> Void
+
+    // Paging state
+    @State private var index: Int
+    init(cards: [Flashcard],
+         initialIndex: Int,
+         showBaseText: Bool,
+         onClose: @escaping () -> Void,
+         onSpeak: @escaping (_ card: Flashcard, _ completion: @escaping () -> Void) -> Void) {
+        self.cards = cards
+        self._index = State(initialValue: initialIndex)
+        self.showBaseText = showBaseText
+        self.onClose = onClose
+        self.onSpeak = onSpeak
+    }
+
+    // Existing controls state (keep your mic/speaker/repeat states here)
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled: Bool = false
-    let onSpeak: (@escaping () -> Void) -> Void   // speak one word, then call completion
-    @State private var isRepeating: Bool = false   // event-driven loop flag
-    @State private var showRecorder: Bool = false   // NEW
+    @State private var isRepeating = false
+    @State private var showRecorder = false
 
-    // MARK: - Resolved fields from your models
-    private var def: WordDefinitionAttributes? {
-        card.wordDefinition?.attributes
-    }
-    
-    private var wordText: String {
-        // backContent already resolves this, but we read it from the model directly
-        def?.word?.data?.attributes.targetText ?? card.backContent
-    }
-    
-    private var baseText: String? { def?.baseText }
-    private var posName: String? { def?.partOfSpeech?.data?.attributes.name }
-    private var example: String? { def?.exampleSentence }
-    private var register: String? { def?.register }
-    private var gender: String? { def?.gender }
-    private var article: String? { def?.article }
-    private var verbMeta: VerbMetaComponent? { def?.verbMeta }
-    private var examBase: [ExamOption]? { def?.examBase }
-    private var examTarget: [ExamOption]? { def?.examTarget }
-    // Optional: convert "adjective" -> "adj.", etc.
-    private func shortPOS(_ s: String) -> String {
-        switch s.lowercased() {
-        case "adjective": return "adj."
-        case "noun": return "n."
-        case "verb": return "v."
-        case "adverb": return "adv."
-        case "pronoun": return "pron."
-        case "conjunction": return "conj."
-        case "preposition": return "prep."
-        case "interjection": return "interj."
-        case "article": return "art."
-        default: return s
-        }
-    }
+    private enum SlideDir { case none, next, prev }
+    @State private var slideDir: SlideDir = .none
+
+    private var card: Flashcard { cards[index] }
+    private var canPrev: Bool { index > 0 }
+    private var canNext: Bool { index < cards.count - 1 }
+
     var body: some View {
-        ZStack{
-            VStack(spacing: 12) {
-                // Close button
-                HStack {
-                    Spacer()
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .padding(8)
-                    }
+        VStack(alignment: .leading, spacing: 0) {
+            // close button row (keep yours)
+            HStack {
+                Spacer()
+                Button {
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.headline)
+                        .padding(12)
                 }
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Title: word + POS
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(card.wordDefinition?.attributes.word?.data?.attributes.targetText ?? "")
-                                .font(.title).bold()
-                                .lineLimit(1)
-                            if let posFull = card.wordDefinition?.attributes.partOfSpeech?.data?.attributes.name {
-                                Text("(\(posAbbrev(from: posFull)))")
-                                    .font(.title3)
-                                    .italic()
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .fixedSize()
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        
-                        if let base = baseText, !base.isEmpty {
-                            Text(base)
-                                .font(.title3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        // Register / Gender / Article (inline pills if present)
-                        HStack(spacing: 8) {
-                            if let reg = register, !reg.isEmpty {
-                                CapsulePill(text: reg)
-                            }
-                            if let gen = gender, !gen.isEmpty {
-                                CapsulePill(text: gen)
-                            }
-                            if let art = article, !art.isEmpty {
-                                CapsulePill(text: art)
-                            }
-                        }
-                        
-                        // Verb forms
-                        if let vm = verbMeta, hasAnyVerbForm(vm) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Verb forms").font(.headline)
-                                VerbRow(label: "Simple past", value: vm.simplePast)
-                                VerbRow(label: "Past participle", value: vm.pastParticiple)
-                                VerbRow(label: "Present participle", value: vm.presentParticiple)
-                                VerbRow(label: "3rd person singular", value: vm.thirdpersonSingular)
-                                VerbRow(label: "Auxiliary", value: vm.auxiliaryVerb)
-                            }
-                        }
-                        
-                        // Example sentence
-                        if let ex = example, !ex.isEmpty {
-                            Divider().opacity(0.5)
-                            Text(ex)
-                                .font(.body)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        
-                        // (Optional) Exam options – uncomment if you want them visible
-                        /*
-                         if let opts = examTarget, !opts.isEmpty {
-                         Divider().opacity(0.5)
-                         Text("Target-side options").font(.headline)
-                         ExamList(options: opts)
-                         }
-                         if let opts = examBase, !opts.isEmpty {
-                         Divider().opacity(0.5)
-                         Text("Base-side options").font(.headline)
-                         ExamList(options: opts)
-                         }
-                         */
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
+            }
+
+            // === CONTENT with horizontal slide ===
+            ZStack {
+                content(for: card)
+                    .id(card.id) // diff by card id
+                    .transition(transitionFor(slideDir))
+            }
+            .animation(.easeInOut(duration: 0.28), value: card.id)
+
+            // === your 3 round buttons (mic / speaker / repeat) ===
+            controlsRow
+
+            // === Prev / Next buttons ===
+            navRow
+        }
+        .padding(.bottom, 12)
+    }
+
+    // MARK: - Content (move your existing word layout here)
+    @ViewBuilder
+    private func content(for card: Flashcard) -> some View {
+        // This is the original content you already had:
+        // Title word + (pos), base text, example, divider, etc.
+        // —— Example skeleton (replace with your current stack) ——
+        VStack(alignment: .leading, spacing: 16) {
+            // title line
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(card.wordDefinition?.attributes.word?.data?.attributes.targetText ?? card.frontContent)
+                    .font(.system(size: 34, weight: .bold))
+                if let pos = card.wordDefinition?.attributes.partOfSpeech?.data?.attributes.name {
+                    Text("(\(pos))").font(.title3).foregroundColor(.secondary).italic()
                 }
-                
-                // Controls row
-                HStack(spacing: 28) {
-                    CircleIcon(systemName: "mic.fill") { showRecorder = true }
-                    CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") {
-                        readButtonTapped()
-                    }
-                    CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") {
-                        toggleRepeat()
-                    }
-                }
-                .padding(.bottom, 20)
             }
-            .padding(.top, 8)
-            .blur(radius: showRecorder ? 8 : 0)
-            .disabled(showRecorder)
-            .onAppear {
-                // @AppStorage loads the last saved toggle automatically.
-                // Do NOT auto-start; user taps Read to begin looping.
-                isRepeating = false
-                
-                // If you prefer auto-start when Repeat is ON, uncomment:
-                // if repeatReadingEnabled { startRepeating() }
+
+            // translation
+            if let base = card.wordDefinition?.attributes.baseText, !base.isEmpty {
+                Text(base).font(.title2)
             }
-            .onDisappear {
-                // Stop any in-flight loop, but keep the saved toggle as-is.
-                stopRepeating()
+
+            Divider().padding(.vertical, 6)
+
+            // example
+            if let ex = card.wordDefinition?.attributes.exampleSentence, !ex.isEmpty {
+                Text(ex).font(.title3)
             }
-            if showRecorder {
-                Color.black.opacity(0.35)
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                
-                RecordModalView(
-                    phrase: wordText,
-                    onClose: { showRecorder = false }
-                )
-                .transition(.scale.combined(with: .opacity))
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 12)
+    }
+
+    // MARK: - Controls
+    private var controlsRow: some View {
+        HStack(spacing: 28) {
+            CircleIcon(systemName: "mic.fill") { showRecorder = true }
+            CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") {
+                readTapped() // one-shot or repeat loop
+            }
+            CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") {
+                toggleRepeat()
             }
         }
-        .interactiveDismissDisabled(true)     // <- prevents swipe-to-dismiss
-        .animation(.spring(response: 0.35, dampingFraction: 0.88), value: showRecorder)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 12)
     }
-    
-    // MARK: - Small helpers
-    private func hasAnyVerbForm(_ vm: VerbMetaComponent) -> Bool {
-        [vm.simplePast, vm.pastParticiple, vm.presentParticiple, vm.thirdpersonSingular, vm.auxiliaryVerb]
-            .compactMap { $0 }
-            .contains { !$0.isEmpty }
+
+    private var navRow: some View {
+        HStack(spacing: 12) {
+            Button("Previous") { goPrev() }
+                .buttonStyle(DetailNavButtonStyle(kind: .secondary))
+                .disabled(!canPrev)
+
+            Button("Next") { goNext() }
+                .buttonStyle(DetailNavButtonStyle(kind: .primary))
+                .disabled(!canNext)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
-    private func posAbbrev(from name: String) -> String {
-        switch name.lowercased() {
-        case "noun": return "n."
-        case "verb": return "v."
-        case "adjective": return "adj."
-        case "adverb": return "adv."
-        case "conjunction": return "conj."
-        case "pronoun": return "pron."
-        case "preposition": return "prep."
-        case "interjection": return "interj."
-        default: return name   // fallback: show the raw value
+
+    private func transitionFor(_ dir: SlideDir) -> AnyTransition {
+        switch dir {
+        case .next: // user tapped Next → slide L→R (new enters from left)
+            return .asymmetric(insertion: .move(edge: .leading),
+                               removal:   .move(edge: .trailing))
+        case .prev: // user tapped Previous → slide R→L (new enters from right)
+            return .asymmetric(insertion: .move(edge: .trailing),
+                               removal:   .move(edge: .leading))
+        case .none:
+            return .identity
         }
     }
 
-    // MARK: - Reading logic
+    // MARK: - Paging actions
+    private func goNext() {
+        guard canNext else { return }
+        slideDir = .next
+        withAnimation(.easeInOut(duration: 0.28)) {
+            index += 1
+        }
+    }
+    private func goPrev() {
+        guard canPrev else { return }
+        slideDir = .prev
+        withAnimation(.easeInOut(duration: 0.28)) {
+            index -= 1
+        }
+    }
 
-    private func readButtonTapped() {
+    // MARK: - Speak / Repeat (reuse your logic; call with current card)
+    private func readTapped() {
         if repeatReadingEnabled {
-            // Toggle start/stop of repeating
-            if isRepeating {
-                stopRepeating()
-            } else {
-                startRepeating()
-            }
+            if isRepeating { stopRepeating() } else { startRepeating() }
         } else {
-            // Single cycle (SpeechManager already reads target twice, + base if enabled)
-            onSpeak({})
+            onSpeak(card) { }
         }
     }
     private func startRepeating() {
         guard !isRepeating else { return }
         isRepeating = true
-
         func loop() {
             guard isRepeating else { return }
-            onSpeak {
-                // Chain the next read only after one word fully finishes
-                DispatchQueue.main.async {
-                    if self.isRepeating { loop() }
-                }
+            onSpeak(card) {
+                DispatchQueue.main.async { if self.isRepeating { loop() } }
             }
         }
         loop()
     }
     private func stopRepeating() {
         isRepeating = false
+        // if your speak helper exposes 'stop', you can call it via another closure
     }
-
     private func toggleRepeat() {
         repeatReadingEnabled.toggle()
         if !repeatReadingEnabled { stopRepeating() }
     }
-
 }
 
-private struct CapsulePill: View {
-    let text: String
-    var body: some View {
-        Text(text)
-            .font(.caption)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Color.secondary.opacity(0.15)))
-    }
-}
-
-private struct VerbRow: View {
-    let label: String
-    let value: String?
-    var body: some View {
-        if let value = value, !value.isEmpty {
-            HStack(alignment: .firstTextBaseline) {
-                Text(label + ":").font(.callout).foregroundColor(.secondary)
-                Text(value).font(.callout)
-            }
-        }
-    }
-}
-
-private struct ExamList: View {
-    let options: [ExamOption]
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(options.enumerated()), id: \.offset) { _, opt in
-                HStack(spacing: 8) {
-                    if let correct = opt.isCorrect {
-                        Image(systemName: correct ? "checkmark.circle.fill" : "circle")
-                            .imageScale(.small)
-                            .foregroundColor(correct ? .green : .secondary)
+// === keep your CircleIcon / DetailNavButtonStyle from earlier ===
+private struct DetailNavButtonStyle: ButtonStyle {
+    enum Kind { case primary, secondary }
+    let kind: Kind
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        return configuration.label
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity, minHeight: 38)
+            .padding(.horizontal, 12)
+            .background(
+                Group {
+                    switch kind {
+                    case .primary:
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.black.opacity(pressed ? 0.85 : 1.0))
+                    case .secondary:
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.white.opacity(pressed ? 0.92 : 1.0))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.black.opacity(0.85), lineWidth: 1)
+                            )
                     }
-                    Text(opt.text)
-                        .font(.callout)
                 }
-            }
-        }
+            )
+            .foregroundColor(kind == .primary ? .white : .black)
+            .animation(.easeInOut(duration: 0.12), value: pressed)
     }
 }
 
@@ -301,4 +231,3 @@ private struct CircleIcon: View {
         .buttonStyle(.plain)
     }
 }
-
