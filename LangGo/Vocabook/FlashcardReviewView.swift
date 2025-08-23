@@ -1,6 +1,10 @@
 import SwiftUI
 import SPConfetti // NEW: Import the confetti package
 
+extension Notification.Name {
+    static let reviewCelebrationClosed = Notification.Name("reviewCelebrationClosed")
+}
+
 struct FlashcardReviewView: View {
     @Environment(\.dismiss) var dismiss
     let viewModel: FlashcardViewModel
@@ -119,11 +123,15 @@ struct FlashcardReviewView: View {
 
             // NEW: Celebration View Overlay
             if isSessionComplete {
-                CelebrationView(showBadge: $showBadge)
-                    .confetti(isPresented: $showFireworks,
-                              animation: .fullWidthToUp,
-                              particles: [.star, .arc, .circle],
-                              duration: 3.0)
+                CelebrationView(showBadge: $showBadge, onClose: {
+                    // Notify VocabookView, then dismiss the review screen
+                    NotificationCenter.default.post(name: .reviewCelebrationClosed, object: nil)
+                    dismiss()
+                })
+                .confetti(isPresented: $showFireworks,
+                          animation: .fullWidthToUp,
+                          particles: [.star, .arc, .circle],
+                          duration: 3.0)
             }
         }
     }
@@ -164,10 +172,6 @@ struct FlashcardReviewView: View {
                 }
             }
             
-            // 3. Dismiss the view after the animations have played
-            //DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-            //    dismiss()
-            //}
         }
     }
 }
@@ -177,7 +181,8 @@ struct FlashcardReviewView: View {
 // NEW: A dedicated view for the celebration animation
 private struct CelebrationView: View {
     @Binding var showBadge: Bool
-    
+    var onClose: () -> Void          // ← add this
+
     var body: some View {
         VStack {
             Spacer()
@@ -202,6 +207,10 @@ private struct CelebrationView: View {
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
+                    Button("Done") { onClose() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .padding(.top, 2)
                 }
                 .transition(.scale.combined(with: .opacity))
             }

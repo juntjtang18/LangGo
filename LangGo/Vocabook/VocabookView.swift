@@ -1,6 +1,7 @@
 // LangGo/Vocabook/VocabookView.swift
 import SwiftUI
 import os
+import SPConfetti
 
 struct VocabookView: View {
     @ObservedObject var flashcardViewModel: FlashcardViewModel
@@ -14,45 +15,10 @@ struct VocabookView: View {
     // 'isListening' state is removed as the button is no longer used.
     @State private var isQuizzing: Bool = false
     @State private var isShowingSettings: Bool = false
-    
-    private var allFlashcards: [Flashcard] {
-        vocabookViewModel.vocabook?.vocapages?.flatMap { $0.flashcards ?? [] } ?? []
-    }
-
-    private var weightedProgress: Double {
-        guard !allFlashcards.isEmpty, !reviewSettings.settings.isEmpty else {
-            return 0.0
-        }
-
-        let promotionBonus = 2.0
-        let masteryStreak = Double(reviewSettings.masteryStreak)
-        let numberOfPromotions = Double(reviewSettings.settings.count - 1)
-        let maxCardScore = masteryStreak + (numberOfPromotions * promotionBonus)
-
-        guard maxCardScore > 0 else {
-            return 0.0
-        }
-
-        let totalPossiblePoints = Double(allFlashcards.count) * maxCardScore
-
-        let currentTotalPoints = allFlashcards.reduce(0.0) { total, card in
-            if card.reviewTire == "remembered" {
-                return total + maxCardScore
-            }
-
-            var cardScore = Double(card.correctStreak)
-            let sortedTiers = reviewSettings.settings.values.sorted { $0.min_streak < $1.min_streak }
-            for tierSetting in sortedTiers where tierSetting.tier != "new" {
-                 if card.correctStreak >= tierSetting.min_streak {
-                    cardScore += promotionBonus
-                }
-            }
-            return total + min(cardScore, maxCardScore)
-        }
-        
-        return totalPossiblePoints > 0 ? currentTotalPoints / totalPossiblePoints : 0.0
-    }
-
+    @State private var badgeAnchor: Anchor<CGPoint>? = nil
+    @State private var flightTrigger: Int = 0
+    @State private var isFlyingStar: Bool = false
+    @State private var starPosition: CGPoint = .zero
     var body: some View {
         ZStack {
             VStack(spacing: 30) {
@@ -78,7 +44,54 @@ struct VocabookView: View {
             }
             .padding(.top)
         }
+        .onPreferenceChange(BadgePositionPreferenceKey.self) { anchor in
+            self.badgeAnchor = anchor
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .reviewCelebrationClosed)) { _ in
+            // trigger a new flight
+            flightTrigger &+= 1
+        }
         .background(theme.background.ignoresSafeArea())
+        .overlay {
+            GeometryReader { proxy in
+                ZStack {
+                    if isFlyingStar {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.yellow)
+                            .shadow(color: .orange.opacity(0.5), radius: 6)
+                            .position(starPosition)
+                            .transition(.opacity)
+                    }
+                }
+                .onChange(of: flightTrigger) { _ in
+                    guard let anchor = badgeAnchor else { return }
+
+                    // Start at screen center
+                    let start = CGPoint(x: proxy.size.width / 2.0, y: proxy.size.height / 2.0)
+                    // End at the published header circle center
+                    let end = proxy[anchor]
+
+                    isFlyingStar = true
+                    starPosition = start
+
+                    withAnimation(.easeInOut(duration: 0.9)) {
+                        starPosition = end
+                    }
+
+                    // Optional: tiny sparkle using SPConfetti at arrival
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                        SPConfetti.startAnimating(.fullWidthToDown, particles: [.star], duration: 0.6)
+                    }
+
+                    // Hide the star after the animation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+                        isFlyingStar = false
+                    }
+                }
+            }
+        }
+
         .onAppear {
             Task {
                 await vocabookViewModel.loadStatistics()
@@ -124,6 +137,46 @@ struct VocabookView: View {
             }
         }
     }
+    
+    
+    private var allFlashcards: [Flashcard] {
+        vocabookViewModel.vocabook?.vocapages?.flatMap { $0.flashcards ?? [] } ?? []
+    }
+
+    private var weightedProgress: Double {
+        guard !allFlashcards.isEmpty, !reviewSettings.settings.isEmpty else {
+            return 0.0
+        }
+
+        let promotionBonus = 2.0
+        let masteryStreak = Double(reviewSettings.masteryStreak)
+        let numberOfPromotions = Double(reviewSettings.settings.count - 1)
+        let maxCardScore = masteryStreak + (numberOfPromotions * promotionBonus)
+
+        guard maxCardScore > 0 else {
+            return 0.0
+        }
+
+        let totalPossiblePoints = Double(allFlashcards.count) * maxCardScore
+
+        let currentTotalPoints = allFlashcards.reduce(0.0) { total, card in
+            if card.reviewTire == "remembered" {
+                return total + maxCardScore
+            }
+
+            var cardScore = Double(card.correctStreak)
+            let sortedTiers = reviewSettings.settings.values.sorted { $0.min_streak < $1.min_streak }
+            for tierSetting in sortedTiers where tierSetting.tier != "new" {
+                 if card.correctStreak >= tierSetting.min_streak {
+                    cardScore += promotionBonus
+                }
+            }
+            return total + min(cardScore, maxCardScore)
+        }
+        
+        return totalPossiblePoints > 0 ? currentTotalPoints / totalPossiblePoints : 0.0
+    }
+
 }
 
 // MARK: - Components
@@ -177,11 +230,21 @@ private struct HeaderTitleView: View {
 
                 Spacer()
 
+                ZStack {
+                    Circle().fill(Color.white)
+                    Text("\(viewModel.totalCards)")
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(Color(red: 0.29, green: 0.82, blue: 0.4))
+                }
+                .frame(width: 40, height: 40)
+                .anchorPreference(key: BadgePositionPreferenceKey.self, value: .center) { $0 }
+                /*
                 Text("\(viewModel.totalCards)")
                     .font(.headline.weight(.bold))
                     .foregroundColor(Color(red: 0.29, green: 0.82, blue: 0.4))
                     .frame(minWidth: 40, minHeight: 40)
                     .background(Circle().fill(Color.white))
+                 */
             }
             .padding(.vertical, 20)
             .padding(.leading, 30)

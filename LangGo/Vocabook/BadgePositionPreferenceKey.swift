@@ -1,3 +1,11 @@
+//
+//  BadgePositionPreferenceKey.swift
+//  LangGo
+//
+//  Created by James Tang on 2025/8/22.
+//
+
+
 // BadgePositionPreferenceKey.swift
 
 import SwiftUI
