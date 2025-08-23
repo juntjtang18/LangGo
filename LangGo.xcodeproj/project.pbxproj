@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A08A6432E596253001C3BA3 /* SPConfetti in Frameworks */ = {isa = PBXBuildFile; productRef = 1A08A6422E596253001C3BA3 /* SPConfetti */; };
 		1A4B514E2E0A92C900DA4E28 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = 1A4B514D2E0A92C900DA4E28 /* KeychainAccess */; };
 /* End PBXBuildFile section */
 
@@ -70,6 +71,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A4B514E2E0A92C900DA4E28 /* KeychainAccess in Frameworks */,
+				1A08A6432E596253001C3BA3 /* SPConfetti in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,6 +141,7 @@
 			name = LangGo;
 			packageProductDependencies = (
 				1A4B514D2E0A92C900DA4E28 /* KeychainAccess */,
+				1A08A6422E596253001C3BA3 /* SPConfetti */,
 			);
 			productName = LangGo;
 			productReference = 1A4B51192E0A922600DA4E28 /* LangGo.app */;
@@ -230,6 +233,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				1A4B514B2E0A928500DA4E28 /* XCRemoteSwiftPackageReference "KeychainAccess" */,
+				1A08A6412E595FF0001C3BA3 /* XCRemoteSwiftPackageReference "SPConfetti" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1A4B511A2E0A922600DA4E28 /* Products */;
@@ -619,6 +623,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		1A08A6412E595FF0001C3BA3 /* XCRemoteSwiftPackageReference "SPConfetti" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ivanvorobei/SPConfetti.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.2;
+			};
+		};
 		1A4B514B2E0A928500DA4E28 /* XCRemoteSwiftPackageReference "KeychainAccess" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kishikawakatsumi/KeychainAccess";
@@ -630,6 +642,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		1A08A6422E596253001C3BA3 /* SPConfetti */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1A08A6412E595FF0001C3BA3 /* XCRemoteSwiftPackageReference "SPConfetti" */;
+			productName = SPConfetti;
+		};
 		1A4B514D2E0A92C900DA4E28 /* KeychainAccess */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 1A4B514B2E0A928500DA4E28 /* XCRemoteSwiftPackageReference "KeychainAccess" */;

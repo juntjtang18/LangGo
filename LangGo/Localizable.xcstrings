@@ -768,6 +768,9 @@
         }
       }
     },
+    "Nice work! You’ve finished today’s due words." : {
+
+    },
     "No cards available for reading." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1097,6 +1100,9 @@
     "Review" : {
 
     },
+    "Review Complete" : {
+
+    },
     "Review Reminders" : {
 
     },
@@ -1172,6 +1178,9 @@
 
     },
     "Select a Voice" : {
+
+    },
+    "Session Complete!" : {
 
     },
     "Settings" : {
