@@ -15,7 +15,7 @@ struct VocapageHostView: View {
     @AppStorage("readingMode") private var readingMode: ReadingMode = .cyclePage
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly: Bool = false
 
-    let originalAllVocapageIds: [Int]
+    // State for the current list of page IDs being displayed
     @State private var vocapageIds: [Int]
     @State private var currentPageIndex: Int
 
@@ -26,48 +26,53 @@ struct VocapageHostView: View {
     @State private var currentWordIndex = -1
     @State private var vbSettings: VBSettingAttributes?
     @State private var pendingAutoplayAfterLoad = false
-    //@State private var finishPageWithoutRepeat = false
 
     // Sheets
     @State private var isShowingReviewView = false
     @State private var selectedCard: Flashcard?
 
     init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
-        self.originalAllVocapageIds = allVocapageIds
+        // Initializes the view with the provided list of page IDs
         self._vocapageIds = State(initialValue: allVocapageIds)
         self._currentPageIndex = State(initialValue: allVocapageIds.firstIndex(of: selectedVocapageId) ?? 0)
         self.flashcardViewModel = flashcardViewModel
     }
 
-    // MARK: - Derived
+    // MARK: - Derived Properties
     private var currentVocapage: Vocapage? {
-        guard !vocapageIds.isEmpty else { return nil }
+        guard !vocapageIds.isEmpty, currentPageIndex < vocapageIds.count else { return nil }
         return loader.vocapages[vocapageIds[currentPageIndex]]
     }
+    
     private var sortedFlashcardsForCurrentPage: [Flashcard] {
         currentVocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
     }
 
-    // MARK: - UI
+    // MARK: - Body
     var body: some View {
         ZStack {
-            VocapagePagingView(
-                currentPageIndex: $currentPageIndex,
-                allVocapageIds: vocapageIds,
-                loader: loader,
-                showBaseText: $showBaseText,
-                highlightIndex: speechManager.currentIndex,
-                isShowingDueWordsOnly: isShowingDueWordsOnly,
-                onSelectCard: { card in
-                    stopAutoplay()
-                    selectedCard = card
-                }
-            )
+            if vocapageIds.isEmpty {
+                 Text("No words to show for this page.")
+                    .foregroundColor(.secondary)
+            } else {
+                VocapagePagingView(
+                    currentPageIndex: $currentPageIndex,
+                    allVocapageIds: vocapageIds,
+                    loader: loader,
+                    showBaseText: $showBaseText,
+                    highlightIndex: speechManager.currentIndex,
+                    isShowingDueWordsOnly: isShowingDueWordsOnly,
+                    onSelectCard: { card in
+                        stopAutoplay()
+                        selectedCard = card
+                    }
+                )
 
-            PageNavigationControls(
-                currentPageIndex: $currentPageIndex,
-                pageCount: vocapageIds.count
-            )
+                PageNavigationControls(
+                    currentPageIndex: $currentPageIndex,
+                    pageCount: vocapageIds.count
+                )
+            }
         }
         .navigationTitle("My Vocabulary")
         .navigationBarTitleDisplayMode(.inline)
@@ -106,16 +111,21 @@ struct VocapageHostView: View {
             if currentWordIndex >= newCards.count { currentWordIndex = max(0, newCards.count - 1) }
             DispatchQueue.main.async { playCurrent() }
         }
-        .task { await updatePageIdsForFilter() }
         .sheet(item: $selectedCard) { card in wordDetailSheet(for: card) }
         .fullScreenCover(isPresented: $isShowingReviewView) {
             VocapageReviewView(cardsToReview: sortedFlashcardsForCurrentPage, viewModel: flashcardViewModel)
         }
         .onDisappear { stopAutoplay() }
-        .onChange(of: scenePhase) { phase in
-            // Stop reading whenever app is not active (home button, lock, multitask)
-            if phase != .active {
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase != .active {
                 stopAutoplay()
+            }
+        }
+        // This is the key change to keep the view in sync with the ViewModel
+        .onChange(of: flashcardViewModel.myCards) { _ in
+            Task {
+                // When the underlying data changes, reload the pages.
+                await flashcardViewModel.fetchAllMyCards()
             }
         }
     }
@@ -160,7 +170,7 @@ struct VocapageHostView: View {
                 Button {
                     if !isShowingDueWordsOnly {
                         isShowingDueWordsOnly = true
-                        Task { await updatePageIdsForFilter() }
+                        Task { await flashcardViewModel.prepareReviewSession() }
                     }
                 } label: {
                     Label("Due Only", systemImage: isShowingDueWordsOnly ? "checkmark.circle.fill" : "circle")
@@ -168,7 +178,7 @@ struct VocapageHostView: View {
                 Button {
                     if isShowingDueWordsOnly {
                         isShowingDueWordsOnly = false
-                        Task { await updatePageIdsForFilter() }
+                        Task { await flashcardViewModel.fetchAllMyCards() }
                     }
                 } label: {
                     Label("All Words", systemImage: !isShowingDueWordsOnly ? "checkmark.circle.fill" : "circle")
@@ -177,15 +187,6 @@ struct VocapageHostView: View {
                 Image(systemName: "line.3.horizontal.decrease.circle").font(.title3)
             }
             .accessibilityLabel("Filter")
-
-            // Review
-            Button {
-                stopAutoplay()
-                isShowingReviewView = true
-            } label: {
-                Image(systemName: "list.bullet.rectangle.portrait").font(.title3)
-            }
-            .accessibilityLabel("Review")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -198,7 +199,6 @@ struct VocapageHostView: View {
         let cards = sortedFlashcardsForCurrentPage
         let idx = cards.firstIndex(where: { $0.id == card.id }) ?? 0
 
-        // speak helper that takes a card
         let onSpeakOnce: (_ c: Flashcard, _ completion: @escaping () -> Void) -> Void = { c, completion in
             Task {
                 if self.vbSettings == nil {
@@ -224,7 +224,6 @@ struct VocapageHostView: View {
             onClose: { self.selectedCard = nil },
             onSpeak: onSpeakOnce
         )
-        // 🔒 keep half height even when paging
         .presentationDetents([.fraction(0.5)])
         .presentationDragIndicator(.visible)
     }
@@ -233,7 +232,6 @@ struct VocapageHostView: View {
 
     // MARK: - Reading Mode
     private func toggleReading(_ target: ReadingMode) {
-        // Tapping the same item toggles OFF; otherwise switch to that mode.
         readingMode = (readingMode == target) ? .inactive : target
     }
     
@@ -297,16 +295,13 @@ struct VocapageHostView: View {
         switch readingMode {
         case .repeatWord:
             if currentWordIndex == -1 { currentWordIndex = 0 }
-            // same index
             playCurrent()
 
         case .cyclePage:
-            // wrap within the page
             currentWordIndex = (currentWordIndex + 1) % count
             playCurrent()
 
         case .cycleAll:
-            // advance across pages and wrap to next page
             if currentWordIndex < count - 1 {
                 currentWordIndex += 1
                 playCurrent()
@@ -315,7 +310,6 @@ struct VocapageHostView: View {
             }
 
         case .inactive:
-            // NEW: advance within page WITHOUT wrapping; stop at end
             if currentWordIndex < count - 1 {
                 currentWordIndex += 1
                 playCurrent()
@@ -339,41 +333,6 @@ struct VocapageHostView: View {
         currentPageIndex = nextPage
         Task {
             await loader.loadPage(withId: vocapageIds[nextPage], dueWordsOnly: isShowingDueWordsOnly)
-            // playback resumes once in onChange(sortedFlashcardsForCurrentPage)
         }
     }
-
-    // MARK: - Filter paging
-    private func updatePageIdsForFilter() async {
-        if isShowingDueWordsOnly {
-            do {
-                // Pull fresh stats directly from the service (VM no longer owns stats)
-                let stats = try await DataServices.shared.strapiService.fetchFlashcardStatistics()
-                let totalDue = stats.dueForReview
-
-                let vb = try await DataServices.shared.strapiService.fetchVBSetting()
-                let pageSize = vb.attributes.wordsPerPage
-                let totalPages = Int(ceil(Double(totalDue) / Double(pageSize)))
-
-                vocapageIds = totalPages > 0 ? Array(1...totalPages) : []
-
-                if currentPageIndex >= vocapageIds.count {
-                    currentPageIndex = max(0, vocapageIds.count - 1)
-                }
-            } catch {
-                vocapageIds = []
-            }
-        } else {
-            vocapageIds = originalAllVocapageIds
-        }
-
-        loader.vocapages.removeAll()
-        if !vocapageIds.isEmpty {
-            let currentId = vocapageIds[currentPageIndex]
-            await loader.loadPage(withId: currentId, dueWordsOnly: isShowingDueWordsOnly)
-        }
-
-        if sortedFlashcardsForCurrentPage.isEmpty { stopAutoplay() }
-    }
-
 }

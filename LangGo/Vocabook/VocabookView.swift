@@ -49,6 +49,39 @@ struct VocabookView: View {
             }
             .padding(.top)
         }
+/*        .overlay {
+            if isInitialLoading {
+                ZStack {
+                    // Dim background to indicate blocking state
+                    Color.black.opacity(0.2).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Loading...")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(24)
+                    //.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(radius: 10, y: 4)
+                }
+                // Block taps while loading
+                .transaction { $0.disablesAnimations = false }
+                .transition(.opacity)
+            }
+        } */
+        .overlay {
+            if vocabookViewModel.isLoadingVocabooks ||
+               (vocabookViewModel.vocabook?.vocapages == nil) {
+                ZStack {
+                    Color.black.opacity(0.2).ignoresSafeArea() // dim background; remove if not wanted
+                    ProgressView("Loading...")
+                        .progressViewStyle(CircularProgressViewStyle(tint: .accentColor))
+                        .scaleEffect(1.4)
+                        .font(.footnote.weight(.semibold))
+                        //.foregroundColor(.primary)   // ← makes text use the main (dark) color in light mode
+                }
+            }
+        }
         .onPreferenceChange(BadgePositionPreferenceKey.self) { anchor in
             self.badgeAnchor = anchor
         }
@@ -195,6 +228,13 @@ struct VocabookView: View {
         
         return totalPossiblePoints > 0 ? currentTotalPoints / totalPossiblePoints : 0.0
     }
+    
+    // Inside VocabookView (same file), add this helper:
+    private var isInitialLoading: Bool {
+        vocabookViewModel.isLoadingVocabooks ||
+        (vocabookViewModel.vocabook?.vocapages == nil)
+    }
+
 
 }
 
@@ -616,3 +656,4 @@ private struct BezierFlight: AnimatableModifier {
         content.position(pos)
     }
 }
+

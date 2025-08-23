@@ -1,8 +1,8 @@
-// LangGo/StrapiService.swift
+// LangGo/DataService/StrapiService.swift
 
 import Foundation
 import os
-import SwiftUI // Import SwiftUI to use @AppStorage
+import SwiftUI
 
 // Define typealiases for Strapi data structures to improve clarity
 typealias StrapiWord = StrapiData<WordAttributes>
@@ -12,58 +12,48 @@ class StrapiService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "StrapiService")
     private let cacheService = CacheService.shared
     
-    // MARK: - Cache State Management
+    // MARK: - Cache State Management (Refactored)
     
-    /// A single flag to indicate if all local flashcard data is fresh or needs to be re-fetched.
-    private var isFlashcardsCacheStale = true
+    /// Separate flags for each distinct, user-specific flashcard cache.
+    private var isAllMyFlashcardsCacheStale = true
+    private var isReviewFlashcardsCacheStale = true
     
     /// Consistent keys for storing and retrieving data from the cache.
-    private let allMyFlashcardsCacheKey = "allMyFlashcards" // Consolidated key
+    private let allMyFlashcardsCacheKey = "allMyFlashcards"
     private let reviewFlashcardsCacheKey = "allMyReviewFlashcards"
     private let flashcardStatisticsCacheKey = "flashcardStatistics"
     private let reviewTireSettingsCacheKey = "reviewTireSettings"
     private let vbSettingsCacheKey = "vbSettings"
     
-    /// UserDefaults key for storing the last fetch timestamp for TTL caching.
+    /// UserDefaults key for storing the last fetch timestamp for TTL caching (for non-user-data).
     private let reviewTireSettingsTimestampKey = "reviewTireSettingsTimestamp"
     private let vbSettingsTimestampKey = "vbSettingsTimestamp"
 
-    
-    /// Time-To-Live for the review tire settings cache, in seconds (e.g., 24 hours).
+    /// Time-To-Live for non-user-specific caches.
     private let reviewTireSettingsTTL: TimeInterval = 86400
     private let vbSettingsTTL: TimeInterval = 86400
-    enum CacheBucket: String, CaseIterable {
-        case allMyFlashcards
-        case reviewFlashcards
-        case flashcardStatistics
-        case reviewTireSettings
-        case vbSettings
-    }
 
     /// Reads the refresh mode setting from UserDefaults.
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
     }
 
-    init() {
-    }
+    init() {}
 
     // MARK: - Authentication & User Management
     func login(credentials: LoginCredentials) async throws -> AuthResponse {
         logger.debug("StrapiService: Attempting login.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local") else { throw URLError(.badURL) }
         let response: AuthResponse = try await NetworkManager.shared.post(to: url, body: credentials)
-        // Invalidate all user-specific caches on login
-        self.invalidateAllUserCaches()
+        invalidateAllUserCaches() // Invalidate all caches on login
         return response
     }
 
     func signup(payload: RegistrationPayload) async throws -> AuthResponse {
-        logger.debug("StrapiService: Attempting signup with proficiency and reminders.")
+        logger.debug("StrapiService: Attempting signup.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register") else { throw URLError(.badURL) }
         let response: AuthResponse = try await NetworkManager.shared.post(to: url, body: payload)
-        // Invalidate caches on a new registration.
-        self.invalidateAllUserCaches()
+        invalidateAllUserCaches() // Invalidate caches on new registration
         return response
     }
 
@@ -83,25 +73,17 @@ class StrapiService {
     func updateBaseLanguage(languageCode: String) async throws {
         logger.debug("StrapiService: Updating base language to \(languageCode).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
-
-        // CORRECTED: Added nil for the new optional parameters to satisfy the initializer.
         let payload = UserProfileUpdatePayload(baseLanguage: languageCode, proficiency: nil, reminder_enabled: nil)
         let body = UserProfileUpdatePayloadWrapper(data: payload)
-
         let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
     }
 
-    // This is the new function from the previous step, now corrected.
     func updateUserProfile(userId: Int, payload: UserProfileUpdatePayload) async throws {
         logger.debug("StrapiService: Updating user profile for user ID: \(userId).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
-
-        // The payload is now passed in directly.
         let body = UserProfileUpdatePayloadWrapper(data: payload)
-
         let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
     }
-
 
     func changePassword(currentPassword: String, newPassword: String, confirmNewPassword: String) async throws -> EmptyResponse {
         logger.debug("StrapiService: Changing password.")
@@ -117,17 +99,17 @@ class StrapiService {
     // MARK: - Flashcard & Review
 
     func fetchFlashcardStatistics() async throws -> StrapiStatistics {
-        if !isFlashcardsCacheStale {
+        // This cache is invalidated directly by write operations, not a staleness flag.
+        if !isRefreshModeEnabled {
             if let cachedStats = cacheService.load(type: StrapiStatistics.self, from: flashcardStatisticsCacheKey) {
                 logger.debug("✅ Returning flashcard statistics from cache.")
                 return cachedStats
             }
         }
 
-        logger.debug("StrapiService: Cache is stale or empty. Fetching flashcard statistics from network.")
+        logger.debug("StrapiService: Cache is empty or refresh is forced. Fetching flashcard statistics from network.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else { throw URLError(.badURL) }
 
-        // NEW: decode the wrapper, then take .data
         let resp: StrapiStatisticsResponse = try await NetworkManager.shared.fetchDirect(from: url)
         let stats = resp.data
 
@@ -166,18 +148,18 @@ class StrapiService {
 
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
         logger.debug("--- Preparing to fetch review flashcards ---")
-        logger.debug("Current isFlashcardsCacheStale flag is: \(self.isFlashcardsCacheStale)")
+        logger.debug("Current isReviewFlashcardsCacheStale flag is: \(self.isReviewFlashcardsCacheStale)")
 
-        if !isFlashcardsCacheStale {
+        if !isReviewFlashcardsCacheStale {
             if let cachedFlashcards = cacheService.load(type: [Flashcard].self, from: reviewFlashcardsCacheKey) {
-                logger.debug("✅ Cache is FRESH. Returning \(cachedFlashcards.count) cards from local cache.")
+                logger.debug("✅ Review cache is FRESH. Returning \(cachedFlashcards.count) cards from local cache.")
                 return cachedFlashcards
             } else {
-                logger.debug("⚠️ Cache flag was FRESH, but no cache file was found. Proceeding to network fetch.")
+                logger.debug("⚠️ Review cache flag was FRESH, but no cache file was found. Proceeding to network fetch.")
             }
         }
 
-        logger.debug("➡️ Cache is STALE or empty. Fetching all pages from network.")
+        logger.debug("➡️ Review cache is STALE or empty. Fetching all pages from network.")
         var allCards: [Flashcard] = []
         var currentPage = 1
         let pageSize = 100
@@ -185,11 +167,7 @@ class StrapiService {
 
         while hasMorePages {
             let (cards, pagination) = try await self.fetchReviewFlashcardsPage(page: currentPage, pageSize: pageSize)
-            
-            if !cards.isEmpty {
-                allCards.append(contentsOf: cards)
-            }
-            
+            if !cards.isEmpty { allCards.append(contentsOf: cards) }
             if let pag = pagination {
                 hasMorePages = pag.page < pag.pageCount
                 currentPage += 1
@@ -201,8 +179,8 @@ class StrapiService {
         logger.debug("✅ Fetched \(allCards.count) review flashcards from network.")
         cacheService.save(allCards, key: reviewFlashcardsCacheKey)
         
-        self.isFlashcardsCacheStale = false
-        logger.debug("✅ Cache has been updated. isFlashcardsCacheStale flag is now FALSE.")
+        self.isReviewFlashcardsCacheStale = false
+        logger.debug("✅ Review cache has been updated. isReviewFlashcardsCacheStale flag is now FALSE.")
         
         return allCards
     }
@@ -217,8 +195,10 @@ class StrapiService {
             throw NSError(domain: "StrapiServiceError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Server response was missing the 'data' object."])
         }
 
-        // 👇 Be precise about what the review actually invalidates
-        invalidate([.reviewFlashcards, .flashcardStatistics, .allMyFlashcards])
+        // Set all relevant cache flags to stale.
+        isAllMyFlashcardsCacheStale = true
+        isReviewFlashcardsCacheStale = true
+        cacheService.delete(key: flashcardStatisticsCacheKey) // Statistics are definitively stale.
 
         let flashcard = transformStrapiCard(updatedStrapiCard)
         return flashcard
@@ -230,20 +210,16 @@ class StrapiService {
     
     // MARK: - Flashcards Pagination
     
-//    func fetchFlashcards(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
     func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false) async throws -> ([Flashcard], StrapiPagination?) {
         if dueOnly {
             return try await fetchReviewFlashcardsPage(page: page, pageSize: pageSize)
         }
-        // 1. Get the full list of flashcards, either from cache or network.
         let allFlashcards = try await getOrFetchAllMyFlashcards()
         
-        // 2. Perform pagination in-memory.
         let totalItems = allFlashcards.count
         let totalPages = (totalItems + pageSize - 1) / pageSize
         
         guard page > 0, page <= totalPages || totalItems == 0 else {
-            // Return empty if the requested page is out of bounds, unless there are no items.
             let pagination = StrapiPagination(page: page, pageSize: pageSize, pageCount: totalPages, total: totalItems)
             return ([], pagination)
         }
@@ -253,7 +229,6 @@ class StrapiService {
         
         let pageItems = Array(allFlashcards[startIndex..<endIndex])
         
-        // 3. Construct the pagination metadata.
         let pagination = StrapiPagination(page: page, pageSize: pageSize, pageCount: totalPages, total: totalItems)
         
         logger.debug("✅ Returning page \(page) of flashcards from in-memory cache.")
@@ -263,22 +238,20 @@ class StrapiService {
     
     // MARK: - Word Creation, Translation & Search
     
-    func saveNewWord(targetText: String, baseText: String, partOfSpeech: String, locale: String) async throws -> WordDefinitionResponse { // Add locale parameter
+    func saveNewWord(targetText: String, baseText: String, partOfSpeech: String, locale: String) async throws -> WordDefinitionResponse {
         logger.debug("StrapiService: Saving new word and definition.")
         
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/word-definitions") else { throw URLError(.badURL) }
         
-        let payload = WordDefinitionCreationPayload(
-            targetText: targetText,
-            baseText: baseText,
-            partOfSpeech: partOfSpeech,
-            locale: locale // Add locale to payload
-        )
+        let payload = WordDefinitionCreationPayload(targetText: targetText, baseText: baseText, partOfSpeech: partOfSpeech, locale: locale)
         let requestBody = CreateWordDefinitionRequest(data: payload)
         
         let response: WordDefinitionResponse = try await NetworkManager.shared.post(to: url, body: requestBody)
         
-        self.invalidate([.allMyFlashcards, .reviewFlashcards, .flashcardStatistics])
+        // A new word makes all flashcard-related data stale.
+        isAllMyFlashcardsCacheStale = true
+        isReviewFlashcardsCacheStale = true
+        cacheService.delete(key: flashcardStatisticsCacheKey)
 
         return response
     }
@@ -288,25 +261,9 @@ class StrapiService {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/words/search") else {
             throw URLError(.badURL)
         }
-        urlComponents.queryItems = [
-            URLQueryItem(name: "term", value: term)
-        ]
-        
+        urlComponents.queryItems = [URLQueryItem(name: "term", value: term)]
         guard let url = urlComponents.url else { throw URLError(.badURL) }
-        
         let response: StrapiListResponse<StrapiWord> = try await NetworkManager.shared.fetchDirect(from: url)
-        
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            let responseData = try encoder.encode(response)
-            if let jsonString = String(data: responseData, encoding: .utf8) {
-                logger.info("Response from searchWords for term '\(term, privacy: .public)':\n\(jsonString, privacy: .public)")
-            }
-        } catch {
-            logger.error("Failed to encode or log searchWords response: \(error.localizedDescription)")
-        }
-        
         return response.data ?? []
     }
 
@@ -315,27 +272,12 @@ class StrapiService {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/word-definitions/search") else {
             throw URLError(.badURL)
         }
-        urlComponents.queryItems = [
-            URLQueryItem(name: "term", value: term)
-        ]
-        
+        urlComponents.queryItems = [URLQueryItem(name: "term", value: term)]
         guard let url = urlComponents.url else { throw URLError(.badURL) }
-        
         let response: StrapiListResponse<StrapiWordDefinition> = try await NetworkManager.shared.fetchDirect(from: url)
-
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            let responseData = try encoder.encode(response)
-            if let jsonString = String(data: responseData, encoding: .utf8) {
-                logger.info("Response from searchWordDefinitions for term '\(term, privacy: .public)':\n\(jsonString, privacy: .public)")
-            }
-        } catch {
-            logger.error("Failed to encode or log searchWordDefinitions response: \(error.localizedDescription)")
-        }
-        
         return response.data ?? []
     }
+    
     func translateWord(word: String, source: String, target: String) async throws -> TranslateWordResponse {
         logger.debug("StrapiService: Translating word '\(word)' from \(source) to \(target).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/translate-word") else { throw URLError(.badURL) }
@@ -387,7 +329,6 @@ class StrapiService {
         let payload = VBSettingUpdatePayload(data: .init(wordsPerPage: wordsPerPage, interval1: interval1, interval2: interval2, interval3: interval3))
         let response: VBSettingSingleResponse = try await NetworkManager.shared.put(to: url, body: payload)
         
-        // Invalidate the cache after a successful update
         cacheService.delete(key: vbSettingsCacheKey)
         logger.debug("✏️ Invalidated VB settings cache due to update.")
         
@@ -404,7 +345,6 @@ class StrapiService {
         return localizedLevels
     }
 
-    /// A private helper function to perform the actual network request for proficiency levels.
     private func fetchLevels(for locale: String) async throws -> [ProficiencyLevel] {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/proficiency-levels") else {
             throw URLError(.badURL)
@@ -420,32 +360,23 @@ class StrapiService {
     
     // MARK: - Private Helper Functions
     
-    /// The single source of truth for fetching "my flashcards". It handles caching and network requests.
-    /// Get /api/flashcards/mine?pagination[page]=...
-    ///
     private func getOrFetchAllMyFlashcards() async throws -> [Flashcard] {
-        // 1. If cache is fresh, try to load from it.
-        if !isFlashcardsCacheStale {
+        if !isAllMyFlashcardsCacheStale {
             if let cachedFlashcards = cacheService.load(type: [Flashcard].self, from: allMyFlashcardsCacheKey) {
                 logger.debug("✅ Returning all 'my flashcards' from cache.")
                 return cachedFlashcards
             }
         }
 
-        // 2. If cache is stale or empty, fetch all pages from the network.
         logger.debug("Cache for 'my flashcards' is stale or empty. Fetching all pages from network.")
         var allCards: [Flashcard] = []
         var currentPage = 1
-        let pageSize = 100 // Standard size for fetching all data
+        let pageSize = 100
         var hasMorePages = true
 
         while hasMorePages {
             let (cards, pagination) = try await fetchFlashcardsPageFromNetwork(page: currentPage, pageSize: pageSize)
-            
-            if !cards.isEmpty {
-                allCards.append(contentsOf: cards)
-            }
-            
+            if !cards.isEmpty { allCards.append(contentsOf: cards) }
             if let pag = pagination {
                 hasMorePages = pag.page < pag.pageCount
                 currentPage += 1
@@ -454,17 +385,13 @@ class StrapiService {
             }
         }
         
-        // 3. Save the complete list to the cache and mark it as fresh.
         cacheService.save(allCards, key: allMyFlashcardsCacheKey)
-        self.isFlashcardsCacheStale = false
+        self.isAllMyFlashcardsCacheStale = false
         logger.debug("💾 Saved all 'my flashcards' to cache and marked cache as fresh.")
         
         return allCards
     }
 
-    /*
-     * fetch /api/review-flashcards
-     */
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching review flashcards page \(page), size \(pageSize).")
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else {
@@ -486,7 +413,6 @@ class StrapiService {
         return (flashcards, response.meta?.pagination)
     }
     
-    /// A simple, network-only function to fetch a single page of "my flashcards".
     private func fetchFlashcardsPageFromNetwork(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         logger.debug("StrapiService: Fetching flashcards page \(page), size \(pageSize) from network.")
         guard let url = URL(string:
@@ -499,42 +425,18 @@ class StrapiService {
         let flashcards = (response.data ?? []).map(transformStrapiCard)
         return (flashcards, response.meta?.pagination)
     }
-    /// Invalidate one bucket.
-    func invalidate(_ bucket: CacheBucket) {
-        switch bucket {
-        case .allMyFlashcards:
-            cacheService.delete(key: allMyFlashcardsCacheKey)
-            // Any change to "my flashcards" also means lists/stats are stale
-            isFlashcardsCacheStale = true
 
-        case .reviewFlashcards:
-            cacheService.delete(key: reviewFlashcardsCacheKey)
-            isFlashcardsCacheStale = true
-
-        case .flashcardStatistics:
-            cacheService.delete(key: flashcardStatisticsCacheKey)
-            isFlashcardsCacheStale = true
-
-        case .reviewTireSettings:
-            cacheService.delete(key: reviewTireSettingsCacheKey)
-            // tire settings don’t directly change content, keep the flag unchanged
-
-        case .vbSettings:
-            cacheService.delete(key: vbSettingsCacheKey)
-            // vb settings affect playback, not lists; keep the flag unchanged
-        }
-
-        logger.debug("✏️ Invalidated cache bucket: \(bucket.rawValue)")
-    }
-
-    /// Invalidate multiple buckets.
-    func invalidate(_ buckets: [CacheBucket]) {
-        buckets.forEach { invalidate($0) }
-    }
-
-    /// Keep this convenience, but route through the new API.
+    /// Invalidates all user-specific data by clearing caches and setting staleness flags.
     func invalidateAllUserCaches() {
-        invalidate([.allMyFlashcards, .reviewFlashcards, .flashcardStatistics, .vbSettings])
+        cacheService.delete(key: allMyFlashcardsCacheKey)
+        cacheService.delete(key: reviewFlashcardsCacheKey)
+        cacheService.delete(key: flashcardStatisticsCacheKey)
+        cacheService.delete(key: vbSettingsCacheKey)
+        
+        isAllMyFlashcardsCacheStale = true
+        isReviewFlashcardsCacheStale = true
+        
+        logger.debug("✏️ Invalidated all user-specific caches.")
     }
 
     private func transformStrapiCard(_ strapiCard: StrapiFlashcard) -> Flashcard {

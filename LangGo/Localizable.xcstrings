@@ -649,6 +649,9 @@
         }
       }
     },
+    "Loading..." : {
+
+    },
     "Log in" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1099,9 +1102,6 @@
           }
         }
       }
-    },
-    "Review" : {
-
     },
     "Review Complete" : {
 
