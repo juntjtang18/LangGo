@@ -420,8 +420,7 @@ struct SelectableTextView: View {
                 wordRect.origin.x += textView.textContainerInset.left
                 wordRect.origin.y += textView.textContainerInset.top
                 
-                guard let globalRect = textView.superview?.convert(wordRect, to: nil) else { return }
-                
+                let globalRect = textView.convert(wordRect, to: nil)
                 parent.onSelectWord(selectedWord, containingSentence, globalRect, effectiveRange)
             }
         }
@@ -430,34 +429,51 @@ struct SelectableTextView: View {
 
 
 struct PopoverPositioner: ViewModifier {
-    let wordFrame: CGRect
-    
-    private let popoverHeight: CGFloat = 180
+    let wordFrame: CGRect                 // in window (global) coordinates
     private let popoverWidth: CGFloat = 300
-    private let spacing: CGFloat = 10
+    private let estimatedHeight: CGFloat = 220   // conservative height estimate
+    private let spacing: CGFloat = 12
+    private let horizPadding: CGFloat = 12
+    private let bottomReserved: CGFloat = 90     // keep above bottom bar
 
     func body(content: Content) -> some View {
-        GeometryReader { screenGeometry in
-            let screenWidth = screenGeometry.size.width
-            
-            let clampedX = max(
-                (popoverWidth / 2) + screenGeometry.safeAreaInsets.leading + 10,
-                min(
-                    wordFrame.midX,
-                    screenWidth - (popoverWidth / 2) - screenGeometry.safeAreaInsets.trailing - 10
-                )
+        GeometryReader { geo in
+            // Container’s frame in the same .global space as wordFrame
+            let containerGlobal = geo.frame(in: .global)
+
+            // Convert word rect into this container’s local coordinates
+            let localWord = CGRect(
+                x: wordFrame.origin.x - containerGlobal.minX,
+                y: wordFrame.origin.y - containerGlobal.minY,
+                width: wordFrame.width,
+                height: wordFrame.height
             )
-            let hasRoomAbove = (wordFrame.minY - popoverHeight - spacing) > screenGeometry.safeAreaInsets.top
-            let yPosition = hasRoomAbove
-                ? wordFrame.minY - spacing
-                : wordFrame.maxY + spacing
+
+            // Horizontal clamping
+            let leftLimit  = horizPadding + popoverWidth / 2
+            let rightLimit = geo.size.width - horizPadding - popoverWidth / 2
+            let centerX = min(max(localWord.midX, leftLimit), rightLimit)
+
+            // Vertical decision (below if there’s room, else above)
+            let bottomSafeMax = geo.size.height - geo.safeAreaInsets.bottom - bottomReserved
+            let canShowBelow  = (localWord.maxY + spacing + estimatedHeight) <= bottomSafeMax
+            let topSafeMin    = geo.safeAreaInsets.top
+
+            let centerY: CGFloat = {
+                if canShowBelow {
+                    // Place *below* the word
+                    let desired = localWord.maxY + spacing + estimatedHeight / 2
+                    return min(desired, bottomSafeMax - estimatedHeight / 2)
+                } else {
+                    // Place *above* the word
+                    let desired = localWord.minY - spacing - estimatedHeight / 2
+                    return max(desired, topSafeMin + estimatedHeight / 2)
+                }
+            }()
 
             content
-                .frame(width: popoverWidth)
-                .position(x: clampedX, y: yPosition)
-                .alignmentGuide(.top) { d in
-                    hasRoomAbove ? d[.bottom] - popoverHeight : d[.top]
-                }
+                .frame(width: popoverWidth)          // width fixed; height flexible
+                .position(x: centerX, y: centerY)     // position by center
         }
     }
 }
