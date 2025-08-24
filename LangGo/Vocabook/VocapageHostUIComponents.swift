@@ -258,7 +258,7 @@ struct VocapagePagingView: View {
         TabView(selection: $currentPageIndex) {
             ForEach(allVocapageIds.indices, id: \.self) { index in
                 VocapageView(
-                    vocapage: loader.vocapages[allVocapageIds[index]],
+                    vocapage: loader.page(id: allVocapageIds[index], dueOnly: isShowingDueWordsOnly),
                     showBaseText: $showBaseText,
                     highlightIndex: highlightIndex,
                     onLoad: {

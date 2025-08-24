@@ -68,8 +68,7 @@ class VocabookViewModel: ObservableObject {
             hardToRememberCount   = stats.hardToRemember
             tierStats             = stats.byTier.sorted { $0.min_streak < $1.min_streak }
         } catch {
-            Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
-                .error("loadStatistics failed: \(error.localizedDescription)")
+            logger.error("loadStatistics failed: \(error.localizedDescription)")
         }
     }
     
@@ -94,6 +93,8 @@ class VocabookViewModel: ObservableObject {
             }
 
             self.totalFlashcards = allFlashcards.count
+            // Keep the user-facing count in sync with the current dataset
+            self.totalCards = allFlashcards.count
             
             // 2. Get pagination settings
             let vbSetting = try await settingsService.fetchVBSetting()

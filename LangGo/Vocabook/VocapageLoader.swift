@@ -11,24 +11,31 @@ class VocapageLoader: ObservableObject {
     private let settingsService  = DataServices.shared.settingsService
     
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageLoader")
-
-    // State properties to hold the data and loading status for each page
-    @Published var vocapages: [Int: Vocapage] = [:]
-    @Published var loadingStatus: [Int: Bool] = [:]
-    @Published var errorMessages: [Int: String] = [:]
+    
+    struct Key: Hashable { let id: Int; let dueOnly: Bool }
+    
+    @Published var vocapagesAll: [Int: Vocapage] = [:]
+    @Published var vocapagesDue: [Int: Vocapage] = [:]
+    @Published var loadingAll: Set<Int> = []
+    @Published var loadingDue: Set<Int> = []
+    @Published var errorAll: [Int: String] = [:]
+    @Published var errorDue: [Int: String] = [:]
 
     // The initializer is now clean and parameter-less.
     init() {}
 
     func loadPage(withId vocapageId: Int, dueWordsOnly: Bool = false) async {
-        // Don't re-load if already loading or if the page's flashcards are already loaded.
-        if loadingStatus[vocapageId] == true || (vocapages[vocapageId]?.flashcards != nil && !dueWordsOnly) {
-             return
-        }
-        
+        // Choose the right buckets based on filter
+        var store      = dueWordsOnly ? vocapagesDue : vocapagesAll
+        var loadingSet = dueWordsOnly ? loadingDue    : loadingAll
+        var errors     = dueWordsOnly ? errorDue      : errorAll
+
+        // Already loading or already cached? bail.
+        if loadingSet.contains(vocapageId) || (store[vocapageId]?.flashcards != nil) { return }
+
         logger.debug("VocapageLoader::loadPage(\(vocapageId), dueWordsOnly: \(dueWordsOnly))")
-        loadingStatus[vocapageId] = true
-        errorMessages[vocapageId] = nil
+        loadingSet.insert(vocapageId)
+        errors[vocapageId] = nil
 
         do {
             let vbSetting = try await settingsService.fetchVBSetting()
@@ -39,13 +46,26 @@ class VocapageLoader: ObservableObject {
             var page = Vocapage(id: vocapageId, title: "Page \(vocapageId)", order: vocapageId)
             page.flashcards = fetchedFlashcards
             
-            vocapages[vocapageId] = page
+            store[vocapageId] = page
+
 
         } catch {
             logger.error("Failed to load details for vocapage \(vocapageId): \(error.localizedDescription)")
-            errorMessages[vocapageId] = error.localizedDescription
+            errors[vocapageId] = error.localizedDescription
         }
 
-        loadingStatus[vocapageId] = false
+        loadingSet.remove(vocapageId)
+
+        // Write back the mutated locals
+        if dueWordsOnly {
+            vocapagesDue = store; loadingDue = loadingSet; errorDue = errors
+        } else {
+            vocapagesAll = store; loadingAll = loadingSet; errorAll = errors
+        }
+     }
+    
+    // Accessor to read the correct variant without exposing internals
+    func page(id: Int, dueOnly: Bool) -> Vocapage? {
+        dueOnly ? vocapagesDue[id] : vocapagesAll[id]
     }
 }

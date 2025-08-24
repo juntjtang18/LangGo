@@ -17,6 +17,7 @@ struct VocapageHostView: View {
     @Binding var isShowingDueWordsOnly: Bool
 
     @State private var vocapageIds: [Int]
+    private let allIdsSeed: [Int]               // original "All" list, for restoring
     @State private var currentPageIndex: Int
 
     let flashcardViewModel: FlashcardViewModel
@@ -42,11 +43,13 @@ struct VocapageHostView: View {
         self.flashcardViewModel = flashcardViewModel
         self._isShowingDueWordsOnly = isShowingDueWordsOnly
         self.onFilterChange = onFilterChange
+        self.allIdsSeed = allVocapageIds
+
     }
 
     private var currentVocapage: Vocapage? {
         guard !vocapageIds.isEmpty, currentPageIndex < vocapageIds.count else { return nil }
-        return loader.vocapages[vocapageIds[currentPageIndex]]
+        return loader.page(id: vocapageIds[currentPageIndex], dueOnly: isShowingDueWordsOnly)
     }
     
     private var sortedFlashcardsForCurrentPage: [Flashcard] {
@@ -56,8 +59,16 @@ struct VocapageHostView: View {
     var body: some View {
         ZStack {
             if vocapageIds.isEmpty {
-                 Text("No words to show for this page.")
-                    .foregroundColor(.secondary)
+                ZStack {
+                    // Match VocapageView’s background so layout and toolbar behave normally
+                    Color(red: 0.98, green: 0.97, blue: 0.94).ignoresSafeArea()
+                    VStack {
+                        Spacer()
+                        Text("No words to show for this page.")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                }
             } else {
                 VocapagePagingView(
                     currentPageIndex: $currentPageIndex,
@@ -103,8 +114,11 @@ struct VocapageHostView: View {
         }
         .safeAreaInset(edge: .bottom) { bottomToolbar }
         .toolbar(.hidden, for: .tabBar)
-        .onChange(of: currentPageIndex) { _ in
+        .onChange(of: currentPageIndex) { newIndex in
             if readingMode != .cycleAll { stopAutoplay() }
+            if newIndex >= 0, newIndex < vocapageIds.count {
+                UserDefaults.standard.set(vocapageIds[newIndex], forKey: "lastViewedVocapageID")
+            }
         }
         .onChange(of: sortedFlashcardsForCurrentPage) { newCards in
             guard pendingAutoplayAfterLoad,
@@ -125,8 +139,61 @@ struct VocapageHostView: View {
                 stopAutoplay()
             }
         }
+        // NEW: when toggling Due/All
+        .onChange(of: isShowingDueWordsOnly) { newValue in
+            Task {
+                // Always load the currently visible page for the new filter,
+                // so the UI never "waits" for a page switch to trigger .task.
+                if !vocapageIds.isEmpty, currentPageIndex < vocapageIds.count {
+                    await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: newValue)
+                }
+        
+                if newValue {
+                    // Preload all pages in Due mode, then prune those with 0 items.
+                    await withTaskGroup(of: Void.self) { group in
+                        for id in allIdsSeed {
+                            group.addTask { await loader.loadPage(withId: id, dueWordsOnly: true) }
+                        }
+                    }
+                    let filtered = allIdsSeed.filter { (loader.page(id: $0, dueOnly: true)?.flashcards?.isEmpty == false) }
+        
+                    if filtered.isEmpty {
+                        // No due words at all → empty list & reset index
+                        vocapageIds = []
+                        currentPageIndex = 0
+                        stopAutoplay()
+                    } else {
+                        // Keep current page if still present, otherwise jump to first
+                        let currentId = (currentPageIndex < vocapageIds.count) ? vocapageIds[currentPageIndex] : filtered.first!
+                        vocapageIds = filtered
+                        currentPageIndex = vocapageIds.firstIndex(of: currentId) ?? 0
+                    }
+                } else {
+                    // Back to All → compute a fresh page list (don’t rely on possibly-empty seed)
+                    let freshIds = await rebuildAllPageIds()
+                    vocapageIds = freshIds
+                    // Keep index in bounds, then load visible page in All mode
+                    currentPageIndex = min(currentPageIndex, max(0, freshIds.count - 1))
+                    if currentPageIndex < vocapageIds.count {
+                        await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: false)
+                    }
+                }
+            }
+        }
     }
 
+    private func rebuildAllPageIds() async -> [Int] {
+        do {
+            let vb = try await DataServices.shared.settingsService.fetchVBSetting()
+            let pageSize = vb.attributes.wordsPerPage
+            let all = try await DataServices.shared.flashcardService.fetchAllMyFlashcards()
+            let pages = max(1, Int(ceil(Double(all.count) / Double(pageSize))))
+            return Array(1...pages)
+        } catch {
+            return []
+        }
+    }
+    
     private var bottomToolbar: some View {
         HStack(spacing: 20) {
             Spacer()
@@ -161,16 +228,12 @@ struct VocapageHostView: View {
 
             Menu {
                 Button {
-                    if !isShowingDueWordsOnly {
-                        isShowingDueWordsOnly = true
-                    }
+                    if !isShowingDueWordsOnly { isShowingDueWordsOnly = true; onFilterChange() }
                 } label: {
                     Label("Due Only", systemImage: isShowingDueWordsOnly ? "checkmark.circle.fill" : "circle")
                 }
                 Button {
-                    if isShowingDueWordsOnly {
-                        isShowingDueWordsOnly = false
-                    }
+                    if isShowingDueWordsOnly { isShowingDueWordsOnly = false; onFilterChange() }
                 } label: {
                     Label("All Words", systemImage: !isShowingDueWordsOnly ? "checkmark.circle.fill" : "circle")
                 }

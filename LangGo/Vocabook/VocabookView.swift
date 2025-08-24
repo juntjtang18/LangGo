@@ -57,13 +57,14 @@ struct VocabookView: View {
             .padding(.top)
         }
         .overlay {
-            if vocabookViewModel.isLoadingVocabooks || (vocabookViewModel.vocabook?.vocapages == nil) {
+            if isInitialLoading {
                 ZStack {
                     Color.black.opacity(0.2).ignoresSafeArea()
                     ProgressView("Loading...")
                         .progressViewStyle(CircularProgressViewStyle(tint: .accentColor))
                         .scaleEffect(1.4)
                         .font(.footnote.weight(.semibold))
+                        .foregroundColor(.primary)
                 }
             }
         }
@@ -213,21 +214,19 @@ struct VocabookView: View {
                                 isReviewing = true
                             }
                         }
-                        if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
-                            let allIDs = pages.map { $0.id }.sorted()
-                            let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-                            let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : allIDs.first ?? 1
-                            NavigationLink(destination: VocapageHostView(
-                                allVocapageIds: allIDs,
-                                selectedVocapageId: targetPageID,
-                                flashcardViewModel: flashcardViewModel,
-                                isShowingDueWordsOnly: $isShowingDueWordsOnly,
-                                onFilterChange: onFilterChange
-                            )) {
-                                VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
-                            }
-                        } else {
-                            VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary).opacity(0.5)
+                        // Always allow navigation; Host can show an empty state if there are no pages
+                        let allIDs = (vocabookViewModel.vocabook?.vocapages ?? []).map { $0.id }.sorted()
+                        let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
+                        let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : (allIDs.first ?? 1)
+                        
+                        NavigationLink(destination: VocapageHostView(
+                            allVocapageIds: allIDs,
+                            selectedVocapageId: targetPageID,
+                            flashcardViewModel: flashcardViewModel,
+                            isShowingDueWordsOnly: $isShowingDueWordsOnly,
+                            onFilterChange: onFilterChange
+                        )) {
+                            VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
                         }
                     }
                     HStack(spacing: spacing) {
