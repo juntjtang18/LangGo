@@ -13,8 +13,8 @@ struct LoginView: View {
     @State private var isLoading = false
     @EnvironmentObject var languageSettings: LanguageSettings
 
-    private let strapiService = DataServices.shared.strapiService
-    
+    private let authService = DataServices.shared.authService
+    private let settingsService = DataServices.shared.settingsService
     private let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "LoginView")
 
@@ -112,12 +112,12 @@ struct LoginView: View {
         Task {
             do {
                 let credentials = LoginCredentials(identifier: email, password: password)
-                let authResponse = try await strapiService.login(credentials: credentials)
+                let authResponse = try await authService.login(credentials: credentials)
                 UserSessionManager.shared.login(user: authResponse.user)
                 keychain["jwt"] = authResponse.jwt
                 languageSettings.selectedLanguageCode = authResponse.user.user_profile?.baseLanguage ?? "en"
                 
-                let vbSetting = try await strapiService.fetchVBSetting()
+                let vbSetting = try await settingsService.fetchVBSetting()
                 UserDefaults.standard.set(Double(vbSetting.attributes.wordsPerPage), forKey: "wordCountPerPage")
                 UserDefaults.standard.set(vbSetting.attributes.interval1, forKey: "interval1")
                 UserDefaults.standard.set(vbSetting.attributes.interval2, forKey: "interval2")

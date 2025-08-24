@@ -12,9 +12,10 @@ struct VocabookView: View {
 
     @State private var isReviewing: Bool = false
     @State private var isAddingNewWord: Bool = false
-    // 'isListening' state is removed as the button is no longer used.
     @State private var isQuizzing: Bool = false
     @State private var isShowingSettings: Bool = false
+    
+    @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly: Bool = false
     
     @State private var badgeAnchor: Anchor<CGPoint>? = nil
     @State private var flightTrigger: Int = 0
@@ -40,8 +41,14 @@ struct VocabookView: View {
                     isQuizzing: $isQuizzing,
                     isAddingNewWord: $isAddingNewWord,
                     isShowingSettings: $isShowingSettings,
+                    isShowingDueWordsOnly: $isShowingDueWordsOnly,
                     vocabookViewModel: vocabookViewModel,
-                    flashcardViewModel: flashcardViewModel
+                    flashcardViewModel: flashcardViewModel,
+                    onFilterChange: {
+                        Task {
+                            await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
+                        }
+                    }
                 )
                 .padding(.horizontal)
 
@@ -49,36 +56,14 @@ struct VocabookView: View {
             }
             .padding(.top)
         }
-/*        .overlay {
-            if isInitialLoading {
-                ZStack {
-                    // Dim background to indicate blocking state
-                    Color.black.opacity(0.2).ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Loading...")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(24)
-                    //.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(radius: 10, y: 4)
-                }
-                // Block taps while loading
-                .transaction { $0.disablesAnimations = false }
-                .transition(.opacity)
-            }
-        } */
         .overlay {
-            if vocabookViewModel.isLoadingVocabooks ||
-               (vocabookViewModel.vocabook?.vocapages == nil) {
+            if vocabookViewModel.isLoadingVocabooks || (vocabookViewModel.vocabook?.vocapages == nil) {
                 ZStack {
-                    Color.black.opacity(0.2).ignoresSafeArea() // dim background; remove if not wanted
+                    Color.black.opacity(0.2).ignoresSafeArea()
                     ProgressView("Loading...")
                         .progressViewStyle(CircularProgressViewStyle(tint: .accentColor))
                         .scaleEffect(1.4)
                         .font(.footnote.weight(.semibold))
-                        //.foregroundColor(.primary)   // ← makes text use the main (dark) color in light mode
                 }
             }
         }
@@ -86,7 +71,6 @@ struct VocabookView: View {
             self.badgeAnchor = anchor
         }
         .onReceive(NotificationCenter.default.publisher(for: .reviewCelebrationClosed)) { _ in
-            // trigger a new flight
             flightTrigger &+= 1
         }
         .background(theme.background.ignoresSafeArea())
@@ -104,49 +88,23 @@ struct VocabookView: View {
                 }
                 .onChange(of: flightTrigger) { _ in
                     guard let anchor = badgeAnchor else { return }
-
-                    // ✅ Use the *screen* center (global), then convert into this GeometryReader's local space
                     let screenBounds = UIScreen.main.bounds
                     let screenCenterGlobal = CGPoint(x: screenBounds.midX, y: screenBounds.midY)
                     let containerFrameGlobal = proxy.frame(in: .global)
-                    let start = CGPoint(
-                        x: screenCenterGlobal.x - containerFrameGlobal.minX,
-                        y: screenCenterGlobal.y - containerFrameGlobal.minY
-                    )
-
-                    // End stays the same (local to this GeometryReader)
+                    let start = CGPoint(x: screenCenterGlobal.x - containerFrameGlobal.minX, y: screenCenterGlobal.y - containerFrameGlobal.minY)
                     let end = proxy[anchor]
-
-                    // --- Build a left-bending arc ---
                     let bendX = -min(proxy.size.width, proxy.size.height) * 0.25
                     let dy = end.y - start.y
                     let lift = max(24, abs(dy) * 0.15)
-
                     let c1 = CGPoint(x: start.x + bendX, y: start.y - lift)
                     let c2 = CGPoint(x: end.x   + bendX, y: end.y   + lift)
-
                     bezier = (p0: start, p1: c1, p2: c2, p3: end)
                     isFlyingStar = true
                     starProgress = 0
-
-                    withAnimation(.easeInOut(duration: 0.95)) {
-                        starProgress = 1
-                    }
-
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) {
-                        SPConfetti.startAnimating(.fullWidthToDown, particles: [.star], duration: 0.6)
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                        isFlyingStar = false
-                    }
+                    withAnimation(.easeInOut(duration: 0.95)) { starProgress = 1 }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) { SPConfetti.startAnimating(.fullWidthToDown, particles: [.star], duration: 0.6) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { isFlyingStar = false }
                 }
-
-            }
-        }
-
-        .onAppear {
-            Task {
-                await vocabookViewModel.loadStatistics()
             }
         }
         .fullScreenCover(isPresented: $isAddingNewWord) {
@@ -155,14 +113,15 @@ struct VocabookView: View {
         .fullScreenCover(isPresented: $isReviewing, onDismiss: {
             Task {
                 await vocabookViewModel.loadStatistics()
+                await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
             }
         }) {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
-        // The .fullScreenCover for 'isListening' has been removed.
         .sheet(isPresented: $isQuizzing, onDismiss: {
             Task {
                 await vocabookViewModel.loadStatistics()
+                await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
             }
         }) {
             if !flashcardViewModel.reviewCards.isEmpty {
@@ -182,7 +141,7 @@ struct VocabookView: View {
             VocabookSettingView()
         }
         .task {
-            await vocabookViewModel.loadVocabookPages()
+            await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
             await vocabookViewModel.loadStatistics()
             if flashcardViewModel.reviewCards.isEmpty {
                 await flashcardViewModel.prepareReviewSession()
@@ -190,52 +149,102 @@ struct VocabookView: View {
         }
     }
     
-    
     private var allFlashcards: [Flashcard] {
         vocabookViewModel.vocabook?.vocapages?.flatMap { $0.flashcards ?? [] } ?? []
     }
 
     private var weightedProgress: Double {
-        guard !allFlashcards.isEmpty, !reviewSettings.settings.isEmpty else {
-            return 0.0
-        }
-
+        guard !allFlashcards.isEmpty, !reviewSettings.settings.isEmpty else { return 0.0 }
         let promotionBonus = 2.0
         let masteryStreak = Double(reviewSettings.masteryStreak)
         let numberOfPromotions = Double(reviewSettings.settings.count - 1)
         let maxCardScore = masteryStreak + (numberOfPromotions * promotionBonus)
-
-        guard maxCardScore > 0 else {
-            return 0.0
-        }
-
+        guard maxCardScore > 0 else { return 0.0 }
         let totalPossiblePoints = Double(allFlashcards.count) * maxCardScore
-
         let currentTotalPoints = allFlashcards.reduce(0.0) { total, card in
-            if card.reviewTire == "remembered" {
-                return total + maxCardScore
-            }
-
+            if card.reviewTire == "remembered" { return total + maxCardScore }
             var cardScore = Double(card.correctStreak)
             let sortedTiers = reviewSettings.settings.values.sorted { $0.min_streak < $1.min_streak }
             for tierSetting in sortedTiers where tierSetting.tier != "new" {
-                 if card.correctStreak >= tierSetting.min_streak {
-                    cardScore += promotionBonus
-                }
+                 if card.correctStreak >= tierSetting.min_streak { cardScore += promotionBonus }
             }
             return total + min(cardScore, maxCardScore)
         }
-        
         return totalPossiblePoints > 0 ? currentTotalPoints / totalPossiblePoints : 0.0
     }
     
-    // Inside VocabookView (same file), add this helper:
     private var isInitialLoading: Bool {
-        vocabookViewModel.isLoadingVocabooks ||
-        (vocabookViewModel.vocabook?.vocapages == nil)
+        vocabookViewModel.isLoadingVocabooks || (vocabookViewModel.vocabook?.vocapages == nil)
     }
 
+    private struct ConnectedActionButtons: View {
+        @Binding var isReviewing: Bool
+        @Binding var isQuizzing: Bool
+        @Binding var isAddingNewWord: Bool
+        @Binding var isShowingSettings: Bool
+        @Binding var isShowingDueWordsOnly: Bool
 
+        @ObservedObject var vocabookViewModel: VocabookViewModel
+        @ObservedObject var flashcardViewModel: FlashcardViewModel
+        
+        let onFilterChange: () -> Void
+
+        private let buttonSize: CGFloat = 110
+        private let spacing: CGFloat = 15
+        private let cornerRadius: CGFloat = 20
+
+        var body: some View {
+            ZStack {
+                let primaryColor = Color(red: 0.2, green: 0.6, blue: 0.25)
+                let secondaryColor = Color(red: 0.5, green: 0.8, blue: 0.5)
+                let rect1_CardReview = CGRect(x: 0, y: 0, width: buttonSize, height: buttonSize)
+                let rect2_ListenSpot = CGRect(x: buttonSize + spacing, y: 0, width: buttonSize, height: buttonSize)
+                let rect5_AddWord = CGRect(x: buttonSize + spacing, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
+                let rect6_OpenSpot = CGRect(x: (buttonSize + spacing) * 2, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
+                
+                TwoButtonConnector(rect1: rect1_CardReview, rect2: rect5_AddWord, cornerRadius: cornerRadius).fill(primaryColor).shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+                TwoButtonConnector(rect1: rect2_ListenSpot, rect2: rect6_OpenSpot, cornerRadius: cornerRadius).fill(secondaryColor).shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+
+                VStack(alignment: .leading, spacing: spacing) {
+                    HStack(spacing: spacing) {
+                        VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) {
+                            Task {
+                                await flashcardViewModel.prepareReviewSession()
+                                isReviewing = true
+                            }
+                        }
+                        if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
+                            let allIDs = pages.map { $0.id }.sorted()
+                            let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
+                            let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : allIDs.first ?? 1
+                            NavigationLink(destination: VocapageHostView(
+                                allVocapageIds: allIDs,
+                                selectedVocapageId: targetPageID,
+                                flashcardViewModel: flashcardViewModel,
+                                isShowingDueWordsOnly: $isShowingDueWordsOnly,
+                                onFilterChange: onFilterChange
+                            )) {
+                                VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
+                            }
+                        } else {
+                            VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary).opacity(0.5)
+                        }
+                    }
+                    HStack(spacing: spacing) {
+                        VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
+                            Task {
+                                await flashcardViewModel.prepareReviewSession()
+                                isQuizzing = true
+                            }
+                        }
+                        VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) { isAddingNewWord = true }
+                        VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionSecondary) { isShowingSettings = true }
+                    }
+                }
+            }
+            .frame(width: buttonSize * 3 + spacing * 2, height: buttonSize * 2 + spacing)
+        }
+    }
 }
 
 // MARK: - Components
@@ -443,6 +452,7 @@ private struct TierBreakdownView: View {
         .cornerRadius(12)
     }
 }
+
 private struct VocabookProgressCircleView: View {
     let progress: Double
     @Environment(\.theme) var theme: Theme
@@ -471,11 +481,14 @@ private struct VocabookProgressCircleView: View {
     }
 }
 
+/*
+// MARK: - Components
 private struct ConnectedActionButtons: View {
     @Binding var isReviewing: Bool
     @Binding var isQuizzing: Bool
     @Binding var isAddingNewWord: Bool
     @Binding var isShowingSettings: Bool
+    @Binding var isShowingDueWordsOnly: Bool
 
     @ObservedObject var vocabookViewModel: VocabookViewModel
     @ObservedObject var flashcardViewModel: FlashcardViewModel
@@ -486,27 +499,9 @@ private struct ConnectedActionButtons: View {
 
     var body: some View {
         ZStack {
-            let primaryColor = Color(red: 0.2, green: 0.6, blue: 0.25)
-            let secondaryColor = Color(red: 0.5, green: 0.8, blue: 0.5)
-            
-            // The CGRects for the connectors remain the same, as they map to the original grid positions.
-            let rect1_CardReview = CGRect(x: 0, y: 0, width: buttonSize, height: buttonSize)
-            let rect2_ListenSpot = CGRect(x: buttonSize + spacing, y: 0, width: buttonSize, height: buttonSize) // Now the "Open" button
-            let rect5_AddWord = CGRect(x: buttonSize + spacing, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
-            let rect6_OpenSpot = CGRect(x: (buttonSize + spacing) * 2, y: buttonSize + spacing, width: buttonSize, height: buttonSize) // Now the "Setting" button
-            
-            // This connector links "Card Review" (top-left) to "Add Word" (bottom-middle).
-            TwoButtonConnector(rect1: rect1_CardReview, rect2: rect5_AddWord, cornerRadius: cornerRadius)
-                .fill(primaryColor)
-                .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
-            
-            // This connector links the new "Open" button (top-middle) to the new "Setting" button (bottom-right).
-            TwoButtonConnector(rect1: rect2_ListenSpot, rect2: rect6_OpenSpot, cornerRadius: cornerRadius)
-                .fill(secondaryColor)
-                .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+            // ... (ZStack content remains the same)
 
             VStack(alignment: .leading, spacing: spacing) {
-                // --- MODIFICATION: Top row now has two buttons ---
                 HStack(spacing: spacing) {
                     VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) {
                         Task {
@@ -515,7 +510,6 @@ private struct ConnectedActionButtons: View {
                         }
                     }
 
-                    // "Listen" is replaced with "Open"
                     if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
                         let allIDs = pages.map { $0.id }.sorted()
                         let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
@@ -524,7 +518,8 @@ private struct ConnectedActionButtons: View {
                         NavigationLink(destination: VocapageHostView(
                             allVocapageIds: allIDs,
                             selectedVocapageId: targetPageID,
-                            flashcardViewModel: flashcardViewModel
+                            flashcardViewModel: flashcardViewModel,
+                            isShowingDueWordsOnly: $isShowingDueWordsOnly
                         )) {
                             VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
                         }
@@ -532,11 +527,7 @@ private struct ConnectedActionButtons: View {
                         VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
                             .opacity(0.5)
                     }
-                    
-                    // The original "Setting" button is removed.
                 }
-
-                // --- MODIFICATION: Bottom row now has the new "Setting" button ---
                 HStack(spacing: spacing) {
                     VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
                         Task {
@@ -544,10 +535,7 @@ private struct ConnectedActionButtons: View {
                             isQuizzing = true
                         }
                     }
-
                     VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) { isAddingNewWord = true }
-
-                    // The original "Open" button is replaced with "Setting".
                     VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionSecondary) { isShowingSettings = true }
                 }
             }
@@ -555,6 +543,7 @@ private struct ConnectedActionButtons: View {
         .frame(width: buttonSize * 3 + spacing * 2, height: buttonSize * 2 + spacing)
     }
 }
+*/
 
 private struct VocabookButtonLabel: View {
     let title: String
@@ -588,44 +577,7 @@ private struct VocabookActionButton: View {
     }
 }
 
-private struct PagesListView: View {
-    private let logger = Logger(subsystem: "com.langGo.swift", category: "PagesListView")
-    @ObservedObject var viewModel: VocabookViewModel
-    @ObservedObject var flashcardViewModel: FlashcardViewModel
-    @Environment(\.theme) var theme: Theme
 
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if viewModel.isLoadingVocabooks { ProgressView().frame(maxWidth: .infinity) }
-                    else if let vocabook = viewModel.vocabook, let pages = vocabook.vocapages, !pages.isEmpty {
-                        let sortedPages = pages.sorted(by: { $0.order < $1.order })
-                        ForEach(sortedPages) { page in
-                            VocabookPageRow(flashcardViewModel: flashcardViewModel, vocapage: page, allVocapageIds: sortedPages.map { $0.id })
-                                .id(page.id)
-                        }
-                    } else {
-                        Text("No vocabulary pages found. Start learning to create them!")
-                            .font(.caption).multilineTextAlignment(.center).padding().frame(maxWidth: .infinity)
-                    }
-                }
-                .padding()
-            }
-            .onChange(of: viewModel.loadCycle) { _ in
-                logger.debug("PageListView::onChange()")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-                    if lastViewedID != 0 {
-                        withAnimation { proxy.scrollTo(lastViewedID, anchor: .center) }
-                    }
-                }
-            }
-        }
-        .navigationTitle("Vocabulary Pages")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
 
 private struct BezierFlight: AnimatableModifier {
     var t: CGFloat

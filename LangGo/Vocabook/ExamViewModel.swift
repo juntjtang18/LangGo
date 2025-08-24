@@ -12,7 +12,7 @@ class ExamViewModel: ObservableObject {
     var flashcards: [Flashcard]
     
     // The service is now fetched directly from the DataServices singleton.
-    private let strapiService = DataServices.shared.strapiService
+    private let flashcardService = DataServices.shared.flashcardService
 
     @Published var currentCardIndex: Int = 0
     @Published var selectedOption: ExamOption?
@@ -67,7 +67,7 @@ class ExamViewModel: ObservableObject {
         
         Task {
             do {
-                _ = try await strapiService.submitFlashcardReview(cardId: card.id, result: result)
+                _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
                 print("Successfully submitted review for card \(card.id) with result: \(result.rawValue)")
             } catch {
                 print("Error submitting review from ExamView: \(error.localizedDescription)")

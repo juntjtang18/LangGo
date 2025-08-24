@@ -5,8 +5,8 @@ import os
 @MainActor
 class FlashcardViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardViewModel")
-    private let strapiService = DataServices.shared.strapiService
-    
+    private let wordService = DataServices.shared.wordService
+    private let flashcardService = DataServices.shared.flashcardService
     // Card data this VM actually owns
     @Published var myCards: [Flashcard] = []
     @Published var reviewCards: [Flashcard] = []
@@ -19,7 +19,7 @@ class FlashcardViewModel: ObservableObject {
     func fetchAllMyCards() async {
         logger.info("Fetching all user flashcards.")
         do {
-            self.myCards = try await strapiService.fetchAllMyFlashcards()
+            self.myCards = try await flashcardService.fetchAllMyFlashcards()
             logger.info("Successfully fetched \(self.myCards.count) user flashcards.")
         } catch {
             logger.error("Failed to fetch user flashcards: \(error.localizedDescription)")
@@ -32,7 +32,7 @@ class FlashcardViewModel: ObservableObject {
     func prepareReviewSession() async {
         logger.info("Attempting to fetch review session from server.")
         do {
-            let fetchedCards = try await strapiService.fetchAllReviewFlashcards()
+            let fetchedCards = try await flashcardService.fetchAllReviewFlashcards()
             self.reviewCards = fetchedCards.sorted {
                 ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast)
             }
@@ -43,14 +43,17 @@ class FlashcardViewModel: ObservableObject {
         }
     }
 
-    func markReview(for card: Flashcard, result: ReviewResult) {
-        Task { await submitReview(for: card, result: result) }
+    // --- CHANGE START ---
+    // The function is now async to allow the caller to await its completion.
+    func markReview(for card: Flashcard, result: ReviewResult) async {
+        await submitReview(for: card, result: result)
     }
+    // --- CHANGE END ---
 
     private func submitReview(for card: Flashcard, result: ReviewResult) async {
         do {
             logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)'")
-            _ = try await strapiService.submitFlashcardReview(cardId: card.id, result: result)
+            _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
             logger.info("Review submitted and synced for card \(card.id).")
         } catch {
             logger.error("Failed to submit/sync review for card \(card.id): \(error.localizedDescription)")
@@ -65,14 +68,13 @@ class FlashcardViewModel: ObservableObject {
             let base = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
 
             logger.info("Saving new word -> target:'\(tgt, privacy: .public)' | base:'\(base, privacy: .public)' | pos:'\(partOfSpeech, privacy: .public)' | locale:'\(locale, privacy: .public)'")
-            _ = try await strapiService.saveNewWord(
+            _ = try await wordService.saveNewWord(
                 targetText: tgt,
                 baseText: base,
                 partOfSpeech: partOfSpeech,
                 locale: locale
             )
             logger.info("Saved new word successfully.")
-            // Refresh the user's cards; stats are now owned by VocabookViewModel
             await fetchAllMyCards()
         } catch {
             logger.error("Failed to save new word: \(error.localizedDescription)")
@@ -85,7 +87,7 @@ class FlashcardViewModel: ObservableObject {
     func translateWord(word: String, source: String, target: String) async throws -> TranslateWordResponse {
         do {
             logger.info("Translating '\(word, privacy: .public)' from \(source, privacy: .public) to \(target, privacy: .public)")
-            let response: TranslateWordResponse = try await strapiService.translateWord(word: word, source: source, target: target)
+            let response: TranslateWordResponse = try await wordService.translateWord(word: word, source: source, target: target)
             return response
         } catch {
             logger.error("Translation failed: \(error.localizedDescription)")
@@ -96,7 +98,7 @@ class FlashcardViewModel: ObservableObject {
     func searchForWord(term: String, searchBase: Bool) async throws -> [SearchResult] {
         logger.info("Searching term '\(term)' (searchBase: \(searchBase))")
         if searchBase {
-            let definitions = try await strapiService.searchWordDefinitions(term: term)
+            let definitions = try await wordService.searchWordDefinitions(term: term)
             return definitions.map { def in
                 let a = def.attributes
                 let isAlready = !(a.flashcards?.data.isEmpty ?? true)
@@ -110,7 +112,7 @@ class FlashcardViewModel: ObservableObject {
                 )
             }
         } else {
-            let words = try await strapiService.searchWords(term: term)
+            let words = try await wordService.searchWords(term: term)
             var results: [SearchResult] = []
             for w in words {
                 guard let defs = w.attributes.word_definitions?.data else { continue }

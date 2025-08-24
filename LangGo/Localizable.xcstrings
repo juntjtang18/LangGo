@@ -83,17 +83,6 @@
         }
       }
     },
-    "AI Conversation" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI Conversation"
-          }
-        }
-      }
-    },
     "AI Conversation Partner" : {
 
     },
@@ -489,35 +478,6 @@
     "Finished Onboarding" : {
 
     },
-    "Flashcard" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "フラッシュカード"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "플래시 카드"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flashcard"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "抽认卡"
-          }
-        }
-      }
-    },
     "Font Size" : {
 
     },
@@ -541,35 +501,6 @@
     },
     "LangGo to Pro, Ready to GO?" : {
 
-    },
-    "Language" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "言語"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "언어"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ngôn ngữ"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "语言"
-          }
-        }
-      }
     },
     "Learn This" : {
       "localizations" : {
@@ -838,9 +769,6 @@
     "No tier data yet." : {
 
     },
-    "No vocabulary pages found. Start learning to create them!" : {
-
-    },
     "No words to show for this page." : {
 
     },
@@ -880,9 +808,6 @@
           }
         }
       }
-    },
-    "Page %lld" : {
-
     },
     "Page Review" : {
 
@@ -1294,35 +1219,6 @@
     "Start recording" : {
 
     },
-    "Statistics" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "統計"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "통계"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Thống kê"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "统计数据"
-          }
-        }
-      }
-    },
     "Stop" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1588,9 +1484,6 @@
 
     },
     "Vocabulary Notebook Settings" : {
-
-    },
-    "Vocabulary Pages" : {
 
     },
     "Want to remember 10× more — with less effort?" : {

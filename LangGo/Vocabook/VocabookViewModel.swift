@@ -33,14 +33,14 @@ struct Vocapage: Identifiable {
 }
 
 // MARK: - VocabookViewModel
-
 @MainActor
 class VocabookViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
     
     // The service is now fetched directly from the DataServices singleton.
-    private let strapiService = DataServices.shared.strapiService
-
+    private let settingsService = DataServices.shared.settingsService
+    private let flashcardService = DataServices.shared.flashcardService
+    
     @Published var vocabook: Vocabook?
     @Published var isLoadingVocabooks = false
     @Published var expandedVocabooks: Set<Int> = []
@@ -60,7 +60,7 @@ class VocabookViewModel: ObservableObject {
     
     func loadStatistics() async {
         do {
-            let stats = try await strapiService.fetchFlashcardStatistics()
+            let stats = try await flashcardService.fetchFlashcardStatistics()
             totalCards            = stats.totalCards
             rememberedCount       = stats.remembered
             dueForReviewCount     = stats.dueForReview
@@ -86,17 +86,17 @@ class VocabookViewModel: ObservableObject {
             // 1. Fetch the appropriate full list of cards from the network
             let allFlashcards: [Flashcard]
             if dueOnly {
-                allFlashcards = try await strapiService.fetchAllReviewFlashcards()
+                allFlashcards = try await flashcardService.fetchAllReviewFlashcards()
                 logger.info("Fetched \(allFlashcards.count) due flashcards for vocabook.")
             } else {
-                allFlashcards = try await strapiService.fetchAllMyFlashcards()
+                allFlashcards = try await flashcardService.fetchAllMyFlashcards()
                  logger.info("Fetched \(allFlashcards.count) total flashcards for vocabook.")
             }
 
             self.totalFlashcards = allFlashcards.count
             
             // 2. Get pagination settings
-            let vbSetting = try await strapiService.fetchVBSetting()
+            let vbSetting = try await settingsService.fetchVBSetting()
             let pageSize = vbSetting.attributes.wordsPerPage
             
             // 3. Paginate the fetched list in memory

@@ -1,3 +1,4 @@
+// LangGo/Vocabook/VocapageReviewView.swift
 import SwiftUI
 
 struct VocapageReviewView: View {
@@ -66,15 +67,25 @@ struct VocapageReviewView: View {
                     
                     // Action Buttons
                     HStack(spacing: 20) {
-                        Button(action: { markCard(.wrong) }) {
+                        // --- CHANGE START ---
+                        Button(action: {
+                            Task {
+                                await markCard(.wrong)
+                            }
+                        }) {
                             Text("Wrong")
                                 .style(.wrongButton)
                         }
                         
-                        Button(action: { markCard(.correct) }) {
+                        Button(action: {
+                            Task {
+                                await markCard(.correct)
+                            }
+                        }) {
                             Text("Correct")
                                 .style(.correctButton)
                         }
+                        // --- CHANGE END ---
                     }
                     .padding()
                 }
@@ -102,11 +113,11 @@ struct VocapageReviewView: View {
         return String(format: format, currentIndex + 1, cardsToReview.count)
     }
     
-    private func markCard(_ answer: ReviewResult) {
+    private func markCard(_ answer: ReviewResult) async {
         guard let currentCard = cardsToReview[safe: currentIndex] else { return }
         
-        // Use the viewModel's method to handle the submission logic
-        viewModel.markReview(for: currentCard, result: answer)
+        // This is now correctly awaited
+        await viewModel.markReview(for: currentCard, result: answer)
         
         goToNextCard()
     }

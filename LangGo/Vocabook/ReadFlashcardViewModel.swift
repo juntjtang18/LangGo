@@ -20,7 +20,7 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     private let logger = Logger(subsystem: "com.langGo.swift", category: "ReadFlashcardViewModel")
     
     // The service is now fetched directly from the DataServices singleton.
-    private let strapiService = DataServices.shared.strapiService
+    private let flashcardService = DataServices.shared.flashcardService
     private var showBaseTextBinding: Binding<Bool>?
     
     private enum ReadingStep {
@@ -39,7 +39,7 @@ class ReadFlashcardViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDel
     func fetchReviewFlashcards() async {
         isLoading = true
         do {
-            self.flashcards = try await strapiService.fetchAllReviewFlashcards()
+            self.flashcards = try await flashcardService.fetchAllReviewFlashcards()
             logger.info("Successfully loaded \(self.flashcards.count) cards for review session.")
         } catch {
             logger.error("Failed to fetch flashcards for review session: \(error.localizedDescription)")

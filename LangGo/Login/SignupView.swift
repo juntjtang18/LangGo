@@ -12,7 +12,7 @@ struct SignupView: View {
     @AppStorage("hasSignedUp") private var hasSignedUp = false
 
     // The view now gets its service dependency directly from the singleton.
-    private let strapiService = DataServices.shared.strapiService
+    private let authService = DataServices.shared.authService
 
     @State private var email = ""
     @State private var password = ""
@@ -108,7 +108,7 @@ struct SignupView: View {
                     reminder_enabled: onboardingData?.remindersEnabled
                 )
 
-                let authResponse: AuthResponse = try await strapiService.signup(payload: payload)
+                let authResponse: AuthResponse = try await authService.signup(payload: payload)
                 keychain["jwt"] = authResponse.jwt
                 UserSessionManager.shared.login(user: authResponse.user)
                 hasSignedUp = true  // 👈 remember that this device/account has gone through signup once

@@ -7,7 +7,8 @@ import os
 @MainActor
 class VocapageLoader: ObservableObject {
     // The service is now fetched directly from the DataServices singleton.
-    private let strapiService = DataServices.shared.strapiService
+    private let flashcardService = DataServices.shared.flashcardService
+    private let settingsService  = DataServices.shared.settingsService
     
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageLoader")
 
@@ -30,10 +31,10 @@ class VocapageLoader: ObservableObject {
         errorMessages[vocapageId] = nil
 
         do {
-            let vbSetting = try await strapiService.fetchVBSetting()
+            let vbSetting = try await settingsService.fetchVBSetting()
             let pageSize = vbSetting.attributes.wordsPerPage
             
-            let (fetchedFlashcards, _) = try await strapiService.fetchFlashcards(page: vocapageId, pageSize: pageSize, dueOnly: dueWordsOnly)
+            let (fetchedFlashcards, _) = try await flashcardService.fetchFlashcards(page: vocapageId, pageSize: pageSize, dueOnly: dueWordsOnly)
             
             var page = Vocapage(id: vocapageId, title: "Page \(vocapageId)", order: vocapageId)
             page.flashcards = fetchedFlashcards

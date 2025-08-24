@@ -5,7 +5,7 @@ import os
 // This is the single source of truth for the app's language setting.
 @MainActor
 class LanguageSettings: ObservableObject {
-    private let strapiService = DataServices.shared.strapiService
+    private let authService = DataServices.shared.authService
     private let logger = Logger(subsystem: "com.langGo.swift", category: "LanguageSettings")
 
     // LanguageSettings.swift
@@ -24,7 +24,7 @@ class LanguageSettings: ObservableObject {
 
             Task {
                 do {
-                    try await strapiService.updateBaseLanguage(languageCode: selectedLanguageCode)
+                    try await authService.updateBaseLanguage(languageCode: selectedLanguageCode)
                     logger.info("Updated base language to \(self.selectedLanguageCode, privacy: .public).")
                 } catch {
                     logger.error("Failed to update base language: \(error.localizedDescription, privacy: .public)")

@@ -6,7 +6,7 @@ struct InitialLoadingView: View {
     @Binding var authState: AuthState
     
     // The services are now accessed directly from the singleton
-    private let strapiService = DataServices.shared.strapiService
+    private let authService = DataServices.shared.authService
     private let reviewSettingsManager = DataServices.shared.reviewSettingsManager
     
     private let keychain = Keychain(service: Config.keychainService)
@@ -34,17 +34,8 @@ struct InitialLoadingView: View {
         Task {
             do {
                 // Use the service from the singleton
-                let user = try await strapiService.fetchCurrentUser()
+                let user = try await authService.fetchCurrentUser()
                 UserSessionManager.shared.login(user: user)
-
-                // SUCCESS: Token is valid. Refresh user details.
-                //UserDefaults.standard.set(user.username, forKey: "username")
-                //UserDefaults.standard.set(user.email, forKey: "email")
-                //UserDefaults.standard.set(user.id, forKey: "userId")
-                //UserDefaults.standard.set(user.user_profile?.baseLanguage, forKey: "selectedLanguage")
-
-                // Load critical app settings. The manager can now access
-                // the Strapi service internally via the singleton.
                 await reviewSettingsManager.loadSettings()
                 
                 authState = .loggedIn

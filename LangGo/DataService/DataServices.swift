@@ -1,19 +1,30 @@
+// LangGo/DataService/DataServices.swift
+
 @MainActor
 final class DataServices {
     static let shared = DataServices()
 
-    let strapiService: StrapiService
+    let authService: AuthService
+    let flashcardService: FlashcardService
+    let wordService: WordService
+    let settingsService: SettingsService
+    
     let storyService: StoryService
     let conversationService: ConversationService
     let reviewSettingsManager: ReviewSettingsManager
 
     private init() {
-        // Construct leaf services first
-        self.strapiService = StrapiService()
+        self.authService = AuthService()
+        self.flashcardService = FlashcardService()
+        self.wordService = WordService()
+        self.settingsService = SettingsService()
+        
         self.storyService = StoryService()
         self.conversationService = ConversationService()
-
-        // Inject dependencies – no reference to DataServices.shared here
-        self.reviewSettingsManager = ReviewSettingsManager(strapiService: self.strapiService)
+        
+        // This was the line with the error.
+        // I am keeping strapiService as a local variable to be used here.
+        let strapiService = StrapiService()
+        self.reviewSettingsManager = ReviewSettingsManager(strapiService: strapiService)
     }
 }

@@ -8,7 +8,7 @@ struct ProfileView: View {
     // ✅ Use the session (single source of truth) instead of UserDefaults
     @EnvironmentObject var userSession: UserSessionManager
 
-    private let strapiService = DataServices.shared.strapiService
+    private let authService = DataServices.shared.authService
 
     // State for existing fields
     @State private var username: String = ""
@@ -119,12 +119,12 @@ struct ProfileView: View {
 
         do {
             // Always fetch fresh and reflect into session
-            let user = try await strapiService.fetchCurrentUser()
+            let user = try await authService.fetchCurrentUser()
             UserSessionManager.shared.login(user: user) // keeps session in sync
 
             // Use user's baseLanguage (fallback to "en") to fetch levels
             let locale = user.user_profile?.baseLanguage ?? "en"
-            let levels = try await strapiService.fetchProficiencyLevels(locale: locale)
+            let levels = try await DataServices.shared.settingsService.fetchProficiencyLevels(locale: locale)
 
             // Fill UI state
             self.proficiencyLevels = levels
@@ -188,7 +188,7 @@ struct ProfileView: View {
                 reminder_enabled: remindersEnabled
             )
 
-            try await strapiService.updateUserProfile(userId: userId, payload: payload)
+            try await authService.updateUserProfile(userId: userId, payload: payload)
 
             // ✅ Reflect changes into the in-memory session user (so UI stays consistent)
             if let old = userSession.currentUser {
@@ -218,7 +218,7 @@ struct ProfileView: View {
 
     private func updateUsername(userId: Int, messages: inout [String]) async {
         do {
-            let updatedUser = try await strapiService.updateUsername(userId: userId, username: username)
+            let updatedUser = try await authService.updateUsername(userId: userId, username: username)
 
             // ✅ Update the in-memory session user
             userSession.currentUser = updatedUser
@@ -245,7 +245,7 @@ struct ProfileView: View {
         }
 
         do {
-            let _: EmptyResponse = try await strapiService.changePassword(
+            let _: EmptyResponse = try await authService.changePassword(
                 currentPassword: currentPassword,
                 newPassword: newPassword,
                 confirmNewPassword: confirmNewPassword

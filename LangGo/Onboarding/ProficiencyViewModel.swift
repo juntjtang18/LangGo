@@ -16,7 +16,7 @@ class ProficiencyViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let strapiService = DataServices.shared.strapiService
+    private let settingsService = DataServices.shared.settingsService
     
     func fetchLevels() async {
         // Avoid refetching if data is already loaded.
@@ -29,7 +29,7 @@ class ProficiencyViewModel: ObservableObject {
         let locale = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en"
         
         do {
-            proficiencyLevels = try await strapiService.fetchProficiencyLevels(locale: locale)
+            proficiencyLevels = try await settingsService.fetchProficiencyLevels(locale: locale)
         } catch {
             errorMessage = "Could not load proficiency levels. Please check your connection."
             print("Error fetching proficiency levels: \(error.localizedDescription)")

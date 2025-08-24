@@ -5,7 +5,7 @@ import Combine
 
 struct VocapageHostView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.theme) private var theme: Theme
+    @Environment(\.theme) var theme: Theme
     @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var loader = VocapageLoader()
@@ -13,32 +13,37 @@ struct VocapageHostView: View {
 
     @AppStorage("showBaseTextInVocapage") private var showBaseText: Bool = true
     @AppStorage("readingMode") private var readingMode: ReadingMode = .cyclePage
-    @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly: Bool = false
+    
+    @Binding var isShowingDueWordsOnly: Bool
 
-    // State for the current list of page IDs being displayed
     @State private var vocapageIds: [Int]
     @State private var currentPageIndex: Int
 
     let flashcardViewModel: FlashcardViewModel
+    let onFilterChange: () -> Void
 
-    // Playback state
     @State private var isAutoPlaying = false
     @State private var currentWordIndex = -1
     @State private var vbSettings: VBSettingAttributes?
     @State private var pendingAutoplayAfterLoad = false
 
-    // Sheets
     @State private var isShowingReviewView = false
     @State private var selectedCard: Flashcard?
 
-    init(allVocapageIds: [Int], selectedVocapageId: Int, flashcardViewModel: FlashcardViewModel) {
-        // Initializes the view with the provided list of page IDs
+    init(
+        allVocapageIds: [Int],
+        selectedVocapageId: Int,
+        flashcardViewModel: FlashcardViewModel,
+        isShowingDueWordsOnly: Binding<Bool>,
+        onFilterChange: @escaping () -> Void
+    ) {
         self._vocapageIds = State(initialValue: allVocapageIds)
         self._currentPageIndex = State(initialValue: allVocapageIds.firstIndex(of: selectedVocapageId) ?? 0)
         self.flashcardViewModel = flashcardViewModel
+        self._isShowingDueWordsOnly = isShowingDueWordsOnly
+        self.onFilterChange = onFilterChange
     }
 
-    // MARK: - Derived Properties
     private var currentVocapage: Vocapage? {
         guard !vocapageIds.isEmpty, currentPageIndex < vocapageIds.count else { return nil }
         return loader.vocapages[vocapageIds[currentPageIndex]]
@@ -48,7 +53,6 @@ struct VocapageHostView: View {
         currentVocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
     }
 
-    // MARK: - Body
     var body: some View {
         ZStack {
             if vocapageIds.isEmpty {
@@ -121,20 +125,11 @@ struct VocapageHostView: View {
                 stopAutoplay()
             }
         }
-        // This is the key change to keep the view in sync with the ViewModel
-        .onChange(of: flashcardViewModel.myCards) { _ in
-            Task {
-                // When the underlying data changes, reload the pages.
-                await flashcardViewModel.fetchAllMyCards()
-            }
-        }
     }
 
-    // MARK: - Bottom Toolbar
     private var bottomToolbar: some View {
         HStack(spacing: 20) {
             Spacer()
-            // Play / Pause
             Button { playPauseTapped() } label: {
                 Image(systemName: isAutoPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.title)
@@ -143,7 +138,6 @@ struct VocapageHostView: View {
 
             Spacer(minLength: 0)
 
-            // Reading / Repeat (toggle items)
             Menu {
                 Button {
                     toggleReading(.repeatWord)
@@ -165,12 +159,10 @@ struct VocapageHostView: View {
             }
             .accessibilityLabel("Reading Mode")
 
-            // Filter
             Menu {
                 Button {
                     if !isShowingDueWordsOnly {
                         isShowingDueWordsOnly = true
-                        Task { await flashcardViewModel.prepareReviewSession() }
                     }
                 } label: {
                     Label("Due Only", systemImage: isShowingDueWordsOnly ? "checkmark.circle.fill" : "circle")
@@ -178,7 +170,6 @@ struct VocapageHostView: View {
                 Button {
                     if isShowingDueWordsOnly {
                         isShowingDueWordsOnly = false
-                        Task { await flashcardViewModel.fetchAllMyCards() }
                     }
                 } label: {
                     Label("All Words", systemImage: !isShowingDueWordsOnly ? "checkmark.circle.fill" : "circle")
@@ -193,7 +184,6 @@ struct VocapageHostView: View {
         .background(.ultraThinMaterial)
     }
 
-    // MARK: - Detail Sheet
     @ViewBuilder
     private func wordDetailSheet(for card: Flashcard) -> some View {
         let cards = sortedFlashcardsForCurrentPage
@@ -202,7 +192,7 @@ struct VocapageHostView: View {
         let onSpeakOnce: (_ c: Flashcard, _ completion: @escaping () -> Void) -> Void = { c, completion in
             Task {
                 if self.vbSettings == nil {
-                    self.vbSettings = try? await DataServices.shared.strapiService.fetchVBSetting().attributes
+                    self.vbSettings = try? await DataServices.shared.settingsService.fetchVBSetting().attributes
                 }
                 if let settings = self.vbSettings {
                     self.speechManager.stop()
@@ -228,9 +218,6 @@ struct VocapageHostView: View {
         .presentationDragIndicator(.visible)
     }
 
-
-
-    // MARK: - Reading Mode
     private func toggleReading(_ target: ReadingMode) {
         readingMode = (readingMode == target) ? .inactive : target
     }
@@ -244,7 +231,6 @@ struct VocapageHostView: View {
         }
     }
 
-    // MARK: - Autoplay
     private func playPauseTapped() {
         if isAutoPlaying {
             isAutoPlaying = false
@@ -262,7 +248,7 @@ struct VocapageHostView: View {
         guard !sortedFlashcardsForCurrentPage.isEmpty else { return }
         Task {
             if vbSettings == nil {
-                do { vbSettings = try await DataServices.shared.strapiService.fetchVBSetting().attributes }
+                do { vbSettings = try await DataServices.shared.settingsService.fetchVBSetting().attributes }
                 catch { vbSettings = nil }
             }
             if currentWordIndex == -1 { currentWordIndex = 0 }
@@ -288,19 +274,15 @@ struct VocapageHostView: View {
     }
     private func onOneWordFinished() {
         guard isAutoPlaying else { return }
-
         let count = sortedFlashcardsForCurrentPage.count
         if count == 0 { stopAutoplay(); return }
-
         switch readingMode {
         case .repeatWord:
             if currentWordIndex == -1 { currentWordIndex = 0 }
             playCurrent()
-
         case .cyclePage:
             currentWordIndex = (currentWordIndex + 1) % count
             playCurrent()
-
         case .cycleAll:
             if currentWordIndex < count - 1 {
                 currentWordIndex += 1
@@ -308,7 +290,6 @@ struct VocapageHostView: View {
             } else {
                 advanceToNextPageAndContinue()
             }
-
         case .inactive:
             if currentWordIndex < count - 1 {
                 currentWordIndex += 1
@@ -318,7 +299,6 @@ struct VocapageHostView: View {
             }
         }
     }
-
 
     private func advanceToNextPageAndContinue() {
         guard !vocapageIds.isEmpty else { stopAutoplay(); return }

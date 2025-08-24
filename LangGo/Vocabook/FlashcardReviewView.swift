@@ -1,10 +1,9 @@
+// LangGo/Vocabook/FlashcardReviewView.swift
 import SwiftUI
-import SPConfetti // NEW: Import the confetti package
-import AVFoundation   // ← add
+import SPConfetti
+import AVFoundation
 import Combine
 
-
-// Replace your speaker class signature:
 final class ReviewSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private let tts = AVSpeechSynthesizer()
     private var completion: (() -> Void)?
@@ -37,11 +36,11 @@ final class ReviewSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelega
 
     func stop() { tts.stopSpeaking(at: .immediate) }
 
-    // AVSpeechSynthesizerDelegate
     func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         completion?(); completion = nil
     }
 }
+
 extension Notification.Name {
     static let reviewCelebrationClosed = Notification.Name("reviewCelebrationClosed")
 }
@@ -52,21 +51,16 @@ struct FlashcardReviewView: View {
     
     @State private var currentIndex = 0
     @State private var isFlipped = false
-
-    // NEW: State variables to control the completion animation
     @State private var isSessionComplete = false
     @State private var showFireworks = false
     @State private var showBadge = false
     
-    
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled = false
     @State private var isRepeating = false
     @State private var showRecorder = false
-    @StateObject private var speaker = ReviewSpeaker()   // local TTS helper
-
+    @StateObject private var speaker = ReviewSpeaker()
 
     var body: some View {
-        // NEW: ZStack to allow the celebration view to overlay the main content
         ZStack {
             NavigationStack {
                 VStack {
@@ -77,7 +71,6 @@ struct FlashcardReviewView: View {
                             .foregroundColor(.secondary)
                         Spacer()
                     } else {
-                        // Progress indicators
                         VStack {
                             ProgressView(value: Double(currentIndex + 1), total: Double(viewModel.reviewCards.count)) {
                                 Text("Progress")
@@ -92,20 +85,11 @@ struct FlashcardReviewView: View {
                         
                         Spacer()
 
-                        // The Flippable Card View
                         if let card = viewModel.reviewCards[safe: currentIndex] {
-                            
-                            // Display Register
                             if let register = card.register, !register.isEmpty, register != "Neutral" {
                                 HStack {
                                     Text(register)
-                                        .font(.footnote)
-                                        .fontWeight(.semibold)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.gray.opacity(0.2))
-                                        .foregroundColor(.gray)
-                                        .cornerRadius(8)
+                                        .style(.registerTag)
                                     Spacer()
                                 }
                                 .padding(.horizontal)
@@ -118,54 +102,27 @@ struct FlashcardReviewView: View {
                                 isFlipped: $isFlipped
                             )
                             .onTapGesture {
-                                withAnimation(.spring) {
-                                    isFlipped.toggle()
-                                }
+                                withAnimation(.spring) { isFlipped.toggle() }
                             }
                         }
                         
                         Spacer()
-                        // Controls row (Mic / Speaker / Repeat)
                         HStack(spacing: 28) {
-                            // Mic: show recorder
                             CircleIcon(systemName: "mic.fill") { showRecorder = true }
-
-                            // Speaker: single cycle (or toggle repeat loop if repeat is ON)
-                            CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") {
-                                readButtonTapped()
-                            }
-
-                            // Repeat toggle
-                            CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") {
-                                toggleRepeat()
-                            }
+                            CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") { readButtonTapped() }
+                            CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") { toggleRepeat() }
                         }
                         .padding(.bottom, 8)
 
                         Spacer()
                         
-                        // Action Buttons
                         HStack(spacing: 20) {
-                            Button(action: { markCard(.wrong) }) {
-                                Text("Wrong")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.red.opacity(0.8))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
+                            Button(action: { Task { await markCard(.wrong) } }) {
+                                Text("Wrong").style(.wrongButton)
                             }
                             
-                            Button(action: { markCard(.correct) }) {
-                                Text("Correct")
-                                     .font(.title2)
-                                     .fontWeight(.bold)
-                                     .frame(maxWidth: .infinity)
-                                     .padding()
-                                     .background(Color.green.opacity(0.8))
-                                     .foregroundColor(.white)
-                                     .cornerRadius(12)
+                            Button(action: { Task { await markCard(.correct) } }) {
+                                Text("Correct").style(.correctButton)
                             }
                         }
                         .padding()
@@ -184,13 +141,10 @@ struct FlashcardReviewView: View {
                     }
                 }
             }
-            // NEW: Hide the navigation stack when the session is complete to avoid visual glitches
             .opacity(isSessionComplete ? 0 : 1)
 
-            // NEW: Celebration View Overlay
             if isSessionComplete {
                 CelebrationView(showBadge: $showBadge, onClose: {
-                    // Notify VocabookView, then dismiss the review screen
                     NotificationCenter.default.post(name: .reviewCelebrationClosed, object: nil)
                     dismiss()
                 })
@@ -210,15 +164,15 @@ struct FlashcardReviewView: View {
                 )
                 .transition(.scale.combined(with: .opacity))
             }
-
         }
     }
+
     private var currentCard: Flashcard? { viewModel.reviewCards[safe: currentIndex] }
     private var currentWordText: String {
         currentCard?.wordDefinition?.attributes.word?.data?.attributes.targetText
         ?? currentCard?.frontContent ?? ""
     }
-    // MARK: - Reading logic (mirrors WordDetailSheet behavior)
+
     private func readButtonTapped() {
         guard let card = currentCard else { return }
         if repeatReadingEnabled {
@@ -228,14 +182,13 @@ struct FlashcardReviewView: View {
                 startRepeating(card: card)
             }
         } else {
-            speaker.speakOnce(card: card) { /* no-op */ }
+            speaker.speakOnce(card: card) {}
         }
     }
 
     private func startRepeating(card: Flashcard) {
         guard !isRepeating else { return }
         isRepeating = true
-
         func loop() {
             guard isRepeating, let liveCard = currentCard else { return }
             speaker.speakOnce(card: liveCard) {
@@ -264,13 +217,17 @@ struct FlashcardReviewView: View {
         return String(format: format, currentIndex + 1, viewModel.reviewCards.count)
     }
     
-    private func markCard(_ answer: ReviewResult) {
+    // --- CHANGE START ---
+    private func markCard(_ answer: ReviewResult) async {
         guard let currentCard = viewModel.reviewCards[safe: currentIndex] else { return }
-        viewModel.markReview(for: currentCard, result: answer)
+        
+        // Await the network call to ensure it completes before moving on.
+        await viewModel.markReview(for: currentCard, result: answer)
+        
         goToNextCard()
     }
+    // --- CHANGE END ---
     
-    // NEW: Updated logic to handle the end-of-session animation
     private func goToNextCard() {
         if currentIndex < viewModel.reviewCards.count - 1 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -278,31 +235,26 @@ struct FlashcardReviewView: View {
                 currentIndex += 1
             }
         } else {
-            // All cards have been reviewed, start the celebration sequence
             isSessionComplete = true
             
-            // 1. Trigger fireworks
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 showFireworks = true
             }
             
-            // 2. Show the badge after a delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
                     showBadge = true
                 }
             }
-            
         }
     }
 }
 
-// MARK: - Subviews
 
-// NEW: A dedicated view for the celebration animation
+// Subviews (CelebrationView, FlippableCardView, etc.) remain unchanged.
 private struct CelebrationView: View {
     @Binding var showBadge: Bool
-    var onClose: () -> Void          // ← add this
+    var onClose: () -> Void
 
     var body: some View {
         VStack {
@@ -337,7 +289,6 @@ private struct CelebrationView: View {
             }
             
             Spacer()
-            
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.ultraThinMaterial)
@@ -352,12 +303,8 @@ private struct FlippableCardView: View {
     var body: some View {
         ZStack {
             Group {
-                CardFace(content: frontContent)
-                    .opacity(isFlipped ? 0 : 1)
-                
-                CardFace(content: backContent)
-                    .opacity(isFlipped ? 1 : 0)
-                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                CardFace(content: frontContent).opacity(isFlipped ? 0 : 1)
+                CardFace(content: backContent).opacity(isFlipped ? 1 : 0).rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
             }
         }
         .rotation3DEffect(.degrees(isFlipped ? 180 : 0), axis: (x: 0, y: 1, z: 0))
@@ -379,7 +326,6 @@ private struct CardFace: View {
             .padding(.horizontal)
     }
 }
-
 
 private struct CircleIcon: View {
     let systemName: String

@@ -64,7 +64,7 @@ class StoryViewModel: NSObject, ObservableObject {
     
     // Services
     private let storyService = DataServices.shared.storyService
-    private let strapiService = DataServices.shared.strapiService
+    private let wordService = DataServices.shared.wordService
     
     // MARK: - Initialization
     init(voiceService: VoiceSelectionService) {
@@ -259,7 +259,7 @@ class StoryViewModel: NSObject, ObservableObject {
                 return
             }
             
-            let response = try await strapiService.translateWordInContext(
+            let response = try await wordService.translateWordInContext(
                 word: word,
                 sentence: sentence,
                 sourceLang: learningLanguage,
@@ -285,7 +285,7 @@ class StoryViewModel: NSObject, ObservableObject {
             let base = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
             
             logger.info("Saving new word from story -> target:'\(tgt, privacy: .public)' | base:'\(base, privacy: .public)' | pos:'\(partOfSpeech, privacy: .public)'")
-            _ = try await strapiService.saveNewWord(
+            _ = try await wordService.saveNewWord(
                 targetText: tgt,
                 baseText: base,
                 partOfSpeech: partOfSpeech,

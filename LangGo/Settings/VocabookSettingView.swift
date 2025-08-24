@@ -16,7 +16,7 @@ struct VocabookSettingView: View {
     @Environment(\.dismiss) private var dismiss
     
     // The view now gets its service dependency directly from the singleton
-    private let strapiService = DataServices.shared.strapiService
+    private let settingsService = DataServices.shared.settingsService
     
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookSettingView")
 
@@ -71,7 +71,7 @@ struct VocabookSettingView: View {
                             }
                             do {
                                 // Use the internally resolved service
-                                let updated = try await strapiService.updateVBSetting(
+                                let updated = try await settingsService.updateVBSetting(
                                     wordsPerPage: Int(wordCountPerPage),
                                     interval1: interval1,
                                     interval2: interval2,
@@ -98,7 +98,7 @@ struct VocabookSettingView: View {
             .task {
                 do {
                     // Use the internally resolved service
-                    let vbSetting = try await strapiService.fetchVBSetting()
+                    let vbSetting = try await settingsService.fetchVBSetting()
                     
                     wordCountPerPage = Double(vbSetting.attributes.wordsPerPage)
                     interval1 = vbSetting.attributes.interval1
