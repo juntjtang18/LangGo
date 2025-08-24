@@ -19,30 +19,33 @@ struct TranslationPopover: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 5)
             } else if let data = translationData {
-                // Displays: "originalWord (pos) translatedWord"
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(originalWord)
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(theme.text)
-                    
-                    // ADDED: The speaker button for text-to-speech.
-                    Button(action: onPlayAudio) {
-                        Image(systemName: "speaker.wave.2.fill")
-                            .font(.headline)
-                            .foregroundColor(theme.accent)
+                // 3-line header: target → part of speech → base (translated) text
+                VStack(alignment: .leading, spacing: 6) {
+                   HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(originalWord)
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(theme.text)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        Button(action: onPlayAudio) {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.headline)
+                                .foregroundColor(theme.accent)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    
+
                     Text(data.partOfSpeech)
-                        .font(.callout)
-                        .italic()
+                        .font(.subheadline.italic())
                         .foregroundColor(theme.text.opacity(0.9))
-                    
+                        .lineLimit(1)
+
                     Text(data.translatedWord)
-                        .font(.title3)
-                        .fontWeight(.bold)
+                        .font(.title3.weight(.semibold))
                         .foregroundColor(theme.text)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if !data.translatedSentence.isEmpty {

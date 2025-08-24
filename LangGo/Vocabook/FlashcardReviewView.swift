@@ -15,20 +15,10 @@ final class ReviewSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelega
 
     func speakOnce(card: Flashcard, completion: @escaping () -> Void) {
         self.completion = completion
-        var parts: [String] = []
-        if let word = card.wordDefinition?.attributes.word?.data?.attributes.targetText, !word.isEmpty {
-            parts.append(word)
-        } else {
-            parts.append(card.frontContent)
-        }
-        if let base = card.wordDefinition?.attributes.baseText, !base.isEmpty {
-            parts.append(base)
-        }
-        if let ex = card.wordDefinition?.attributes.exampleSentence, !ex.isEmpty {
-            parts.append(ex)
-        }
-
-        let u = AVSpeechUtterance(string: parts.joined(separator: ". "))
+        // Speak TARGET ONLY (consistent for all locales)
+        let word = card.wordDefinition?.attributes.word?.data?.attributes.targetText
+            ?? card.frontContent
+        let u = AVSpeechUtterance(string: word)
         u.voice = AVSpeechSynthesisVoice(language: "en-US")
         u.rate  = AVSpeechUtteranceDefaultSpeechRate
         tts.speak(u)
@@ -59,6 +49,7 @@ struct FlashcardReviewView: View {
     @State private var isRepeating = false
     @State private var showRecorder = false
     @StateObject private var speaker = ReviewSpeaker()
+    @State private var repeatInterval: TimeInterval = 1.5   // fallback; will load from VBSetting
 
     var body: some View {
         ZStack {
@@ -117,11 +108,11 @@ struct FlashcardReviewView: View {
                         Spacer()
                         
                         HStack(spacing: 20) {
-                            Button(action: { Task { await markCard(.wrong) } }) {
+                            Button(action: { markCard(.wrong) }) {
                                 Text("Wrong").style(.wrongButton)
                             }
                             
-                            Button(action: { Task { await markCard(.correct) } }) {
+                            Button(action: { markCard(.correct) }) {
                                 Text("Correct").style(.correctButton)
                             }
                         }
@@ -138,6 +129,13 @@ struct FlashcardReviewView: View {
                                 Text("Back")
                             }
                         }
+                    }
+                }
+                .task {
+                    // Load vbSetting.interval1 once
+                    if let vb = try? await DataServices.shared.settingsService.fetchVBSetting() {
+                        // interval1 is assumed to be seconds; clamp to a safe minimum
+                        repeatInterval = max(0.4, TimeInterval(vb.attributes.interval1))
                     }
                 }
             }
@@ -192,7 +190,7 @@ struct FlashcardReviewView: View {
         func loop() {
             guard isRepeating, let liveCard = currentCard else { return }
             speaker.speakOnce(card: liveCard) {
-                DispatchQueue.main.async {
+                DispatchQueue.main.asyncAfter(deadline: .now() + repeatInterval) {
                     if self.isRepeating { loop() }
                 }
             }
@@ -217,16 +215,13 @@ struct FlashcardReviewView: View {
         return String(format: format, currentIndex + 1, viewModel.reviewCards.count)
     }
     
-    // --- CHANGE START ---
-    private func markCard(_ answer: ReviewResult) async {
-        guard let currentCard = viewModel.reviewCards[safe: currentIndex] else { return }
-        
-        // Await the network call to ensure it completes before moving on.
-        await viewModel.markReview(for: currentCard, result: answer)
-        
+    private func markCard(_ answer: ReviewResult) {
+        guard let card = viewModel.reviewCards[safe: currentIndex] else { return }
+        // 1) Optimistically advance the UI
         goToNextCard()
+        // 2) Submit review in the background
+        viewModel.submitReviewOptimistic(for: card, result: answer)
     }
-    // --- CHANGE END ---
     
     private func goToNextCard() {
         if currentIndex < viewModel.reviewCards.count - 1 {

@@ -92,9 +92,9 @@ class VocabookViewModel: ObservableObject {
                  logger.info("Fetched \(allFlashcards.count) total flashcards for vocabook.")
             }
 
+            // Keep this as the visible dataset count if you need it elsewhere,
+            // but DO NOT touch `totalCards` here (that comes from statistics).
             self.totalFlashcards = allFlashcards.count
-            // Keep the user-facing count in sync with the current dataset
-            self.totalCards = allFlashcards.count
             
             // 2. Get pagination settings
             let vbSetting = try await settingsService.fetchVBSetting()
@@ -106,7 +106,7 @@ class VocabookViewModel: ObservableObject {
                 return
             }
             
-            let totalPages = Int(ceil(Double(totalFlashcards) / Double(pageSize)))
+            let totalPages = Int(ceil(Double(allFlashcards.count) / Double(pageSize)))
 
             var pages: [Vocapage] = []
             for pageNum in 1...totalPages {

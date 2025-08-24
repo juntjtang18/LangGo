@@ -43,21 +43,22 @@ class FlashcardViewModel: ObservableObject {
         }
     }
 
-    // --- CHANGE START ---
-    // The function is now async to allow the caller to await its completion.
-    func markReview(for card: Flashcard, result: ReviewResult) async {
-        await submitReview(for: card, result: result)
-    }
-    // --- CHANGE END ---
-
-    private func submitReview(for card: Flashcard, result: ReviewResult) async {
-        do {
-            logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)'")
-            _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
-            logger.info("Review submitted and synced for card \(card.id).")
-        } catch {
-            logger.error("Failed to submit/sync review for card \(card.id): \(error.localizedDescription)")
+    /// Optimistic submit: doesn't block the UI.
+    func submitReviewOptimistic(for card: Flashcard, result: ReviewResult) {
+        Task.detached(priority: .utility) { [flashcardService, logger] in
+            do {
+                logger.info("Submitting review for card \(card.id) with result '\(result.rawValue)'")
+                _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
+                logger.info("Review submitted and synced for card \(card.id).")
+            } catch {
+                logger.error("Failed to submit/sync review for card \(card.id): \(error.localizedDescription)")
+            }
         }
+    }
+
+    // Keep the old submit path if you ever need strict awaits elsewhere.
+    private func submitReview(for card: Flashcard, result: ReviewResult) async {
+        await submitReviewOptimistic(for: card, result: result)
     }
 
     // MARK: - New Word

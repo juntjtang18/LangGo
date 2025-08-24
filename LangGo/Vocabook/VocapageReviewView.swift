@@ -67,25 +67,16 @@ struct VocapageReviewView: View {
                     
                     // Action Buttons
                     HStack(spacing: 20) {
-                        // --- CHANGE START ---
-                        Button(action: {
-                            Task {
-                                await markCard(.wrong)
-                            }
-                        }) {
+                        Button(action: { markCard(.wrong) }) {
                             Text("Wrong")
                                 .style(.wrongButton)
                         }
                         
-                        Button(action: {
-                            Task {
-                                await markCard(.correct)
-                            }
-                        }) {
+                        Button(action: { markCard(.correct) }) {
+
                             Text("Correct")
                                 .style(.correctButton)
                         }
-                        // --- CHANGE END ---
                     }
                     .padding()
                 }
@@ -113,13 +104,12 @@ struct VocapageReviewView: View {
         return String(format: format, currentIndex + 1, cardsToReview.count)
     }
     
-    private func markCard(_ answer: ReviewResult) async {
+    private func markCard(_ answer: ReviewResult) {
         guard let currentCard = cardsToReview[safe: currentIndex] else { return }
-        
-        // This is now correctly awaited
-        await viewModel.markReview(for: currentCard, result: answer)
-        
+        // 1) Optimistically advance the UI
         goToNextCard()
+        // 2) Submit in the background (non-blocking)
+        viewModel.submitReviewOptimistic(for: currentCard, result: answer)
     }
     
     private func goToNextCard() {

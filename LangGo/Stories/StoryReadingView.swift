@@ -431,10 +431,15 @@ struct SelectableTextView: View {
 struct PopoverPositioner: ViewModifier {
     let wordFrame: CGRect                 // in window (global) coordinates
     private let popoverWidth: CGFloat = 300
-    private let estimatedHeight: CGFloat = 220   // conservative height estimate
     private let spacing: CGFloat = 12
     private let horizPadding: CGFloat = 12
     private let bottomReserved: CGFloat = 90     // keep above bottom bar
+    @State private var measuredSize: CGSize = .zero
+
+    private struct SizeKey: PreferenceKey {
+        static var defaultValue: CGSize = .zero
+        static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
+    }
 
     func body(content: Content) -> some View {
         GeometryReader { geo in
@@ -454,26 +459,33 @@ struct PopoverPositioner: ViewModifier {
             let rightLimit = geo.size.width - horizPadding - popoverWidth / 2
             let centerX = min(max(localWord.midX, leftLimit), rightLimit)
 
-            // Vertical decision (below if there’s room, else above)
+            // Decide using the measured height (fallback to 220 until measured)
+            let height = max(measuredSize.height, 220)
             let bottomSafeMax = geo.size.height - geo.safeAreaInsets.bottom - bottomReserved
-            let canShowBelow  = (localWord.maxY + spacing + estimatedHeight) <= bottomSafeMax
+            let canShowBelow  = (localWord.maxY + spacing + height) <= bottomSafeMax
             let topSafeMin    = geo.safeAreaInsets.top
 
             let centerY: CGFloat = {
                 if canShowBelow {
-                    // Place *below* the word
-                    let desired = localWord.maxY + spacing + estimatedHeight / 2
-                    return min(desired, bottomSafeMax - estimatedHeight / 2)
+                    let desired = localWord.maxY + spacing + height / 2
+                    return min(desired, bottomSafeMax - height / 2)
                 } else {
-                    // Place *above* the word
-                    let desired = localWord.minY - spacing - estimatedHeight / 2
-                    return max(desired, topSafeMin + estimatedHeight / 2)
+                    let desired = localWord.minY - spacing - height / 2
+                    return max(desired, topSafeMin + height / 2)
                 }
             }()
 
             content
-                .frame(width: popoverWidth)          // width fixed; height flexible
-                .position(x: centerX, y: centerY)     // position by center
+                .frame(width: popoverWidth)
+                // Measure the actual size of the popover
+                .background(
+                    GeometryReader { inner in
+                        Color.clear
+                            .preference(key: SizeKey.self, value: inner.size)
+                    }
+                )
+                .onPreferenceChange(SizeKey.self) { measuredSize = $0 }
+                .position(x: centerX, y: centerY)
         }
     }
 }
