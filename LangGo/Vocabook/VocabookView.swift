@@ -178,6 +178,41 @@ struct VocabookView: View {
         vocabookViewModel.isLoadingVocabooks || (vocabookViewModel.vocabook?.vocapages == nil)
     }
 
+    private enum ButtonSlot: Hashable {
+        case cardReview, open, quiz, add, setting
+    }
+
+    private struct ButtonFramesKey: PreferenceKey {
+        static var defaultValue: [ButtonSlot: Anchor<CGRect>] = [:]
+        static func reduce(value: inout [ButtonSlot: Anchor<CGRect>], nextValue: () -> [ButtonSlot: Anchor<CGRect>]) {
+            value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+        }
+    }
+
+    private struct CenterConnectorCapsule: Shape {
+        let start: CGPoint
+        let end: CGPoint
+        let thickness: CGFloat
+
+        func path(in _: CGRect) -> Path {
+            let dx = end.x - start.x, dy = end.y - start.y
+            let len = max(1, hypot(dx, dy))
+            let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+            let angle = atan2(dy, dx)
+
+            var capsule = Path(
+                roundedRect: CGRect(x: mid.x - len/2, y: mid.y - thickness/2,
+                                    width: len, height: thickness),
+                cornerRadius: thickness/2
+            )
+            capsule = capsule
+                .applying(.init(translationX: -mid.x, y: -mid.y))
+                .applying(.init(rotationAngle: angle))
+                .applying(.init(translationX: mid.x, y: mid.y))
+            return capsule
+        }
+    }
+    
     private struct ConnectedActionButtons: View {
         @Binding var isReviewing: Bool
         @Binding var isQuizzing: Bool
@@ -190,7 +225,7 @@ struct VocabookView: View {
         
         let onFilterChange: () -> Void
 
-        private let buttonSize: CGFloat = 110
+        private let buttonSize: CGFloat = 100
         private let spacing: CGFloat = 15
         private let cornerRadius: CGFloat = 20
 
@@ -198,14 +233,9 @@ struct VocabookView: View {
             ZStack {
                 let primaryColor = Color(red: 0.2, green: 0.6, blue: 0.25)
                 let secondaryColor = Color(red: 0.5, green: 0.8, blue: 0.5)
-                let rect1_CardReview = CGRect(x: 0, y: 0, width: buttonSize, height: buttonSize)
-                let rect2_ListenSpot = CGRect(x: buttonSize + spacing, y: 0, width: buttonSize, height: buttonSize)
-                let rect5_AddWord = CGRect(x: buttonSize + spacing, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
-                let rect6_OpenSpot = CGRect(x: (buttonSize + spacing) * 2, y: buttonSize + spacing, width: buttonSize, height: buttonSize)
-                
-                TwoButtonConnector(rect1: rect1_CardReview, rect2: rect5_AddWord, cornerRadius: cornerRadius).fill(primaryColor).shadow(color: .black.opacity(0.2), radius: 5, y: 4)
-                TwoButtonConnector(rect1: rect2_ListenSpot, rect2: rect6_OpenSpot, cornerRadius: cornerRadius).fill(secondaryColor).shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+                let ribbonThickness = max(8, cornerRadius * 0.60)
 
+                // Buttons grid (unchanged visually), but we attach anchors for their frames.
                 VStack(alignment: .leading, spacing: spacing) {
                     HStack(spacing: spacing) {
                         VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) {
@@ -214,11 +244,13 @@ struct VocabookView: View {
                                 isReviewing = true
                             }
                         }
-                        // Always allow navigation; Host can show an empty state if there are no pages
+                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.cardReview: $0] }
+
+                        // Always allow navigation; host can show empty state
                         let allIDs = (vocabookViewModel.vocabook?.vocapages ?? []).map { $0.id }.sorted()
                         let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
                         let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : (allIDs.first ?? 1)
-                        
+
                         NavigationLink(destination: VocapageHostView(
                             allVocapageIds: allIDs,
                             selectedVocapageId: targetPageID,
@@ -228,7 +260,13 @@ struct VocabookView: View {
                         )) {
                             VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
                         }
+                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { current in
+                            var m = [ButtonSlot: Anchor<CGRect>]()
+                            m[.open] = current
+                            return m
+                        }
                     }
+
                     HStack(spacing: spacing) {
                         VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
                             Task {
@@ -236,8 +274,45 @@ struct VocabookView: View {
                                 isQuizzing = true
                             }
                         }
-                        VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) { isAddingNewWord = true }
-                        VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionSecondary) { isShowingSettings = true }
+                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.quiz: $0] }
+
+                        VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) {
+                            isAddingNewWord = true
+                        }
+                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.add: $0] }
+
+                        VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionSecondary) {
+                            isShowingSettings = true
+                        }
+                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.setting: $0] }
+                    }
+                }
+                // Draw connectors using the *measured* centers
+                .backgroundPreferenceValue(ButtonFramesKey.self) { anchors in
+                    GeometryReader { proxy in
+                        ZStack {
+                            if let a = anchors[.cardReview], let b = anchors[.add] {
+                                let r1 = proxy[a], r2 = proxy[b]
+                                CenterConnectorCapsule(
+                                    start: CGPoint(x: r1.midX, y: r1.midY),
+                                    end:   CGPoint(x: r2.midX, y: r2.midY),
+                                    thickness: ribbonThickness
+                                )
+                                .fill(primaryColor)
+                                .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+                            }
+                            if let a = anchors[.open], let b = anchors[.setting] {
+                                let r1 = proxy[a], r2 = proxy[b]
+                                CenterConnectorCapsule(
+                                    start: CGPoint(x: r1.midX, y: r1.midY),
+                                    end:   CGPoint(x: r2.midX, y: r2.midY),
+                                    thickness: ribbonThickness
+                                )
+                                .fill(secondaryColor)
+                                .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+                            }
+                        }
+                        .allowsHitTesting(false)
                     }
                 }
             }
@@ -264,25 +339,42 @@ private struct RightRoundedRectangle: Shape {
     }
 }
 
-private struct TwoButtonConnector: Shape {
-    let rect1: CGRect
-    let rect2: CGRect
-    let cornerRadius: CGFloat
-    let connectorWidthRatio: CGFloat = 0.7
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let pinchOffset = cornerRadius * (1 - connectorWidthRatio)
+private struct CenterConnector: Shape {
+    let start: CGPoint        // center of first button (same local coords)
+    let end: CGPoint          // center of second button
+    let thickness: CGFloat    // visual thickness of the ribbon
+    let trimInset: CGFloat    // how far to stop short of each center
 
-        path.move(to: CGPoint(x: rect1.maxX - cornerRadius + pinchOffset, y: rect1.maxY))
-        path.addLine(to: CGPoint(x: rect1.maxX, y: rect1.maxY - cornerRadius + pinchOffset))
-        path.addLine(to: CGPoint(x: rect2.minX + cornerRadius - pinchOffset, y: rect2.minY))
-        path.addLine(to: CGPoint(x: rect2.minX, y: rect2.minY + cornerRadius - pinchOffset))
-        path.closeSubpath()
-        
-        return path
+    func path(in _: CGRect) -> Path {
+        let dx = end.x - start.x, dy = end.y - start.y
+        let L = max(1, hypot(dx, dy))
+        let ux = dx / L, uy = dy / L
+
+        // Trim so the ribbon meets the rounded corners cleanly
+        let p1 = CGPoint(x: start.x + ux * trimInset, y: start.y + uy * trimInset)
+        let p2 = CGPoint(x: end.x - ux * trimInset,   y: end.y - uy * trimInset)
+
+        let len = max(1, hypot(p2.x - p1.x, p2.y - p1.y))
+        let mid = CGPoint(x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2)
+        let angle = atan2(uy, ux)
+
+        var capsule = Path(
+            roundedRect: CGRect(x: mid.x - len/2, y: mid.y - thickness/2,
+                                width: len, height: thickness),
+            cornerRadius: thickness/2
+        )
+
+        // Rotate capsule to align with p1 → p2
+        capsule = capsule
+            .applying(CGAffineTransform(translationX: -mid.x, y: -mid.y))
+            .applying(CGAffineTransform(rotationAngle: angle))
+            .applying(CGAffineTransform(translationX: mid.x, y: mid.y))
+
+        return capsule
     }
 }
+
 
 private struct HeaderTitleView: View {
     @ObservedObject var viewModel: VocabookViewModel
@@ -479,70 +571,6 @@ private struct VocabookProgressCircleView: View {
         }
     }
 }
-
-/*
-// MARK: - Components
-private struct ConnectedActionButtons: View {
-    @Binding var isReviewing: Bool
-    @Binding var isQuizzing: Bool
-    @Binding var isAddingNewWord: Bool
-    @Binding var isShowingSettings: Bool
-    @Binding var isShowingDueWordsOnly: Bool
-
-    @ObservedObject var vocabookViewModel: VocabookViewModel
-    @ObservedObject var flashcardViewModel: FlashcardViewModel
-
-    private let buttonSize: CGFloat = 110
-    private let spacing: CGFloat = 15
-    private let cornerRadius: CGFloat = 20
-
-    var body: some View {
-        ZStack {
-            // ... (ZStack content remains the same)
-
-            VStack(alignment: .leading, spacing: spacing) {
-                HStack(spacing: spacing) {
-                    VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) {
-                        Task {
-                            await flashcardViewModel.prepareReviewSession()
-                            isReviewing = true
-                        }
-                    }
-
-                    if let pages = vocabookViewModel.vocabook?.vocapages, !pages.isEmpty {
-                        let allIDs = pages.map { $0.id }.sorted()
-                        let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-                        let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : allIDs.first ?? 1
-
-                        NavigationLink(destination: VocapageHostView(
-                            allVocapageIds: allIDs,
-                            selectedVocapageId: targetPageID,
-                            flashcardViewModel: flashcardViewModel,
-                            isShowingDueWordsOnly: $isShowingDueWordsOnly
-                        )) {
-                            VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
-                        }
-                    } else {
-                        VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
-                            .opacity(0.5)
-                    }
-                }
-                HStack(spacing: spacing) {
-                    VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
-                        Task {
-                            await flashcardViewModel.prepareReviewSession()
-                            isQuizzing = true
-                        }
-                    }
-                    VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) { isAddingNewWord = true }
-                    VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionSecondary) { isShowingSettings = true }
-                }
-            }
-        }
-        .frame(width: buttonSize * 3 + spacing * 2, height: buttonSize * 2 + spacing)
-    }
-}
-*/
 
 private struct VocabookButtonLabel: View {
     let title: String
