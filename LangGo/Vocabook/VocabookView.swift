@@ -367,7 +367,6 @@ private struct RightRoundedRectangle: Shape {
     }
 }
 
-
 private struct CenterConnector: Shape {
     let start: CGPoint        // center of first button (same local coords)
     let end: CGPoint          // center of second button

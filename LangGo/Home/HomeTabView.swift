@@ -11,16 +11,27 @@ struct HomeTabView: View {
         NavigationView {
             HomeView(selectedTab: $selectedTab)
                 // This existing logic remains unchanged.
-                .navigationBarItems(leading: (
-                    Button(action: {
-                        withAnimation {
-                            self.isSideMenuShowing.toggle()
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.rectangle.fill")     // app mark; swap for your asset if you have one
+                                .foregroundColor(theme.accent)
+                            Text("LangGo")
+                                .font(.headline.bold())
+                                .foregroundColor(theme.text)
                         }
-                    }) {
-                        Image(systemName: "line.horizontal.3")
-                            .imageScale(.large)
                     }
-                ))
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            withAnimation { isSideMenuShowing.toggle() }
+                        } label: {
+                            Image(systemName: "person.crop.circle")
+                                .imageScale(.large)
+                                .foregroundColor(theme.text)
+                        }
+                        .accessibilityLabel("Profile / Menu")
+                    }
+                }
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }

@@ -315,6 +315,9 @@
     "Cycle Page" : {
 
     },
+    "Daily recommendations" : {
+
+    },
     "Data Options" : {
       "localizations" : {
         "ja" : {
@@ -466,7 +469,7 @@
         }
       }
     },
-    "Explore lessons on specific topics" : {
+    "Explore by Course" : {
 
     },
     "Filter" : {
@@ -481,9 +484,6 @@
     "Font Size" : {
 
     },
-    "Hi, %@" : {
-
-    },
     "Hide Base Text" : {
 
     },
@@ -496,10 +496,10 @@
     "Input Text (%@)" : {
 
     },
-    "LangGo to Pro, Ready to GO!" : {
+    "LangGo" : {
 
     },
-    "LangGo to Pro, Ready to GO?" : {
+    "LangGo to Pro, Ready to GO!" : {
 
     },
     "Learn This" : {
@@ -551,6 +551,7 @@
       }
     },
     "Limited Offer" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -810,6 +811,9 @@
         }
       }
     },
+    "Open %@" : {
+
+    },
     "Page Review" : {
 
     },
@@ -895,6 +899,9 @@
           }
         }
       }
+    },
+    "Profile / Menu" : {
+
     },
     "Profile Update" : {
       "localizations" : {
@@ -1149,9 +1156,6 @@
     "Show Base Text" : {
 
     },
-    "Show Topics" : {
-
-    },
     "Sign Up" : {
       "localizations" : {
         "ja" : {
@@ -1360,9 +1364,6 @@
     "Translation unavailable." : {
 
     },
-    "Try LangGo free for 7 days!\nEnds 25 July 2025 at 08:05" : {
-
-    },
     "Type or hold to speak..." : {
 
     },
@@ -1496,6 +1497,9 @@
     "Want to remember 10× more — with less effort?" : {
 
     },
+    "Welcome back!" : {
+
+    },
     "Welcome to LangGo" : {
       "localizations" : {
         "ja" : {
@@ -1525,6 +1529,9 @@
       }
     },
     "What is your native language?" : {
+
+    },
+    "What would you like to practice today?" : {
 
     },
     "Without review, most people forget 90% of new words in 2 days. Our smart Vocabulary Notebook reminds you only when you’re about to forget — not too soon, not too late." : {
