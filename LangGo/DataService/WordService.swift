@@ -36,8 +36,9 @@ class WordService {
     }
 
     func searchWordDefinitions(term: String) async throws -> [StrapiWordDefinition] {
-        guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/word-definitions/search") else { throw URLError(.badURL) }
-        urlComponents.queryItems = [URLQueryItem(name: "term", value: term)]
+        let q = term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/word-definitions/search-by-target") else { throw URLError(.badURL) }
+        urlComponents.queryItems = [URLQueryItem(name: "term", value: q)]
         guard let url = urlComponents.url else { throw URLError(.badURL) }
         let response: StrapiListResponse<StrapiWordDefinition> = try await networkManager.fetchDirect(from: url)
         return response.data ?? []

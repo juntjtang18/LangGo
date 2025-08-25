@@ -40,6 +40,7 @@ class VocabookViewModel: ObservableObject {
     // The service is now fetched directly from the DataServices singleton.
     private let settingsService = DataServices.shared.settingsService
     private let flashcardService = DataServices.shared.flashcardService
+    private let wordService = DataServices.shared.wordService
     
     @Published var vocabook: Vocabook?
     @Published var isLoadingVocabooks = false
@@ -136,6 +137,24 @@ class VocabookViewModel: ObservableObject {
             expandedVocabooks.remove(vocabookId)
         } else {
             expandedVocabooks.insert(vocabookId)
+        }
+    }
+    
+    // MARK: - Search (target language or base if desired)
+    func searchForWord(query: String, searchBase: Bool = false) async throws -> [SearchResult] {
+        // Use WordService to hit /api/word-definitions/search and map into SearchResult
+        let definitions = try await wordService.searchWordDefinitions(term: query)
+        return definitions.map { def in
+            let a = def.attributes
+            let isAlready = !(a.flashcards?.data.isEmpty ?? true)
+            return SearchResult(
+                id: "def-\(def.id)",
+                wordDefinitionId: def.id,
+                baseText: a.baseText ?? "",
+                targetText: a.word?.data?.attributes.targetText ?? "",
+                partOfSpeech: a.partOfSpeech?.data?.attributes.name ?? "N/A",
+                isAlreadyAdded: isAlready
+            )
         }
     }
 }

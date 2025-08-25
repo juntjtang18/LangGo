@@ -14,7 +14,8 @@ struct VocabookView: View {
     @State private var isAddingNewWord: Bool = false
     @State private var isQuizzing: Bool = false
     @State private var isShowingSettings: Bool = false
-    
+    @State private var isShowingSearch = false
+
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly: Bool = false
     
     @State private var badgeAnchor: Anchor<CGPoint>? = nil
@@ -42,6 +43,7 @@ struct VocabookView: View {
                     isAddingNewWord: $isAddingNewWord,
                     isShowingSettings: $isShowingSettings,
                     isShowingDueWordsOnly: $isShowingDueWordsOnly,
+                    isShowingSearch: $isShowingSearch,
                     vocabookViewModel: vocabookViewModel,
                     flashcardViewModel: flashcardViewModel,
                     onFilterChange: {
@@ -148,6 +150,9 @@ struct VocabookView: View {
                 await flashcardViewModel.prepareReviewSession()
             }
         }
+        .sheet(isPresented: $isShowingSearch) {
+            WordSearchView(vocabookVM: vocabookViewModel)
+        }
     }
     
     private var allFlashcards: [Flashcard] {
@@ -179,7 +184,7 @@ struct VocabookView: View {
     }
 
     private enum ButtonSlot: Hashable {
-        case cardReview, open, quiz, add, setting
+        case cardReview, open, search, quiz, add, setting
     }
 
     private struct ButtonFramesKey: PreferenceKey {
@@ -219,105 +224,126 @@ struct VocabookView: View {
         @Binding var isAddingNewWord: Bool
         @Binding var isShowingSettings: Bool
         @Binding var isShowingDueWordsOnly: Bool
+        @Binding var isShowingSearch: Bool
 
-        @ObservedObject var vocabookViewModel: VocabookViewModel
-        @ObservedObject var flashcardViewModel: FlashcardViewModel
-        
+        let vocabookViewModel: VocabookViewModel
+        let flashcardViewModel: FlashcardViewModel   // ← add this back
+
         let onFilterChange: () -> Void
 
-        private let buttonSize: CGFloat = 100
-        private let spacing: CGFloat = 15
-        private let cornerRadius: CGFloat = 20
+        //private let buttonSize: CGFloat = 100
+        //private let spacing: CGFloat = 15
+        //private let cornerRadius: CGFloat = 20
 
         var body: some View {
-            ZStack {
-                let primaryColor = Color(red: 0.2, green: 0.6, blue: 0.25)
-                let secondaryColor = Color(red: 0.5, green: 0.8, blue: 0.5)
+            GeometryReader { proxy in
+                // Layout constants
+                let spacing: CGFloat = 15
+                let computed = (proxy.size.width - spacing * 2) / 3
+                let buttonSize = min(110, max(92, floor(computed)))   // responsive size
+                let gridWidth  = buttonSize * 3 + spacing * 2
+                let gridHeight = buttonSize * 2 + spacing
+                let cornerRadius = buttonSize * 0.20
                 let ribbonThickness = max(8, cornerRadius * 0.60)
 
-                // Buttons grid (unchanged visually), but we attach anchors for their frames.
-                VStack(alignment: .leading, spacing: spacing) {
-                    HStack(spacing: spacing) {
-                        VocabookActionButton(title: "Card Review", icon: "square.stack.3d.up.fill", style: .vocabookActionPrimary) {
-                            Task {
-                                await flashcardViewModel.prepareReviewSession()
-                                isReviewing = true
+                let primaryColor   = Color(red: 0.2, green: 0.6, blue: 0.25)
+                let secondaryColor = Color(red: 0.5, green: 0.8, blue: 0.5)
+
+                ZStack {
+                    VStack(alignment: .leading, spacing: spacing) {
+                        HStack(spacing: spacing) {
+                            VocabookActionButton(
+                                title: "Card Review",
+                                icon: "square.stack.3d.up.fill",
+                                style: .vocabookActionPrimary
+                            ) { isReviewing = true }
+                            .frame(width: buttonSize, height: buttonSize)
+                            .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.cardReview: $0] }
+
+                            let allIDs = (vocabookViewModel.vocabook?.vocapages ?? []).map { $0.id }.sorted()
+                            let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
+                            let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : (allIDs.first ?? 1)
+
+                            NavigationLink(destination: VocapageHostView(
+                                allVocapageIds: allIDs,
+                                selectedVocapageId: targetPageID,
+                                flashcardViewModel: flashcardViewModel,
+                                isShowingDueWordsOnly: $isShowingDueWordsOnly,
+                                onFilterChange: onFilterChange
+                            )) {
+                                VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
+                                    .frame(width: buttonSize, height: buttonSize)
                             }
-                        }
-                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.cardReview: $0] }
+                            .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.open: $0] }
 
-                        // Always allow navigation; host can show empty state
-                        let allIDs = (vocabookViewModel.vocabook?.vocapages ?? []).map { $0.id }.sorted()
-                        let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-                        let targetPageID = (lastViewedID != 0 && allIDs.contains(lastViewedID)) ? lastViewedID : (allIDs.first ?? 1)
-
-                        NavigationLink(destination: VocapageHostView(
-                            allVocapageIds: allIDs,
-                            selectedVocapageId: targetPageID,
-                            flashcardViewModel: flashcardViewModel,
-                            isShowingDueWordsOnly: $isShowingDueWordsOnly,
-                            onFilterChange: onFilterChange
-                        )) {
-                            VocabookButtonLabel(title: "Open", icon: "book.fill", style: .vocabookActionSecondary)
+                            VocabookActionButton(
+                                title: "Search",
+                                icon: "magnifyingglass",
+                                style: .vocabookActionPrimary
+                            ) { isShowingSearch = true }
+                            .frame(width: buttonSize, height: buttonSize)
+                            .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.search: $0] }
                         }
-                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { current in
-                            var m = [ButtonSlot: Anchor<CGRect>]()
-                            m[.open] = current
-                            return m
+
+                        HStack(spacing: spacing) {
+                            VocabookActionButton(
+                                title: "Quiz Review",
+                                icon: "checkmark.circle.fill",
+                                style: .vocabookActionSecondary
+                            ) { isQuizzing = true }
+                            .frame(width: buttonSize, height: buttonSize)
+                            .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.quiz: $0] }
+
+                            VocabookActionButton(
+                                title: "Add Word",
+                                icon: "plus.app.fill",
+                                style: .vocabookActionPrimary
+                            ) { isAddingNewWord = true }
+                            .frame(width: buttonSize, height: buttonSize)
+                            .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.add: $0] }
+
+                            VocabookActionButton(
+                                title: "Setting",
+                                icon: "gear",
+                                style: .vocabookActionSecondary
+                            ) { isShowingSettings = true }
+                            .frame(width: buttonSize, height: buttonSize)
+                            .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.setting: $0] }
                         }
                     }
-
-                    HStack(spacing: spacing) {
-                        VocabookActionButton(title: "Quiz Review", icon: "checkmark.circle.fill", style: .vocabookActionSecondary) {
-                            Task {
-                                await flashcardViewModel.prepareReviewSession()
-                                isQuizzing = true
+                    .backgroundPreferenceValue(ButtonFramesKey.self) { anchors in
+                        GeometryReader { p in
+                            ZStack {
+                                if let a = anchors[.cardReview], let b = anchors[.add] {
+                                    let r1 = p[a], r2 = p[b]
+                                    CenterConnectorCapsule(
+                                        start: CGPoint(x: r1.midX, y: r1.midY),
+                                        end:   CGPoint(x: r2.midX, y: r2.midY),
+                                        thickness: ribbonThickness
+                                    )
+                                    .fill(primaryColor)
+                                    .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+                                }
+                                if let a = anchors[.open], let b = anchors[.setting] {
+                                    let r1 = p[a], r2 = p[b]
+                                    CenterConnectorCapsule(
+                                        start: CGPoint(x: r1.midX, y: r1.midY),
+                                        end:   CGPoint(x: r2.midX, y: r2.midY),
+                                        thickness: ribbonThickness
+                                    )
+                                    .fill(secondaryColor)
+                                    .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
+                                }
                             }
+                            .allowsHitTesting(false)
                         }
-                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.quiz: $0] }
-
-                        VocabookActionButton(title: "Add Word", icon: "plus.app.fill", style: .vocabookActionPrimary) {
-                            isAddingNewWord = true
-                        }
-                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.add: $0] }
-
-                        VocabookActionButton(title: "Setting", icon: "gear", style: .vocabookActionSecondary) {
-                            isShowingSettings = true
-                        }
-                        .anchorPreference(key: ButtonFramesKey.self, value: .bounds) { [.setting: $0] }
                     }
                 }
-                // Draw connectors using the *measured* centers
-                .backgroundPreferenceValue(ButtonFramesKey.self) { anchors in
-                    GeometryReader { proxy in
-                        ZStack {
-                            if let a = anchors[.cardReview], let b = anchors[.add] {
-                                let r1 = proxy[a], r2 = proxy[b]
-                                CenterConnectorCapsule(
-                                    start: CGPoint(x: r1.midX, y: r1.midY),
-                                    end:   CGPoint(x: r2.midX, y: r2.midY),
-                                    thickness: ribbonThickness
-                                )
-                                .fill(primaryColor)
-                                .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
-                            }
-                            if let a = anchors[.open], let b = anchors[.setting] {
-                                let r1 = proxy[a], r2 = proxy[b]
-                                CenterConnectorCapsule(
-                                    start: CGPoint(x: r1.midX, y: r1.midY),
-                                    end:   CGPoint(x: r2.midX, y: r2.midY),
-                                    thickness: ribbonThickness
-                                )
-                                .fill(secondaryColor)
-                                .shadow(color: .black.opacity(0.2), radius: 5, y: 4)
-                            }
-                        }
-                        .allowsHitTesting(false)
-                    }
-                }
+                .frame(width: gridWidth, height: gridHeight) // container fits the computed grid
+                .frame(maxWidth: .infinity)                  // center in the parent
             }
-            .frame(width: buttonSize * 3 + spacing * 2, height: buttonSize * 2 + spacing)
         }
+
     }
 }
 
@@ -382,7 +408,7 @@ private struct HeaderTitleView: View {
     var body: some View {
         HStack {
             HStack {
-                Text("My Vocabulary\nNote Book")
+                Text("My Vocabulary")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
@@ -635,4 +661,106 @@ private struct BezierFlight: AnimatableModifier {
         content.position(pos)
     }
 }
+
+private struct WordSearchView: View {
+    @ObservedObject var vocabookVM: VocabookViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var query = ""
+    @State private var results: [SearchResult] = []
+    @State private var isSearching = false
+    @State private var errorMessage: String?
+    @State private var liveSearchTask: Task<Void, Never>? = nil    // ← debounce token
+
+   @ViewBuilder
+   private var searchHeader: some View {
+       HStack(spacing: 8) {
+           Image(systemName: "magnifyingglass")
+               .imageScale(.medium)
+           TextField("Word or sentence", text: $query)
+               .textInputAutocapitalization(.never)   // ✅ no auto-capitalization
+               .autocorrectionDisabled(true)          // ✅ no autocorrect
+               .onSubmit { Task { await runSearch() } }
+           if !query.isEmpty {
+               Button {
+                   query = ""
+                   results = []
+                   errorMessage = nil
+                   liveSearchTask?.cancel()
+               } label: {
+                   Image(systemName: "xmark.circle.fill")
+                       .imageScale(.medium)
+               }
+               .buttonStyle(.plain)
+           }
+       }
+       .padding(10)
+       .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+       .padding([.horizontal, .top])
+   }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                searchHeader             // ✅ custom header keeps toolbar intact
+                List {
+                    if let msg = errorMessage, !msg.isEmpty {
+                        Text(msg).foregroundStyle(.red)
+                    }
+                    if isSearching {
+                        HStack { ProgressView(); Text("Searching…") }
+                    }
+                    ForEach(results, id: \.id) { r in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(r.targetText).font(.headline)
+                            if !r.partOfSpeech.isEmpty {
+                                Text(r.partOfSpeech)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !r.baseText.isEmpty {
+                                Text(r.baseText).font(.body)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+                .listStyle(.plain)
+            }
+            .navigationTitle("Search")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+            }
+            // Live search with debounce (same logic you had)
+            .onChange(of: query) { newValue in
+                liveSearchTask?.cancel()
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty, trimmed.count >= 2 else {
+                    results = []; errorMessage = nil; isSearching = false
+                    return
+                }
+                liveSearchTask = Task {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    await runSearch(queryOverride: trimmed)
+                }
+            }
+            .onDisappear { liveSearchTask?.cancel() }
+        }
+    }
+
+    private func runSearch(queryOverride: String? = nil) async {
+        let q = (queryOverride ?? query).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { results = []; return }
+        isSearching = true; errorMessage = nil
+        do {
+            let r = try await vocabookVM.searchForWord(query: q, searchBase: false)
+            await MainActor.run { results = r; isSearching = false }
+        } catch {
+            await MainActor.run { errorMessage = error.localizedDescription; isSearching = false }
+        }
+    }
+}
+
 
