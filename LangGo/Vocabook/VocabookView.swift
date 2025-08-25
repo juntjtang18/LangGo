@@ -77,6 +77,8 @@ struct VocabookView: View {
             flightTrigger &+= 1
         }
         .background(theme.background.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .overlay {
             GeometryReader { proxy in
                 ZStack {
@@ -463,7 +465,7 @@ private struct OverallProgressView: View {
                 .layoutPriority(1)
 
             // Right: shifted a bit to the right; tight internal spacing; values right-aligned
-            VStack(alignment: .leading, spacing: isCompactPhone ? 3 : 6) {
+            VStack(alignment: .leading, spacing: isCompactPhone ? 0 : 6) {
                 StatRowTight(label: "Total Words", value: "\(viewModel.totalCards)")
 
                 ForEach(tiersHighToLow, id: \.id) { t in
@@ -490,7 +492,7 @@ private struct StatRowTight: View {
     @Environment(\.theme) var theme: Theme
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {   // ← tight base spacing
+        HStack(alignment: .firstTextBaseline, spacing: 0) {   // ← tight base spacing
             Text(label)
                 .foregroundColor(theme.text.opacity(0.75))
                 .lineLimit(1)

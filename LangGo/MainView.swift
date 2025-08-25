@@ -14,15 +14,33 @@ struct MainView: View {
 
     init(authState: Binding<AuthState>) {
         _authState = authState
-        
-        // Configure the appearance of the TabBar
+
+        // 1) Base appearance (yours)
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = .clear
         appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-        
+
+        // 2) Bigger label font (works on iPhone/iPad, all layouts)
+        let font = UIFont.systemFont(ofSize: 13, weight: .semibold) // tweak size/weight here
+
+        let item = UITabBarItemAppearance()
+        item.normal.titleTextAttributes   = [.font: font]          // unselected
+        item.selected.titleTextAttributes = [.font: font]          // selected
+        // Optional: also control colors if you want
+        // item.normal.iconColor = UIColor.secondaryLabel
+        // item.normal.titleTextAttributes?[.foregroundColor] = UIColor.secondaryLabel
+        // (selected color is driven by SwiftUI .tint)
+
+        // Apply to all layout styles (stacked/inline/compactInline)
+        appearance.stackedLayoutAppearance       = item
+        appearance.inlineLayoutAppearance        = item
+        appearance.compactInlineLayoutAppearance = item
+
         UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
+        if #available(iOS 15.0, *) {
+            UITabBar.appearance().scrollEdgeAppearance = appearance
+        }
     }
 
     var body: some View {
