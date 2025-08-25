@@ -485,30 +485,38 @@ private struct OverallProgressView: View {
     }
 }
 
-
-private struct StatRowTight: View {
+struct StatRowTight: View {
     let label: String
     let value: String
-    @Environment(\.theme) var theme: Theme
+    /// Width of the trailing value column (adjust to taste)
+    var valueColumnWidth: CGFloat = 44
+    /// Spacing between label and value
+    var gap: CGFloat = 5
+    /// Row height (keeps GeometryReader compact)
+    var rowHeight: CGFloat = 24
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {   // ← tight base spacing
-            Text(label)
-                .foregroundColor(theme.text.opacity(0.75))
-                .lineLimit(1)
-                .minimumScaleFactor(0.9)
-                .layoutPriority(1)
+        GeometryReader { geo in
+            // Reserve a narrow column for the numeric value on the right.
+            let labelWidth = max(0, geo.size.width - valueColumnWidth - gap)
 
-            Spacer(minLength: 6)                               // ← minimal gap, expands only within capped width
+            HStack(alignment: .firstTextBaseline, spacing: gap) {
+                Text(label)
+                    .foregroundColor(.primary.opacity(0.75))
+                    .lineLimit(1)
+                    .truncationMode(.tail)                 // ← will now kick in
+                    .frame(width: labelWidth, alignment: .leading)
 
-            Text(value)
-                .fontWeight(.semibold)
-                .monospacedDigit()
-                .frame(alignment: .trailing)                   // ← right-aligned within the row
+                Text(value)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                    .frame(width: valueColumnWidth, alignment: .trailing)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)       // rows fill the right column width, values align
+        .frame(height: rowHeight) // keep the row compact
     }
 }
+
 
 
 

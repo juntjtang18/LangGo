@@ -43,17 +43,17 @@ struct SignupView: View {
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
             // 👇 New explicit picker row
-            HStack {
-                Label("Native language", systemImage: "globe")
-                Spacer()
+            //HStack {
+                //Label("Native language", systemImage: "globe")
+                //Spacer()
                 Picker("Native language", selection: $languageSettings.selectedLanguageCode) {
                     ForEach(LanguageSettings.availableLanguages) { language in
                         Text(language.name).tag(language.id)
                     }
                 }
                 .pickerStyle(.menu) // simple inline menu
-            }
-            .padding(.horizontal)
+            //}
+            //.padding(.horizontal)
             
             if !errorMessage.isEmpty {
                 Text(errorMessage)
