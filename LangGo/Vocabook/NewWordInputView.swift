@@ -95,6 +95,7 @@ struct NewWordInputView: View {
     }
 
     private var mainContent: some View {
+        // MARK: - Removed background tap gesture to resolve conflict with picker.
         VStack {
             Form {
                 NewWordFormView(
@@ -123,6 +124,18 @@ struct NewWordInputView: View {
             .onChange(of: word, perform: { _ in
                 isTranslationStale = true
             })
+            // MARK: - Added toolbar with a keyboard close icon to dismiss keyboard
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(action: {
+                        hideKeyboard()
+                    }) {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(.title2)
+                    }
+                }
+            }
             
             actionButtons
         }
@@ -168,6 +181,10 @@ struct NewWordInputView: View {
     
     // MARK: - Logic & Actions
     
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
     private func speak(text: String, languageCode: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         synthesizer.stopSpeaking(at: .immediate)

@@ -217,10 +217,27 @@ struct FlashcardReviewView: View {
     
     private func markCard(_ answer: ReviewResult) {
         guard let card = viewModel.reviewCards[safe: currentIndex] else { return }
-        // 1) Optimistically advance the UI
-        goToNextCard()
-        // 2) Submit review in the background
-        viewModel.submitReviewOptimistic(for: card, result: answer)
+
+        if currentIndex == viewModel.reviewCards.count - 1 {
+            // This is the LAST card. Wait for the review to complete.
+            Task {
+                // Show a loading indicator if you have one
+                // viewModel.isLoading = true
+                
+                await viewModel.submitReviewAndWait(for: card, result: answer)
+                
+                // viewModel.isLoading = false
+                
+                // Only advance to the "Session Complete" screen after successful submission
+                DispatchQueue.main.async {
+                    self.goToNextCard()
+                }
+            }
+        } else {
+            // Optimistic update for all cards except the last one
+            goToNextCard()
+            viewModel.submitReviewOptimistic(for: card, result: answer)
+        }
     }
     
     private func goToNextCard() {

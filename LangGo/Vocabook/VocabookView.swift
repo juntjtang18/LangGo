@@ -112,7 +112,15 @@ struct VocabookView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $isAddingNewWord) {
+        // LangGo/Vocabook/VocabookView.swift
+
+        .fullScreenCover(isPresented: $isAddingNewWord, onDismiss: {
+            // 👇 ADD THIS ON-DISMISS ACTION
+            Task {
+                await vocabookViewModel.loadStatistics()
+                await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
+            }
+        }) {
             NewWordInputView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isReviewing, onDismiss: {
