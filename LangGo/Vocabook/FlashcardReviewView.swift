@@ -137,6 +137,7 @@ struct FlashcardReviewView: View {
                         // interval1 is assumed to be seconds; clamp to a safe minimum
                         repeatInterval = max(0.4, TimeInterval(vb.attributes.interval1))
                     }
+                    await viewModel.prepareReviewSession()
                 }
             }
             .opacity(isSessionComplete ? 0 : 1)
