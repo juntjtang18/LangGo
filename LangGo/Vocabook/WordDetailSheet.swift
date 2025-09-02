@@ -47,18 +47,13 @@ struct WordDetailSheet: View {
                 }
             }
 
-            // === CONTENT with horizontal slide ===
             ZStack {
                 content(for: card)
                     .id(card.id) // diff by card id
                     .transition(transitionFor(slideDir))
             }
             .animation(.easeInOut(duration: 0.28), value: card.id)
-
-            // === your 3 round buttons (mic / speaker / repeat) ===
             controlsRow
-
-            // === Prev / Next buttons ===
             navRow
         }
         .padding(.bottom, 12)
@@ -67,27 +62,21 @@ struct WordDetailSheet: View {
     // MARK: - Content (move your existing word layout here)
     @ViewBuilder
     private func content(for card: Flashcard) -> some View {
-        // This is the original content you already had:
-        // Title word + (pos), base text, example, divider, etc.
-        // —— Example skeleton (replace with your current stack) ——
         VStack(alignment: .leading, spacing: 16) {
-            // title line
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(card.wordDefinition?.attributes.word?.data?.attributes.targetText ?? card.frontContent)
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.title2.weight(.bold))
                 if let pos = card.wordDefinition?.attributes.partOfSpeech?.data?.attributes.name {
                     Text("(\(pos))").font(.title3).foregroundColor(.secondary).italic()
                 }
             }
 
-            // translation
             if let base = card.wordDefinition?.attributes.baseText, !base.isEmpty {
-                Text(base).font(.title2)
+                Text(base).font(.title3)
             }
 
             Divider().padding(.vertical, 6)
 
-            // example
             if let ex = card.wordDefinition?.attributes.exampleSentence, !ex.isEmpty {
                 Text(ex).font(.title3)
             }

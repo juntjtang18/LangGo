@@ -277,7 +277,7 @@ struct VocapageHostView: View {
             onClose: { self.selectedCard = nil },
             onSpeak: onSpeakOnce
         )
-        .presentationDetents([.fraction(0.5)])
+        .presentationDetents([.fraction(0.65)])
         .presentationDragIndicator(.visible)
     }
 
