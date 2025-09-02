@@ -2,6 +2,7 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import os
 
 struct VocapageHostView: View {
     @Environment(\.dismiss) private var dismiss
@@ -10,6 +11,7 @@ struct VocapageHostView: View {
 
     @StateObject private var loader = VocapageLoader()
     @StateObject private var speechManager = SpeechManager()
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageHostView")
 
     @AppStorage("showBaseTextInVocapage") private var showBaseText: Bool = true
     @AppStorage("readingMode") private var readingMode: ReadingMode = .cyclePage
@@ -17,7 +19,7 @@ struct VocapageHostView: View {
     @Binding var isShowingDueWordsOnly: Bool
 
     @State private var vocapageIds: [Int]
-    private let allIdsSeed: [Int]               // original "All" list, for restoring
+    private let allIdsSeed: [Int]
     @State private var currentPageIndex: Int
 
     let flashcardViewModel: FlashcardViewModel
@@ -28,7 +30,6 @@ struct VocapageHostView: View {
     @State private var vbSettings: VBSettingAttributes?
     @State private var pendingAutoplayAfterLoad = false
 
-    @State private var isShowingReviewView = false
     @State private var selectedCard: Flashcard?
 
     init(
@@ -44,7 +45,6 @@ struct VocapageHostView: View {
         self._isShowingDueWordsOnly = isShowingDueWordsOnly
         self.onFilterChange = onFilterChange
         self.allIdsSeed = allVocapageIds
-
     }
 
     private var currentVocapage: Vocapage? {
@@ -59,16 +59,7 @@ struct VocapageHostView: View {
     var body: some View {
         ZStack {
             if vocapageIds.isEmpty {
-                ZStack {
-                    // Match VocapageView’s background so layout and toolbar behave normally
-                    Color(red: 0.98, green: 0.97, blue: 0.94).ignoresSafeArea()
-                    VStack {
-                        Spacer()
-                        Text("No words to show for this page.")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                }
+                emptyStateView
             } else {
                 VocapagePagingView(
                     currentPageIndex: $currentPageIndex,
@@ -92,105 +83,195 @@ struct VocapageHostView: View {
         .navigationTitle("My Vocabulary")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    stopAutoplay()
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left").font(.body.weight(.semibold))
-                }
-                .accessibilityLabel("Back")
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showBaseText.toggle()
-                } label: {
-                    Image(systemName: showBaseText ? "text.badge.minus" : "text.badge.plus")
-                        .font(.body.weight(.semibold))
-                }
-                .accessibilityLabel(showBaseText ? "Hide Base Text" : "Show Base Text")
-            }
-        }
+        .toolbar { navigationToolbarItems }
         .safeAreaInset(edge: .bottom) { bottomToolbar }
         .toolbar(.hidden, for: .tabBar)
-        .onChange(of: currentPageIndex) { newIndex in
-            if readingMode != .cycleAll { stopAutoplay() }
-            if newIndex >= 0, newIndex < vocapageIds.count {
-                UserDefaults.standard.set(vocapageIds[newIndex], forKey: "lastViewedVocapageID")
-            }
-        }
-        .onChange(of: sortedFlashcardsForCurrentPage) { newCards in
-            guard pendingAutoplayAfterLoad,
-                  readingMode == .cycleAll,
-                  isAutoPlaying,
-                  !newCards.isEmpty else { return }
-            pendingAutoplayAfterLoad = false
-            if currentWordIndex >= newCards.count { currentWordIndex = max(0, newCards.count - 1) }
-            DispatchQueue.main.async { playCurrent() }
-        }
-        .sheet(item: $selectedCard) { card in wordDetailSheet(for: card) }
-        .fullScreenCover(isPresented: $isShowingReviewView) {
-            VocapageReviewView(cardsToReview: sortedFlashcardsForCurrentPage, viewModel: flashcardViewModel)
+        .onChange(of: currentPageIndex, perform: handlePageChange)
+        .onChange(of: sortedFlashcardsForCurrentPage, perform: handleCardsLoadedForAutoplay)
+        .sheet(item: $selectedCard) { card in
+            wordDetailSheet(for: card)
         }
         .onDisappear { stopAutoplay() }
         .onChange(of: scenePhase) { newPhase in
-            if newPhase != .active {
-                stopAutoplay()
-            }
+            if newPhase != .active { stopAutoplay() }
         }
-        // NEW: when toggling Due/All
-        .onChange(of: isShowingDueWordsOnly) { newValue in
-            Task {
-                // Always load the currently visible page for the new filter,
-                // so the UI never "waits" for a page switch to trigger .task.
-                if !vocapageIds.isEmpty, currentPageIndex < vocapageIds.count {
-                    await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: newValue)
-                }
-        
-                if newValue {
-                    // Preload all pages in Due mode, then prune those with 0 items.
-                    await withTaskGroup(of: Void.self) { group in
-                        for id in allIdsSeed {
-                            group.addTask { await loader.loadPage(withId: id, dueWordsOnly: true) }
-                        }
-                    }
-                    let filtered = allIdsSeed.filter { (loader.page(id: $0, dueOnly: true)?.flashcards?.isEmpty == false) }
-        
-                    if filtered.isEmpty {
-                        // No due words at all → empty list & reset index
-                        vocapageIds = []
-                        currentPageIndex = 0
-                        stopAutoplay()
-                    } else {
-                        // Keep current page if still present, otherwise jump to first
-                        let currentId = (currentPageIndex < vocapageIds.count) ? vocapageIds[currentPageIndex] : filtered.first!
-                        vocapageIds = filtered
-                        currentPageIndex = vocapageIds.firstIndex(of: currentId) ?? 0
-                    }
-                } else {
-                    // Back to All → compute a fresh page list (don’t rely on possibly-empty seed)
-                    let freshIds = await rebuildAllPageIds()
-                    vocapageIds = freshIds
-                    // Keep index in bounds, then load visible page in All mode
-                    currentPageIndex = min(currentPageIndex, max(0, freshIds.count - 1))
-                    if currentPageIndex < vocapageIds.count {
-                        await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: false)
-                    }
-                }
+        .onChange(of: isShowingDueWordsOnly, perform: handleFilterChange)
+    }
+    
+    // MARK: - Subviews & Logic
+    
+    private var emptyStateView: some View {
+        ZStack {
+            Color(red: 0.98, green: 0.97, blue: 0.94).ignoresSafeArea()
+            VStack {
+                Spacer()
+                Text("No words to show.")
+                    .foregroundColor(.secondary)
+                    .font(.headline)
+                Text(isShowingDueWordsOnly ? "You have no words due for review." : "Add some words to your vocabook to get started.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                Spacer()
             }
         }
     }
 
+    @ToolbarContentBuilder
+    private var navigationToolbarItems: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button {
+                stopAutoplay()
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left").font(.body.weight(.semibold))
+            }
+            .accessibilityLabel("Back")
+        }
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Button {
+                showBaseText.toggle()
+            } label: {
+                Image(systemName: showBaseText ? "text.badge.minus" : "text.badge.plus")
+                    .font(.body.weight(.semibold))
+            }
+            .accessibilityLabel(showBaseText ? "Hide Base Text" : "Show Base Text")
+        }
+    }
+
+    @ViewBuilder
+    private func wordDetailSheet(for card: Flashcard) -> some View {
+        let cards = sortedFlashcardsForCurrentPage
+        let idx = cards.firstIndex(where: { $0.id == card.id }) ?? 0
+
+        WordDetailSheet(
+            cards: cards,
+            initialIndex: idx,
+            showBaseText: showBaseText,
+            onClose: { self.selectedCard = nil },
+            onSpeak: speakOnce,
+            onDelete: { cardId in
+                await deleteCardAndRefresh(cardId: cardId)
+            }
+        )
+        .presentationDetents([.fraction(0.65)])
+        .presentationDragIndicator(.visible)
+    }
+    
+    private func deleteCardAndRefresh(cardId: Int) async {
+        logger.debug("--- Start Deletion Process for cardId: \(cardId) ---")
+        self.selectedCard = nil
+        
+        do {
+            try await DataServices.shared.flashcardService.deleteFlashcard(cardId: cardId)
+            logger.debug("✅ Service deletion successful.")
+            let oldPageCount = vocapageIds.count
+            let newIds = await rebuildAllPageIds()
+            logger.debug("🔄 Page IDs rebuilt. Old count: \(oldPageCount), New count: \(newIds.count)")
+            self.vocapageIds = newIds
+            
+            if currentPageIndex >= newIds.count {
+                currentPageIndex = max(0, newIds.count - 1)
+                logger.debug("Adjusted page index to: \(self.currentPageIndex)")
+            }
+            
+            if !newIds.isEmpty {
+                let pageToReload = newIds[currentPageIndex]
+                logger.debug("⚡️ Forcing reload of page ID: \(pageToReload)...")
+                await loader.forceReloadPage(withId: newIds[currentPageIndex], dueWordsOnly: isShowingDueWordsOnly)
+                logger.debug("✅ Page reload complete.")
+            } else {
+                logger.debug("No pages left, skipping reload.")
+            }
+            
+        } catch {
+            print("Failed to delete card: \(error.localizedDescription)")
+        }
+        logger.debug("--- End Deletion Process ---")
+    }
+    
+    private func speakOnce(card: Flashcard, completion: @escaping () -> Void) {
+        Task {
+            if self.vbSettings == nil {
+                self.vbSettings = try? await DataServices.shared.settingsService.fetchVBSetting().attributes
+            }
+            if let settings = self.vbSettings {
+                self.speechManager.stop()
+                // FIXED: Changed argument label from 'completion' to 'onComplete'
+                self.speechManager.speak(card: card, showBaseText: self.showBaseText, settings: settings, onComplete: completion)
+            } else {
+                completion()
+            }
+        }
+    }
+    
+    private func handlePageChange(newIndex: Int) {
+        if readingMode != .cycleAll { stopAutoplay() }
+        if newIndex >= 0, newIndex < vocapageIds.count {
+            UserDefaults.standard.set(vocapageIds[newIndex], forKey: "lastViewedVocapageID")
+        }
+    }
+
+    private func handleCardsLoadedForAutoplay(newCards: [Flashcard]) {
+        guard pendingAutoplayAfterLoad, readingMode == .cycleAll, isAutoPlaying, !newCards.isEmpty else { return }
+        pendingAutoplayAfterLoad = false
+        if currentWordIndex >= newCards.count { currentWordIndex = max(0, newCards.count - 1) }
+        DispatchQueue.main.async { playCurrent() }
+    }
+
+    private func handleFilterChange(newValue: Bool) {
+        Task {
+            if !vocapageIds.isEmpty, currentPageIndex < vocapageIds.count {
+                await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: newValue)
+            }
+    
+            if newValue {
+                await withTaskGroup(of: Void.self) { group in
+                    for id in allIdsSeed { group.addTask { await loader.loadPage(withId: id, dueWordsOnly: true) } }
+                }
+                let filtered = allIdsSeed.filter { !(loader.page(id: $0, dueOnly: true)?.flashcards?.isEmpty ?? true) }
+    
+                if filtered.isEmpty {
+                    vocapageIds = []
+                    currentPageIndex = 0
+                    stopAutoplay()
+                } else {
+                    let currentId = (currentPageIndex < vocapageIds.count) ? vocapageIds[currentPageIndex] : filtered.first!
+                    vocapageIds = filtered
+                    currentPageIndex = vocapageIds.firstIndex(of: currentId) ?? 0
+                }
+            } else {
+                let freshIds = await rebuildAllPageIds()
+                vocapageIds = freshIds
+                currentPageIndex = min(currentPageIndex, max(0, freshIds.count - 1))
+                if !vocapageIds.isEmpty {
+                    await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: false)
+                }
+            }
+        }
+    }
+    
     private func rebuildAllPageIds() async -> [Int] {
+        logger.debug("Rebuilding all page IDs...")
         do {
             let vb = try await DataServices.shared.settingsService.fetchVBSetting()
             let pageSize = vb.attributes.wordsPerPage
             let all = try await DataServices.shared.flashcardService.fetchAllMyFlashcards()
-            let pages = max(1, Int(ceil(Double(all.count) / Double(pageSize))))
-            return Array(1...pages)
+            logger.debug("Found \(all.count) total flashcards to calculate pages.")
+            let pageCount = all.isEmpty ? 0 : Int(ceil(Double(all.count) / Double(pageSize)))
+            guard pageCount > 0 else {
+                logger.debug("Page count is 0. Returning empty ID list.")
+                return []
+            }
+            let ids = Array(1...pageCount)
+            logger.debug("Calculated \(ids.count) pages.")
+
+            return Array(1...pageCount)
         } catch {
-            return []
+            logger.error("❌ Failed to rebuild page IDs: \(error.localizedDescription)")
+           return []
         }
     }
     
@@ -247,40 +328,6 @@ struct VocapageHostView: View {
         .background(.ultraThinMaterial)
     }
 
-    @ViewBuilder
-    private func wordDetailSheet(for card: Flashcard) -> some View {
-        let cards = sortedFlashcardsForCurrentPage
-        let idx = cards.firstIndex(where: { $0.id == card.id }) ?? 0
-
-        let onSpeakOnce: (_ c: Flashcard, _ completion: @escaping () -> Void) -> Void = { c, completion in
-            Task {
-                if self.vbSettings == nil {
-                    self.vbSettings = try? await DataServices.shared.settingsService.fetchVBSetting().attributes
-                }
-                if let settings = self.vbSettings {
-                    self.speechManager.stop()
-                    self.speechManager.speak(
-                        card: c,
-                        showBaseText: self.showBaseText,
-                        settings: settings
-                    ) { completion() }
-                } else {
-                    completion()
-                }
-            }
-        }
-
-        WordDetailSheet(
-            cards: cards,
-            initialIndex: idx,
-            showBaseText: showBaseText,
-            onClose: { self.selectedCard = nil },
-            onSpeak: onSpeakOnce
-        )
-        .presentationDetents([.fraction(0.65)])
-        .presentationDragIndicator(.visible)
-    }
-
     private func toggleReading(_ target: ReadingMode) {
         readingMode = (readingMode == target) ? .inactive : target
     }
@@ -331,10 +378,9 @@ struct VocapageHostView: View {
               let settings = vbSettings else { return }
 
         speechManager.currentIndex = currentWordIndex
-        speechManager.speak(card: cards[currentWordIndex], showBaseText: showBaseText, settings: settings) {
-            onOneWordFinished()
-        }
+        speechManager.speak(card: cards[currentWordIndex], showBaseText: showBaseText, settings: settings, onComplete: onOneWordFinished)
     }
+    
     private func onOneWordFinished() {
         guard isAutoPlaying else { return }
         let count = sortedFlashcardsForCurrentPage.count

@@ -72,7 +72,26 @@ class VocabookViewModel: ObservableObject {
             logger.error("loadStatistics failed: \(error.localizedDescription)")
         }
     }
-    
+    @MainActor
+    func deleteCardAndRefresh(cardId: Int) async {
+        do {
+            // The service deletes the card and invalidates the cache
+            try await flashcardService.deleteFlashcard(cardId: cardId)
+            
+            // Reload the pages with the current filter setting.
+            // This will fetch fresh data because the cache is now stale.
+            // This effectively "reconstructs" the vocapage as requested.
+            let dueOnly = UserDefaults.standard.bool(forKey: "isShowingDueWordsOnly")
+            await loadVocabookPages(dueOnly: dueOnly)
+            
+            // Also refresh the statistics panel
+            await loadStatistics()
+            
+        } catch {
+            // Handle the error appropriately, e.g., show an error message to the user
+            logger.error("Failed to delete card and refresh: \(error.localizedDescription)")
+        }
+    }
     // MARK: - Refactored Vocabook Loading
     
     /// Fetches and paginates flashcards, either all cards or only those due for review.

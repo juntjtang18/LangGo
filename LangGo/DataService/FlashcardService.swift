@@ -143,7 +143,7 @@ class FlashcardService {
         isAllMyFlashcardsCacheStale = true
         isReviewFlashcardsCacheStale = true
         
-        logger.debug("✏️ Invalidated all flashcard-related caches.")
+        logger.debug("✏️ SUCCESS: All flashcard caches invalidated. Stale flags set to TRUE.")
     }
     
     private func getOrFetchAllMyFlashcards() async throws -> [Flashcard] {

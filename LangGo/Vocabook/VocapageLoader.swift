@@ -12,8 +12,6 @@ class VocapageLoader: ObservableObject {
     
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocapageLoader")
     
-    struct Key: Hashable { let id: Int; let dueOnly: Bool }
-    
     @Published var vocapagesAll: [Int: Vocapage] = [:]
     @Published var vocapagesDue: [Int: Vocapage] = [:]
     @Published var loadingAll: Set<Int> = []
@@ -26,9 +24,19 @@ class VocapageLoader: ObservableObject {
 
     func loadPage(withId vocapageId: Int, dueWordsOnly: Bool = false) async {
         // Choose the right buckets based on filter
-        var store      = dueWordsOnly ? vocapagesDue : vocapagesAll
-        var loadingSet = dueWordsOnly ? loadingDue    : loadingAll
-        var errors     = dueWordsOnly ? errorDue      : errorAll
+        var store: [Int: Vocapage]
+        var loadingSet: Set<Int>
+        var errors: [Int: String]
+        
+        if dueWordsOnly {
+            store = vocapagesDue
+            loadingSet = loadingDue
+            errors = errorDue
+        } else {
+            store = vocapagesAll
+            loadingSet = loadingAll
+            errors = errorAll
+        }
 
         // Already loading or already cached? bail.
         if loadingSet.contains(vocapageId) || (store[vocapageId]?.flashcards != nil) { return }
@@ -47,8 +55,7 @@ class VocapageLoader: ObservableObject {
             page.flashcards = fetchedFlashcards
             
             store[vocapageId] = page
-
-
+            
         } catch {
             logger.error("Failed to load details for vocapage \(vocapageId): \(error.localizedDescription)")
             errors[vocapageId] = error.localizedDescription
@@ -67,5 +74,16 @@ class VocapageLoader: ObservableObject {
     // Accessor to read the correct variant without exposing internals
     func page(id: Int, dueOnly: Bool) -> Vocapage? {
         dueOnly ? vocapagesDue[id] : vocapagesAll[id]
+    }
+    
+    // 👇 ADD THIS FUNCTION
+    /// Removes a page from the cache and then re-triggers a load from the network.
+    func forceReloadPage(withId id: Int, dueWordsOnly: Bool) async {
+        if dueWordsOnly {
+            vocapagesDue.removeValue(forKey: id)
+        } else {
+            vocapagesAll.removeValue(forKey: id)
+        }
+        await loadPage(withId: id, dueWordsOnly: dueWordsOnly)
     }
 }

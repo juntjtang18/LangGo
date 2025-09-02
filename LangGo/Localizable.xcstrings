@@ -63,6 +63,9 @@
         }
       }
     },
+    "Add some words to your vocabook to get started." : {
+
+    },
     "Add to VocaBook" : {
       "localizations" : {
         "fr" : {
@@ -90,6 +93,9 @@
 
     },
     "Already have an account?" : {
+
+    },
+    "Are you sure?" : {
 
     },
     "Back" : {
@@ -127,6 +133,9 @@
 
     },
     "by %@" : {
+
+    },
+    "Cancel" : {
 
     },
     "Card %lld of %lld" : {
@@ -346,6 +355,12 @@
         }
       }
     },
+    "Delete" : {
+
+    },
+    "Delete Word" : {
+
+    },
     "Don't have an account? Sign Up" : {
       "localizations" : {
         "ja" : {
@@ -406,6 +421,9 @@
 
     },
     "Due Words" : {
+
+    },
+    "Edit Word" : {
 
     },
     "Email" : {
@@ -772,6 +790,9 @@
 
     },
     "No words to show for this page." : {
+
+    },
+    "No words to show." : {
 
     },
     "Not now — I’ll review manually" : {
@@ -1321,6 +1342,9 @@
         }
       }
     },
+    "This word will be permanently deleted from your vocabook." : {
+
+    },
     "Tier Breakdown" : {
 
     },
@@ -1572,6 +1596,9 @@
       }
     },
     "Yes, help me remember better" : {
+
+    },
+    "You have no words due for review." : {
 
     }
   },

@@ -4,14 +4,15 @@ import SwiftUI
 struct VocapageView: View {
     let vocapage: Vocapage?
     @Binding var showBaseText: Bool
+
+    // This property was removed as its state is better managed by the parent view.
+    // @State private var selectedCardIndex: Int?
+
     /// Index of the currently reading item for highlight/scroll.
     let highlightIndex: Int
     let onLoad: () -> Void
-    let onSelectCard: (Flashcard) -> Void      // <-- add this
-
-    private var sortedFlashcards: [Flashcard] {
-        vocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
-    }
+    // ADDED: A closure that the parent view provides to handle a card tap.
+    let onSelectCard: (Flashcard) -> Void
 
     var body: some View {
         ZStack {
@@ -25,7 +26,8 @@ struct VocapageView: View {
                         sortedFlashcards: sortedFlashcards,
                         showBaseText: showBaseText,
                         highlightIndex: highlightIndex,
-                        onSelectCard: onSelectCard              // <-- pass down
+                        // PASSED DOWN: The onSelectCard closure is passed to the list view.
+                        onSelectCard: onSelectCard
                     )
                 }
             }
@@ -37,17 +39,32 @@ struct VocapageView: View {
                         .padding(.vertical, 6)
                 }
             }
-
         }
         .task { onLoad() }
     }
+
+    private var sortedFlashcards: [Flashcard] {
+        vocapage?.flashcards?.sorted { $0.id < $1.id } ?? []
+    }
+
+    // This logic is also better managed by the parent view (e.g., VocapageHostView)
+    // that presents the detail sheet.
+    /*
+    private var isShowingDetail: Binding<Bool> {
+        Binding(
+            get: { selectedCardIndex != nil },
+            set: { if !$0 { selectedCardIndex = nil } }
+        )
+    }
+    */
 }
 
 private struct VocapageContentListView: View {
     let sortedFlashcards: [Flashcard]
     let showBaseText: Bool
     let highlightIndex: Int
-    let onSelectCard: (Flashcard) -> Void      // <-- add this
+    // ADDED: The view now accepts the onSelectCard closure.
+    let onSelectCard: (Flashcard) -> Void
 
     var body: some View {
         if sortedFlashcards.isEmpty {
@@ -58,8 +75,9 @@ private struct VocapageContentListView: View {
         } else {
             ScrollViewReader { proxy in
                 List {
+                    // Using a clear header to add some top padding to the list content.
                     Section(header: Color.clear.frame(height: 10)) {
-                        ForEach(sortedFlashcards.enumerated().map { (index, card) in (index, card) }, id: \.1.id) { index, card in
+                        ForEach(sortedFlashcards.enumerated().map { $0 }, id: \.element.id) { index, card in
                             HStack(spacing: 8) {
                                 TierIconView(tier: card.reviewTire)
 
@@ -78,10 +96,9 @@ private struct VocapageContentListView: View {
                             .padding(.vertical, 8)
                             .listRowBackground(Color.clear)
                             .background(highlightIndex == index ? Color.yellow.opacity(0.3) : Color.clear)
-                            // 👇 make the whole row tappable
+                            // ADDED: These modifiers make the entire row tappable.
                             .contentShape(Rectangle())
                             .onTapGesture { onSelectCard(card) }
-
                         }
                     }
                 }
@@ -91,7 +108,7 @@ private struct VocapageContentListView: View {
                     if newIndex >= 0 && newIndex < sortedFlashcards.count {
                         let cardIdToScroll = sortedFlashcards[newIndex].id
                         withAnimation {
-                            proxy.scrollTo(cardIdToScroll, anchor: .top)
+                            proxy.scrollTo(cardIdToScroll, anchor: .center)
                         }
                     }
                 }
@@ -99,3 +116,4 @@ private struct VocapageContentListView: View {
         }
     }
 }
+

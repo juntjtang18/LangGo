@@ -6,19 +6,29 @@ struct WordDetailSheet: View {
     let showBaseText: Bool
     let onClose: () -> Void
     let onSpeak: (_ card: Flashcard, _ completion: @escaping () -> Void) -> Void
+    // ADDED: A closure to handle the delete action.
+    let onDelete: (_ cardId: Int) async -> Void
 
     // Paging state
     @State private var index: Int
+    
+    // ADDED: State for the confirmation view and deletion process.
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+
     init(cards: [Flashcard],
          initialIndex: Int,
          showBaseText: Bool,
          onClose: @escaping () -> Void,
-         onSpeak: @escaping (_ card: Flashcard, _ completion: @escaping () -> Void) -> Void) {
+         onSpeak: @escaping (_ card: Flashcard, _ completion: @escaping () -> Void) -> Void,
+         // ADDED: onDelete parameter
+         onDelete: @escaping (_ cardId: Int) async -> Void) {
         self.cards = cards
         self._index = State(initialValue: initialIndex)
         self.showBaseText = showBaseText
         self.onClose = onClose
         self.onSpeak = onSpeak
+        self.onDelete = onDelete
     }
 
     // Existing controls state (keep your mic/speaker/repeat states here)
@@ -53,10 +63,13 @@ struct WordDetailSheet: View {
                     .transition(transitionFor(slideDir))
             }
             .animation(.easeInOut(duration: 0.28), value: card.id)
+
             controlsRow
             navRow
         }
         .padding(.bottom, 12)
+        .overlay(deleteConfirmationOverlay) // ADDED: The confirmation view overlay
+        //.disabled(showDeleteConfirmation) // Disable background content when overlay is visible
     }
 
     // MARK: - Content (move your existing word layout here)
@@ -68,6 +81,21 @@ struct WordDetailSheet: View {
                     .font(.title2.weight(.bold))
                 if let pos = card.wordDefinition?.attributes.partOfSpeech?.data?.attributes.name {
                     Text("(\(pos))").font(.title3).foregroundColor(.secondary).italic()
+                }
+                Spacer()
+                // ADDED: The "..." menu button
+                Menu {
+                    Button("Edit Word") {
+                        // Placeholder for your edit action
+                        print("Edit tapped for card ID: \(card.id)")
+                    }
+                    Button("Delete Word", role: .destructive) {
+                        showDeleteConfirmation = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -86,8 +114,65 @@ struct WordDetailSheet: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 12)
     }
+    
+    // ADDED: The entire confirmation view
+    @ViewBuilder
+    private var deleteConfirmationOverlay: some View {
+        if showDeleteConfirmation {
+            ZStack {
+                // Background dimmer
+                Color.black.opacity(0.4).ignoresSafeArea()
+                    .onTapGesture {
+                        if !isDeleting {
+                            showDeleteConfirmation = false
+                        }
+                    }
 
-    // MARK: - Controls
+                // Confirmation dialog
+                VStack(spacing: 16) {
+                    Text("Are you sure?")
+                        .font(.headline)
+                    Text("This word will be permanently deleted from your vocabook.")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.secondary)
+
+                    if isDeleting {
+                        ProgressView()
+                            .padding(.vertical, 10)
+                    } else {
+                        HStack(spacing: 12) {
+                            Button("Cancel") {
+                                showDeleteConfirmation = false
+                            }
+                            .buttonStyle(DetailNavButtonStyle(kind: .secondary))
+
+                            Button("Delete") {
+                                Task {
+                                    isDeleting = true
+                                    await onDelete(card.id)
+                                    // The parent view is responsible for closing the sheet.
+                                    // We reset state here in case of an error.
+                                    isDeleting = false
+                                    showDeleteConfirmation = false
+                                }
+                            }
+                            .buttonStyle(DetailNavButtonStyle(kind: .primary, isDestructive: true))
+                        }
+                    }
+                }
+                .padding()
+                .background(Material.regularMaterial)
+                .cornerRadius(20)
+                .shadow(radius: 10)
+                .padding(.horizontal, 40)
+            }
+            .transition(.opacity.animation(.easeInOut))
+        }
+    }
+
+
+    // MARK: - Controls (Unchanged)
     private var controlsRow: some View {
         HStack(spacing: 28) {
             CircleIcon(systemName: "mic.fill") { showRecorder = true }
@@ -118,18 +203,16 @@ struct WordDetailSheet: View {
 
     private func transitionFor(_ dir: SlideDir) -> AnyTransition {
         switch dir {
-        case .next: // user tapped Next → slide L→R (new enters from left)
-            return .asymmetric(insertion: .move(edge: .leading),
-                               removal:   .move(edge: .trailing))
-        case .prev: // user tapped Previous → slide R→L (new enters from right)
-            return .asymmetric(insertion: .move(edge: .trailing),
-                               removal:   .move(edge: .leading))
+        case .next:
+            return .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
+        case .prev:
+            return .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
         case .none:
             return .identity
         }
     }
 
-    // MARK: - Paging actions
+    // MARK: - Paging actions (Unchanged)
     private func goNext() {
         guard canNext else { return }
         slideDir = .next
@@ -145,7 +228,7 @@ struct WordDetailSheet: View {
         }
     }
 
-    // MARK: - Speak / Repeat (reuse your logic; call with current card)
+    // MARK: - Speak / Repeat (Unchanged)
     private func readTapped() {
         if repeatReadingEnabled {
             if isRepeating { stopRepeating() } else { startRepeating() }
@@ -164,22 +247,23 @@ struct WordDetailSheet: View {
         }
         loop()
     }
-    private func stopRepeating() {
-        isRepeating = false
-        // if your speak helper exposes 'stop', you can call it via another closure
-    }
+    private func stopRepeating() { isRepeating = false }
     private func toggleRepeat() {
         repeatReadingEnabled.toggle()
         if !repeatReadingEnabled { stopRepeating() }
     }
 }
 
-// === keep your CircleIcon / DetailNavButtonStyle from earlier ===
+
 private struct DetailNavButtonStyle: ButtonStyle {
     enum Kind { case primary, secondary }
     let kind: Kind
+    var isDestructive: Bool = false // ADDED: To style the delete button
+
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
+        let primaryColor = isDestructive ? Color.red : Color.black
+        
         return configuration.label
             .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity, minHeight: 38)
@@ -189,7 +273,7 @@ private struct DetailNavButtonStyle: ButtonStyle {
                     switch kind {
                     case .primary:
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.black.opacity(pressed ? 0.85 : 1.0))
+                            .fill(primaryColor.opacity(pressed ? 0.85 : 1.0))
                     case .secondary:
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(Color.white.opacity(pressed ? 0.92 : 1.0))
