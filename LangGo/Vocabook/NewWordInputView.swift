@@ -4,185 +4,193 @@ import Combine
 import os
 import AVFoundation
 
+// FIX 1: Moved SearchResult outside the main view struct to make it accessible to NewWordFormView.
+struct SearchResult: Identifiable, Hashable {
+    let id: String
+    let wordDefinitionId: Int
+    let baseText: String
+    let targetText: String
+    let partOfSpeech: String
+    let isAlreadyAdded: Bool
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(wordDefinitionId)
+    }
+    
+    static func == (lhs: SearchResult, rhs: SearchResult) -> Bool {
+        lhs.wordDefinitionId == rhs.wordDefinitionId
+    }
+}
+
+private struct ActionButtonStyle: ButtonStyle {
+    var backgroundColor: Color
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Capsule().fill(backgroundColor))
+            .foregroundColor(.white)
+            .font(.headline)
+            .opacity(isEnabled ? 1.0 : 0.5) // Fades the button when disabled
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: isEnabled)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
 struct NewWordInputView: View {
     // MARK: - Environment & View Model
     @Environment(\.dismiss) var dismiss
     @ObservedObject var viewModel: FlashcardViewModel
-    
-    // --- CORRECTED: Observe the shared UserSessionManager ---
     @StateObject private var session = UserSessionManager.shared
 
     // MARK: - State (Source of Truth)
     @State private var word: String = ""
     @State private var baseText: String = ""
     @State private var partOfSpeech: PartOfSpeech? = nil
-    @State private var inputDirection: InputDirection = .baseToTarget
-    @State private var isTranslationStale: Bool = true
+    @AppStorage("newWordInputDirection") private var inputDirection: InputDirection = .targetToBase
     
-    // Asynchronous Operation State
-    @State private var isLoading: Bool = false
-    @State private var isTranslating: Bool = false
-    @State private var isLearningWord: Bool = false
+    enum ViewState: Equatable {
+        case idle
+        case searching
+        case translating
+        case saving
+        case success
+        case error(String)
+        
+        static func == (lhs: NewWordInputView.ViewState, rhs: NewWordInputView.ViewState) -> Bool {
+            switch (lhs, rhs) {
+            case (.idle, .idle), (.searching, .searching), (.translating, .translating),
+                 (.saving, .saving), (.success, .success):
+                return true
+            case (.error(let a), .error(let b)):
+                return a == b
+            default:
+                return false
+            }
+        }
+    }
+    @State private var viewState: ViewState = .idle
     
-    // Search State
     @State private var searchResults: [SearchResult] = []
-    @State private var isSearching: Bool = false
     @State private var searchTask: Task<Void, Never>?
     
-    // User Feedback State
-    @State private var showSuccessMessage: Bool = false
-    @State private var showErrorMessage: Bool = false
-    @State private var errorMessageText: String = ""
-    
-    // Enum and State for managing focus
-    enum Field: Hashable {
-        case top, bottom
-    }
+    enum Field: Hashable { case top, bottom }
     @FocusState private var focusedField: Field?
     
-    // Speech Synthesizer
     @State private var synthesizer = AVSpeechSynthesizer()
 
     // MARK: - Enums & Computed Properties
-    enum InputDirection: String, CaseIterable, Identifiable {
-        case baseToTarget = "Base → Target"
-        case targetToBase = "Target → Base"
-        var id: String { self.rawValue }
-    }
+    enum InputDirection: String { case baseToTarget, targetToBase }
 
-    // --- CORRECTED: Reads the base language from the session ---
-    private var baseLanguageCode: String {
-        session.currentUser?.user_profile?.baseLanguage ?? "en"
-    }
+    private var baseLanguageCode: String { session.currentUser?.user_profile?.baseLanguage ?? "en" }
     private var targetLanguageCode: String { Config.learningTargetLanguageCode }
     private var baseLanguageName: String { languageName(for: baseLanguageCode) }
     private var targetLanguageName: String { languageName(for: targetLanguageCode) }
 
+    private var isBusy: Bool {
+        viewState != .idle && viewState != .success
+    }
+
     // MARK: - Body
     var body: some View {
         NavigationStack {
-            ZStack {
-                mainContent
-                
-                if showSuccessMessage || showErrorMessage {
-                    FloatingMessageView(
-                        isSuccess: showSuccessMessage,
-                        message: showSuccessMessage ? "Word saved successfully!" : errorMessageText
-                    )
-                    .transition(.opacity.combined(with: .scale))
-                }
-            }
-            .navigationTitle("Add New Word")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItemGroup(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        HStack { Image(systemName: "chevron.left"); Text("Back") }
+            mainContent
+                .navigationTitle("Add New Word")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItemGroup(placement: .navigationBarLeading) {
+                        Button("Back") { dismiss() }
+                    }
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button(action: hideKeyboard) {
+                            Image(systemName: "keyboard.chevron.compact.down")
+                        }
                     }
                 }
-            }
-            .sheet(isPresented: $isTranslating) {
-                VStack(spacing: 20) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                    Text("Translating...")
-                        .font(.headline)
-                }
-                .presentationDetents([.height(150)])
-                .interactiveDismissDisabled(true)
-            }
         }
     }
 
     private var mainContent: some View {
-        // MARK: - Removed background tap gesture to resolve conflict with picker.
         VStack {
-            Form {
-                NewWordFormView(
-                    word: $word,
-                    baseText: $baseText,
-                    partOfSpeech: $partOfSpeech,
-                    inputDirection: $inputDirection,
-                    searchResults: $searchResults,
-                    isSearching: $isSearching,
-                    isTranslationStale: $isTranslationStale,
-                    focusedField: $focusedField,
-                    baseLanguageName: baseLanguageName,
-                    targetLanguageName: targetLanguageName,
-                    onDebouncedSearch: debouncedSearch,
-                    onTranslate: translateWord,
-                    onSwap: swapLanguages,
-                    onLearnThis: learnThisWord,
-                    onSpeakTop: speakTop,
-                    onSpeakBottom: speakBottom
-                )
-            }
-            .id(inputDirection)
-            .onAppear {
-                focusedField = .top
-            }
-            .onChange(of: word, perform: { _ in
-                isTranslationStale = true
-            })
-            // MARK: - Added toolbar with a keyboard close icon to dismiss keyboard
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button(action: {
-                        hideKeyboard()
-                    }) {
-                        Image(systemName: "keyboard.chevron.compact.down")
-                            .font(.title2)
-                    }
+            // FIX 2: Wrapped Form in a Group before applying the .id() modifier.
+            Group {
+                Form {
+                    NewWordFormView(
+                        word: $word,
+                        baseText: $baseText,
+                        partOfSpeech: $partOfSpeech,
+                        inputDirection: $inputDirection,
+                        searchResults: $searchResults,
+                        isSearching: .constant(viewState == .searching),
+                        focusedField: $focusedField,
+                        baseLanguageName: baseLanguageName,
+                        targetLanguageName: targetLanguageName,
+                        onDebouncedSearch: debouncedSearch,
+                        onTranslate: translateWord,
+                        onSwap: swapLanguages,
+                        onLearnThis: learnThisWord,
+                        onSpeakTop: speakTop,
+                        onSpeakBottom: speakBottom
+                    )
                 }
             }
-            
+            .id(inputDirection)
+            .onAppear { focusedField = .top }
+
             actionButtons
         }
         .padding(.bottom, 10)
+        .background(Color(UIColor.systemGroupedBackground)) // Match form background
+        .onTapGesture {
+            hideKeyboard()
+        }
+        .overlay {
+            feedbackOverlay
+        }
+    }
+    
+    @ViewBuilder
+    private var feedbackOverlay: some View {
+        ZStack {
+            if isBusy {
+                Color.black.opacity(0.001)
+            }
+            
+            switch viewState {
+            case .translating:
+                FeedbackPill(message: "Translating...", icon: nil, style: .loading)
+            case .saving:
+                FeedbackPill(message: "Saving...", icon: nil, style: .loading)
+            case .success:
+                FeedbackPill(message: "Saved Successfully!", icon: "checkmark.circle.fill", style: .success)
+            case .error(let message):
+                FeedbackPill(message: message, icon: "xmark.circle.fill", style: .error)
+            default:
+                EmptyView()
+            }
+        }
+        .animation(.easeInOut, value: viewState)
     }
 
-    // MARK: - Subviews
     private var actionButtons: some View {
         HStack(spacing: 20) {
-            Button(action: translateWord) {
-                Text("Translate")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Capsule().fill(Color.blue))
-                    .foregroundColor(.white)
-                    .font(.headline)
-                    .opacity(word.isEmpty || isTranslating || isLoading ? 0.5 : 1.0)
-            }
-            .disabled(word.isEmpty || isTranslating || isLoading)
-            
-            Button(action: saveWord) {
-                HStack {
-                    if isLoading { ProgressView() }
-                    Text(isLoading ? "Saving..." : "Save")
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Capsule().fill(Color.green))
-                .foregroundColor(.white)
-                .font(.headline)
-                .opacity(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                         || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                         || isLoading || isTranslating || isTranslationStale ? 0.5 : 1.0)
-            }
-            .disabled(isLoading
-                      || word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                      || baseText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                      || isTranslating
-                      || isTranslationStale)
+            Button("Translate", action: translateWord)
+                .buttonStyle(ActionButtonStyle(backgroundColor: .blue))
+                .disabled(word.trimmed.isEmpty || isBusy)
+
+            Button("Save", action: saveWord)
+                .buttonStyle(ActionButtonStyle(backgroundColor: .green))
+                .disabled(word.trimmed.isEmpty || baseText.trimmed.isEmpty || isBusy)
         }
         .padding(.horizontal)
     }
     
-    // MARK: - Logic & Actions
-    
     private func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        focusedField = nil
     }
 
     private func speak(text: String, languageCode: String) {
@@ -216,31 +224,27 @@ struct NewWordInputView: View {
     }
 
     private func learnThisWord(result: SearchResult) {
-        guard !isLearningWord else { return }
-        isLearningWord = true
         Task {
+            viewState = .saving
             do {
-                let posRawValue = PartOfSpeech.allCases.first(where: { $0.displayName == result.partOfSpeech })?.rawValue ?? "noun"
+                let posRawValue = PartOfSpeech.allCases.first { $0.displayName == result.partOfSpeech }?.rawValue ?? "noun"
                 try await viewModel.saveNewWord(
                     targetText: result.targetText,
                     baseText: result.baseText,
                     partOfSpeech: posRawValue,
                     locale: baseLanguageCode
                 )
-                word = ""
-                baseText = ""
-                searchResults = []
-                partOfSpeech = nil
-                isTranslationStale = true
-                focusedField = .top
+                word = ""; baseText = ""; searchResults = []; partOfSpeech = nil
+                viewState = .success
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    if viewState == .success { viewState = .idle }
+                }
             } catch {
-                errorMessageText = "Failed to add word: \(error.localizedDescription)"
-                withAnimation { showErrorMessage = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    withAnimation { showErrorMessage = false }
+                viewState = .error("Already in vocabook.")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    if case .error = viewState { viewState = .idle }
                 }
             }
-            isLearningWord = false
         }
     }
 
@@ -249,159 +253,139 @@ struct NewWordInputView: View {
     }
     
     private func swapLanguages() {
-        withAnimation {
-            inputDirection = (inputDirection == .baseToTarget) ? .targetToBase : .baseToTarget
-            word = ""; baseText = ""; searchResults = []; searchTask?.cancel()
-            isTranslationStale = true
-        }
+        (word, baseText) = (baseText, word)
+        inputDirection = (inputDirection == .baseToTarget) ? .targetToBase : .baseToTarget
+        debouncedSearch(term: word, searchBase: inputDirection == .baseToTarget)
     }
     
     private func debouncedSearch(term: String, searchBase: Bool) {
         searchTask?.cancel()
-        let trimmedTerm = term.trimmingCharacters(in: .whitespaces)
-        guard trimmedTerm.count >= 2 else {
+        guard term.trimmed.count >= 2 else {
             searchResults = []
-            isSearching = false
+            if case .searching = viewState { viewState = .idle }
             return
         }
-        isSearching = true
-        showErrorMessage = false
-        searchTask = Task {
+        
+        let task = Task {
             do {
-                try await Task.sleep(nanoseconds: 500_000_000)
-                let results = try await viewModel.searchForWord(term: trimmedTerm, searchBase: searchBase)
-                await MainActor.run { self.searchResults = results; self.isSearching = false }
+                try await Task.sleep(nanoseconds: 200_000_000)
+                if Task.isCancelled { return }
+                viewState = .searching
+                
+                try await Task.sleep(nanoseconds: 300_000_000)
+                if Task.isCancelled { return }
+                
+                let results = try await viewModel.searchForWord(term: term.trimmed, searchBase: searchBase)
+                self.searchResults = results
+                viewState = .idle
             } catch {
-                if error is CancellationError || (error as? URLError)?.code == .cancelled {
-                    await MainActor.run { self.isSearching = false }
+                if Task.isCancelled {
+                    viewState = .idle
                 } else {
-                    await MainActor.run {
-                        self.errorMessageText = "Search failed: \(error.localizedDescription)"
-                        self.showErrorMessage = true
-                        self.isSearching = false
-                    }
+                    viewState = .error("Search failed")
                 }
             }
         }
+        searchTask = task
     }
 
     private func saveWord() {
-        isLoading = true
+        guard !isBusy else { return }
+        hideKeyboard()
+        viewState = .saving
         Task {
             do {
-                let targetOut: String
-                let baseOut: String
-                if inputDirection == .baseToTarget {
-                    baseOut   = word.trimmingCharacters(in: .whitespacesAndNewlines)
-                    targetOut = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
-                } else {
-                    targetOut = word.trimmingCharacters(in: .whitespacesAndNewlines)
-                    baseOut   = baseText.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
+                let targetOut = (inputDirection == .baseToTarget) ? baseText.trimmed : word.trimmed
+                let baseOut = (inputDirection == .baseToTarget) ? word.trimmed : baseText.trimmed
+                
                 try await viewModel.saveNewWord(
                     targetText: targetOut,
                     baseText: baseOut,
                     partOfSpeech: partOfSpeech?.rawValue ?? "",
                     locale: baseLanguageCode
                 )
-                word = ""
-                baseText = ""
-                partOfSpeech = nil
-                isTranslationStale = true
-                withAnimation {
-                    showSuccessMessage = true
-                    showErrorMessage = false
+                word = ""; baseText = ""; partOfSpeech = nil
+                viewState = .success
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    if viewState == .success { viewState = .idle }
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    withAnimation { showSuccessMessage = false }
-                }
-                isLoading = false
             } catch {
-                errorMessageText = "Failed to save word: \(error.localizedDescription)"
-                withAnimation {
-                    showErrorMessage = true
-                    showSuccessMessage = false
+                viewState = .error("Failed to save. Word may already exist.")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    if case .error = viewState { viewState = .idle }
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    withAnimation { showErrorMessage = false }
-                }
-                isLoading = false
             }
         }
     }
     
     private func translateWord() {
-        isTranslating = true
+        guard !word.trimmed.isEmpty, !isBusy else { return }
+        hideKeyboard()
+        viewState = .translating
         Task {
             do {
                 let sourceCode = (inputDirection == .baseToTarget) ? baseLanguageCode : targetLanguageCode
                 let targetCode = (inputDirection == .baseToTarget) ? targetLanguageCode : baseLanguageCode
-                let sourceText = word.trimmingCharacters(in: .whitespacesAndNewlines)
-                if sourceText.isEmpty || sourceCode == targetCode {
+                
+                if sourceCode == targetCode {
                     baseText = word
-                    isTranslating = false
+                    viewState = .idle
                     return
                 }
-                let response = try await viewModel.translateWord(
-                    word: sourceText,
-                    source: sourceCode,
-                    target: targetCode
-                )
+                
+                let response = try await viewModel.translateWord(word: word.trimmed, source: sourceCode, target: targetCode)
                 self.baseText = response.translation
                 
-                if !response.partOfSpeech.contains(",") {
-                    if let newPartOfSpeech = PartOfSpeech(rawValue: response.partOfSpeech.trimmingCharacters(in: .whitespaces).lowercased()) {
-                        self.partOfSpeech = newPartOfSpeech
-                    }
+                if let newPOS = PartOfSpeech(rawValue: response.partOfSpeech.trimmed.lowercased()) {
+                    self.partOfSpeech = newPOS
                 }
-                
-                self.isTranslationStale = false
+                viewState = .idle
             } catch {
-                errorMessageText = "Translation failed: \(error.localizedDescription)"
-                withAnimation {
-                    showErrorMessage = true
-                    showSuccessMessage = false
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    withAnimation { showErrorMessage = false }
+                viewState = .error("Translation failed.")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    if case .error = viewState { viewState = .idle }
                 }
             }
-            isTranslating = false
         }
     }
 }
 
-
-// MARK: - Floating Message View
-private struct FloatingMessageView: View {
-    let isSuccess: Bool
+private struct FeedbackPill: View {
     let message: String
-
+    let icon: String?
+    let style: Style
+    
+    enum Style { case loading, success, error }
+    
     var body: some View {
-        Text(message)
-            .font(.subheadline)
-            .foregroundColor(.white)
-            .padding()
-            .background(isSuccess ? Color.green : Color.red)
-            .cornerRadius(12)
-            .shadow(radius: 10)
+        HStack(spacing: 8) {
+            if let icon = icon {
+                Image(systemName: icon)
+            } else if style == .loading {
+                ProgressView()
+            }
+            Text(message)
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundColor(.white)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        // FIX 3: Corrected the background modifier syntax
+        .background(backgroundColor, in: Capsule())
+        .shadow(radius: 10)
+    }
+    
+    private var backgroundColor: some ShapeStyle {
+        switch style {
+        case .loading: return Color.blue.gradient
+        case .success: return Color.green.gradient
+        case .error: return Color.red.gradient
+        }
     }
 }
 
-
-struct SearchResult: Identifiable, Hashable {
-    let id: String
-    let wordDefinitionId: Int
-    let baseText: String
-    let targetText: String
-    let partOfSpeech: String
-    let isAlreadyAdded: Bool
-    
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(wordDefinitionId)
-    }
-    
-    static func == (lhs: SearchResult, rhs: SearchResult) -> Bool {
-        lhs.wordDefinitionId == rhs.wordDefinitionId
+extension String {
+    var trimmed: String {
+        self.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

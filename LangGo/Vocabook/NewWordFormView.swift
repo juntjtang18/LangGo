@@ -42,7 +42,6 @@ struct NewWordFormView: View {
     @Binding var inputDirection: NewWordInputView.InputDirection
     @Binding var searchResults: [SearchResult]
     @Binding var isSearching: Bool
-    @Binding var isTranslationStale: Bool
     
     @FocusState.Binding var focusedField: NewWordInputView.Field?
     
@@ -74,15 +73,13 @@ struct NewWordFormView: View {
         let isBaseAtTop = (inputDirection == .baseToTarget)
         
         return Section {
-            TextField(isBaseAtTop ? "Enter base word" : "Enter target word", text: $word, axis: .vertical)
-                // MODIFIED: Reduced height to be closer to two lines.
+            TextField(isBaseAtTop ? baseLanguageName : targetLanguageName, text: $word, axis: .vertical)
                 .frame(minHeight: 60, alignment: .top)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .focused($focusedField, equals: .top)
-                .onChange(of: word, perform: { newWord in
-                    onDebouncedSearch(newWord, isBaseAtTop)
-                })
+                // FIX 4: Corrected .onChange syntax
+                .onChange(of: word, perform: { newValue in onDebouncedSearch(newValue, isBaseAtTop) })
 
             if focusedField == .top {
                 if isSearching {
@@ -111,16 +108,13 @@ struct NewWordFormView: View {
         let isBaseAtBottom = (inputDirection != .baseToTarget)
 
         return Section {
-            TextField(isBaseAtBottom ? "Enter base word" : "Target word", text: $baseText, axis: .vertical)
-                // MODIFIED: Reduced height to be closer to two lines.
+            TextField(isBaseAtBottom ? baseLanguageName : targetLanguageName, text: $baseText, axis: .vertical)
                 .frame(minHeight: 60, alignment: .top)
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
                 .focused($focusedField, equals: .bottom)
-                .foregroundColor(isTranslationStale ? .gray : .primary)
-                .onChange(of: baseText, perform: { newText in
-                    onDebouncedSearch(newText, isBaseAtBottom)
-                })
+                // FIX 4: Corrected .onChange syntax
+                .onChange(of: baseText, perform: { newValue in onDebouncedSearch(newValue, isBaseAtBottom) })
 
             if focusedField == .bottom {
                 if isSearching {
@@ -133,13 +127,6 @@ struct NewWordFormView: View {
         } header: {
             HStack {
                 Text(isBaseAtBottom ? "Base (\(baseLanguageName))" : "Target (\(targetLanguageName))")
-                
-                if isTranslationStale && !baseText.isEmpty {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                        .font(.caption)
-                }
-                
                 Spacer()
                 Button(action: onSpeakBottom) { Image(systemName: "speaker.wave.2.fill") }
                     .buttonStyle(SubtleIconButtonStyle())
@@ -152,9 +139,8 @@ struct NewWordFormView: View {
     }
     
     private var partOfSpeechSection: some View {
-        // MODIFIED: Removed the section header text.
-        Section("") {
-            Picker("Part of Speech", selection: $partOfSpeech) {
+        Section("Part of Speech") {
+            Picker("Select", selection: $partOfSpeech) {
                 Text("Not Specified").tag(nil as PartOfSpeech?)
                 ForEach(PartOfSpeech.allCases) { pos in
                     Text(pos.displayName).tag(pos as PartOfSpeech?)
