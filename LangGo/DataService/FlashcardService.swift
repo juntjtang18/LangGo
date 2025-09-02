@@ -81,6 +81,35 @@ class FlashcardService {
         invalidateAllFlashcardCaches()
         return transformStrapiCard(updatedStrapiCard)
     }
+    
+    func deleteFlashcard(cardId: Int) async throws {
+        logger.debug("➡️ Attempting to delete flashcard with id: \(cardId).")
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcards/\(cardId)/remove") else {
+            throw URLError(.badURL)
+        }
+
+        // The endpoint uses POST and doesn't require a request body.
+        // We define a placeholder for the generic `post` method's body parameter.
+        struct EmptyBody: Encodable {}
+
+        // We define a struct to decode the success response from the server,
+        // confirming the deletion.
+        struct DeleteResponse: Decodable {
+            struct Data: Decodable {
+                struct Attributes: Decodable {
+                    let message: String
+                }
+                let attributes: Attributes
+            }
+            let data: Data
+        }
+
+        let _: DeleteResponse = try await networkManager.post(to: url, body: EmptyBody())
+
+        invalidateAllFlashcardCaches()
+
+        logger.debug("✅ Successfully deleted flashcard with id: \(cardId) and invalidated caches.")
+    }
 
     func fetchAllMyFlashcards() async throws -> [Flashcard] {
         return try await getOrFetchAllMyFlashcards()

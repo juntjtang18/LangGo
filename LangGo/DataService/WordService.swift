@@ -14,7 +14,11 @@ import os
 class WordService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "WordService")
     private let networkManager = NetworkManager.shared
-    private let flashcardService = FlashcardService()
+    private let flashcardService: FlashcardService
+    
+    init(flashcardService: FlashcardService) {
+        self.flashcardService = flashcardService
+    }
     
     func saveNewWord(targetText: String, baseText: String, partOfSpeech: String, locale: String) async throws -> WordDefinitionResponse {
         logger.debug("WordService: Saving new word.")

@@ -15,8 +15,11 @@ final class DataServices {
 
     private init() {
         self.authService = AuthService()
-        self.flashcardService = FlashcardService()
-        self.wordService = WordService()
+        
+        let flashcardService = FlashcardService()
+        self.flashcardService = flashcardService
+
+        self.wordService = WordService(flashcardService: self.flashcardService)
         self.settingsService = SettingsService()
         
         self.storyService = StoryService()
