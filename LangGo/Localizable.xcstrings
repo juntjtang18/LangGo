@@ -455,7 +455,6 @@
       }
     },
     "Enter base word" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -464,6 +463,9 @@
           }
         }
       }
+    },
+    "Enter target word" : {
+
     },
     "Enter word or sentence" : {
       "localizations" : {
@@ -1126,13 +1128,13 @@
     "Save to Vocabook" : {
 
     },
+    "Saving..." : {
+
+    },
     "Search" : {
 
     },
     "Searching…" : {
-
-    },
-    "Select" : {
 
     },
     "Select a language" : {
@@ -1304,6 +1306,9 @@
       }
     },
     "Target (%@)" : {
+
+    },
+    "Target word" : {
 
     },
     "The correct answer is: **%@**" : {
