@@ -44,7 +44,8 @@ struct FlashcardReviewView: View {
     @State private var isSessionComplete = false
     @State private var showFireworks = false
     @State private var showBadge = false
-    
+    @State private var isSubmittingFinalCard = false
+
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled = false
     @State private var isRepeating = false
     @State private var showRecorder = false
@@ -140,6 +141,27 @@ struct FlashcardReviewView: View {
                     await viewModel.prepareReviewSession()
                 }
             }
+            // 2. ADDED: Overlay for the progress view
+            .overlay {
+                if isSubmittingFinalCard {
+                    ZStack {
+                        Color.black.opacity(0.4).ignoresSafeArea()
+                        VStack {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .scaleEffect(1.5)
+                            Text("Finishing Up...")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.top)
+                        }
+                        .padding(30)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15))
+                        .shadow(radius: 10)
+                    }
+                    .transition(.opacity.animation(.easeInOut))
+                }
+            }
             .opacity(isSessionComplete ? 0 : 1)
 
             if isSessionComplete {
@@ -222,12 +244,8 @@ struct FlashcardReviewView: View {
         if currentIndex == viewModel.reviewCards.count - 1 {
             // This is the LAST card. Wait for the review to complete.
             Task {
-                // Show a loading indicator if you have one
-                // viewModel.isLoading = true
-                
+                isSubmittingFinalCard = true
                 await viewModel.submitReviewAndWait(for: card, result: answer)
-                
-                // viewModel.isLoading = false
                 
                 // Only advance to the "Session Complete" screen after successful submission
                 DispatchQueue.main.async {
