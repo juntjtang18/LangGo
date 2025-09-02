@@ -31,6 +31,7 @@ struct VocapageHostView: View {
     @State private var pendingAutoplayAfterLoad = false
 
     @State private var selectedCard: Flashcard?
+    @State private var isProcessingDeletion = false
 
     init(
         allVocapageIds: [Int],
@@ -78,6 +79,25 @@ struct VocapageHostView: View {
                     currentPageIndex: $currentPageIndex,
                     pageCount: vocapageIds.count
                 )
+            }
+        }
+        .overlay {
+            if isProcessingDeletion {
+                ZStack {
+                    Color.black.opacity(0.25).ignoresSafeArea()
+                    
+                    VStack {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("Updating...")
+                            .font(.headline)
+                            .padding(.top)
+                    }
+                    .padding(30)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 15))
+                    .shadow(radius: 10)
+                }
+                .transition(.opacity.animation(.easeInOut))
             }
         }
         .navigationTitle("My Vocabulary")
@@ -167,6 +187,10 @@ struct VocapageHostView: View {
     }
     
     private func deleteCardAndRefresh(cardId: Int) async {
+        // 3. ADDED: Logic to control the progress view's visibility
+        isProcessingDeletion = true
+        defer { isProcessingDeletion = false }
+        
         logger.debug("--- Start Deletion Process for cardId: \(cardId) ---")
         self.selectedCard = nil
         
