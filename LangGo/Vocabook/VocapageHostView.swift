@@ -86,6 +86,12 @@ struct VocapageHostView: View {
         .toolbar { navigationToolbarItems }
         .safeAreaInset(edge: .bottom) { bottomToolbar }
         .toolbar(.hidden, for: .tabBar)
+        // 👇 ADD THIS .TASK MODIFIER to proactively load the first page
+        .task {
+            guard !vocapageIds.isEmpty else { return }
+            let initialPageId = vocapageIds[currentPageIndex]
+            await loader.loadPage(withId: initialPageId, dueWordsOnly: isShowingDueWordsOnly)
+        }
         .onChange(of: currentPageIndex, perform: handlePageChange)
         .onChange(of: sortedFlashcardsForCurrentPage, perform: handleCardsLoadedForAutoplay)
         .sheet(item: $selectedCard) { card in
@@ -199,7 +205,6 @@ struct VocapageHostView: View {
             }
             if let settings = self.vbSettings {
                 self.speechManager.stop()
-                // FIXED: Changed argument label from 'completion' to 'onComplete'
                 self.speechManager.speak(card: card, showBaseText: self.showBaseText, settings: settings, onComplete: completion)
             } else {
                 completion()
