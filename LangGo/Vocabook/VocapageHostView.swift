@@ -115,7 +115,25 @@ struct VocapageHostView: View {
         .onChange(of: currentPageIndex, perform: handlePageChange)
         .onChange(of: sortedFlashcardsForCurrentPage, perform: handleCardsLoadedForAutoplay)
         .sheet(item: $selectedCard) { card in
-            wordDetailSheet(for: card)
+            let cards = sortedFlashcardsForCurrentPage
+            let idx = cards.firstIndex(where: { $0.id == card.id }) ?? 0
+
+            WordDetailSheet(
+                cards: cards,
+                initialIndex: idx,
+                showBaseText: showBaseText
+            )
+            .presentationDetents([.fraction(0.65)])
+            .presentationDragIndicator(.visible)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flashcardDeleted)) { note in
+            Task { @MainActor in
+                guard let deletedId = note.object as? Int else { return }
+                // Clear selection if the open card got deleted
+                if selectedCard?.id == deletedId { selectedCard = nil }
+                // Refresh pages & page content without calling delete API again
+                await refreshAfterExternalDeletion(deletedId: deletedId)
+            }
         }
         .onDisappear { stopAutoplay() }
         .onChange(of: scenePhase) { newPhase in
@@ -166,26 +184,26 @@ struct VocapageHostView: View {
             .accessibilityLabel(showBaseText ? "Hide Base Text" : "Show Base Text")
         }
     }
+    private func refreshAfterExternalDeletion(deletedId: Int) async {
+        isProcessingDeletion = true
+        defer { isProcessingDeletion = false }
 
-    @ViewBuilder
-    private func wordDetailSheet(for card: Flashcard) -> some View {
-        let cards = sortedFlashcardsForCurrentPage
-        let idx = cards.firstIndex(where: { $0.id == card.id }) ?? 0
+        let oldCount = vocapageIds.count
+        let newIds = await rebuildAllPageIds()
+        vocapageIds = newIds
 
-        WordDetailSheet(
-            cards: cards,
-            initialIndex: idx,
-            showBaseText: showBaseText,
-            onClose: { self.selectedCard = nil },
-            onSpeak: speakOnce,
-            onDelete: { cardId in
-                await deleteCardAndRefresh(cardId: cardId)
-            }
-        )
-        .presentationDetents([.fraction(0.65)])
-        .presentationDragIndicator(.visible)
+        if currentPageIndex >= newIds.count {
+            currentPageIndex = max(0, newIds.count - 1)
+        }
+
+        if !newIds.isEmpty {
+            let pageToReload = newIds[currentPageIndex]
+            await loader.forceReloadPage(withId: pageToReload, dueWordsOnly: isShowingDueWordsOnly)
+        } else {
+            // No pages left; autoplay and selection are already handled elsewhere.
+        }
     }
-    
+
     private func deleteCardAndRefresh(cardId: Int) async {
         // 3. ADDED: Logic to control the progress view's visibility
         isProcessingDeletion = true

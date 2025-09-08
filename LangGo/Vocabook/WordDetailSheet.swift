@@ -1,55 +1,60 @@
 import SwiftUI
+import Combine
+
+extension Notification.Name {
+    static let flashcardDeleted = Notification.Name("flashcardDeleted")
+}
 
 struct WordDetailSheet: View {
-    // NEW: pass whole list + starting index
-    let cards: [Flashcard]
+    // Input
+    private let initialIndex: Int
+    private let initialCards: [Flashcard]
     let showBaseText: Bool
-    let onClose: () -> Void
-    let onSpeak: (_ card: Flashcard, _ completion: @escaping () -> Void) -> Void
-    // ADDED: A closure to handle the delete action.
-    let onDelete: (_ cardId: Int) async -> Void
 
-    // Paging state
+    // Sheet control
+    @Environment(\.dismiss) private var dismiss
+
+    // Local mutable models
+    @State private var cards: [Flashcard]
     @State private var index: Int
-    
-    // ADDED: State for the confirmation view and deletion process.
-    @State private var showDeleteConfirmation = false
-    @State private var isDeleting = false
 
-    init(cards: [Flashcard],
-         initialIndex: Int,
-         showBaseText: Bool,
-         onClose: @escaping () -> Void,
-         onSpeak: @escaping (_ card: Flashcard, _ completion: @escaping () -> Void) -> Void,
-         // ADDED: onDelete parameter
-         onDelete: @escaping (_ cardId: Int) async -> Void) {
-        self.cards = cards
-        self._index = State(initialValue: initialIndex)
-        self.showBaseText = showBaseText
-        self.onClose = onClose
-        self.onSpeak = onSpeak
-        self.onDelete = onDelete
-    }
-
-    // Existing controls state (keep your mic/speaker/repeat states here)
+    // Read / settings
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled: Bool = false
     @State private var isRepeating = false
     @State private var showRecorder = false
+    @State private var vbSettings: VBSettingAttributes?
 
+    // UI state
     private enum SlideDir { case none, next, prev }
     @State private var slideDir: SlideDir = .none
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var isFetchingSettings = false
 
     private var card: Flashcard { cards[index] }
     private var canPrev: Bool { index > 0 }
     private var canNext: Bool { index < cards.count - 1 }
+    @StateObject private var speechManager = SpeechManager()
+
+    init(
+        cards: [Flashcard],
+        initialIndex: Int,
+        showBaseText: Bool
+    ) {
+        self.initialCards = cards
+        self._cards = State(initialValue: cards)
+        self.initialIndex = initialIndex
+        self._index = State(initialValue: initialIndex)
+        self.showBaseText = showBaseText
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // close button row (keep yours)
+            // Close
             HStack {
                 Spacer()
                 Button {
-                    onClose()
+                    dismiss()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.headline)
@@ -57,9 +62,10 @@ struct WordDetailSheet: View {
                 }
             }
 
+            // Content
             ZStack {
                 content(for: card)
-                    .id(card.id) // diff by card id
+                    .id(card.id)
                     .transition(transitionFor(slideDir))
             }
             .animation(.easeInOut(duration: 0.28), value: card.id)
@@ -68,26 +74,32 @@ struct WordDetailSheet: View {
             navRow
         }
         .padding(.bottom, 12)
-        .overlay(deleteConfirmationOverlay) // ADDED: The confirmation view overlay
-        //.disabled(showDeleteConfirmation) // Disable background content when overlay is visible
+        .overlay(deleteConfirmationOverlay)
+        .task {
+            await ensureVBSettings()
+        }
     }
 
-    // MARK: - Content (move your existing word layout here)
+    // MARK: - Content
     @ViewBuilder
     private func content(for card: Flashcard) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(card.wordDefinition?.attributes.word?.data?.attributes.targetText ?? card.frontContent)
                     .font(.title2.weight(.bold))
+
                 if let pos = card.wordDefinition?.attributes.partOfSpeech?.data?.attributes.name {
-                    Text("(\(pos))").font(.title3).foregroundColor(.secondary).italic()
+                    Text("(\(pos))")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                        .italic()
                 }
+
                 Spacer()
-                // ADDED: The "..." menu button
+
                 Menu {
                     Button("Edit Word") {
-                        // Placeholder for your edit action
-                        print("Edit tapped for card ID: \(card.id)")
+                        // Hook up later if needed
                     }
                     Button("Delete Word", role: .destructive) {
                         showDeleteConfirmation = true
@@ -114,21 +126,17 @@ struct WordDetailSheet: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 12)
     }
-    
-    // ADDED: The entire confirmation view
+
+    // MARK: - Delete overlay
     @ViewBuilder
     private var deleteConfirmationOverlay: some View {
         if showDeleteConfirmation {
             ZStack {
-                // Background dimmer
                 Color.black.opacity(0.4).ignoresSafeArea()
                     .onTapGesture {
-                        if !isDeleting {
-                            showDeleteConfirmation = false
-                        }
+                        if !isDeleting { showDeleteConfirmation = false }
                     }
 
-                // Confirmation dialog
                 VStack(spacing: 16) {
                     Text("Are you sure?")
                         .font(.headline)
@@ -138,24 +146,14 @@ struct WordDetailSheet: View {
                         .foregroundColor(.secondary)
 
                     if isDeleting {
-                        ProgressView()
-                            .padding(.vertical, 10)
+                        ProgressView().padding(.vertical, 10)
                     } else {
                         HStack(spacing: 12) {
-                            Button("Cancel") {
-                                showDeleteConfirmation = false
-                            }
-                            .buttonStyle(DetailNavButtonStyle(kind: .secondary))
+                            Button("Cancel") { showDeleteConfirmation = false }
+                                .buttonStyle(DetailNavButtonStyle(kind: .secondary))
 
                             Button("Delete") {
-                                Task {
-                                    isDeleting = true
-                                    await onDelete(card.id)
-                                    // The parent view is responsible for closing the sheet.
-                                    // We reset state here in case of an error.
-                                    isDeleting = false
-                                    showDeleteConfirmation = false
-                                }
+                                Task { await deleteCurrentCard() }
                             }
                             .buttonStyle(DetailNavButtonStyle(kind: .primary, isDestructive: true))
                         }
@@ -171,13 +169,12 @@ struct WordDetailSheet: View {
         }
     }
 
-
-    // MARK: - Controls (Unchanged)
+    // MARK: - Controls
     private var controlsRow: some View {
         HStack(spacing: 28) {
             CircleIcon(systemName: "mic.fill") { showRecorder = true }
             CircleIcon(systemName: isRepeating ? "speaker.wave.2.circle.fill" : "speaker.wave.2.fill") {
-                readTapped() // one-shot or repeat loop
+                readTapped()
             }
             CircleIcon(systemName: repeatReadingEnabled ? "repeat.circle.fill" : "repeat.circle") {
                 toggleRepeat()
@@ -203,46 +200,58 @@ struct WordDetailSheet: View {
 
     private func transitionFor(_ dir: SlideDir) -> AnyTransition {
         switch dir {
-        case .next:
-            return .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
-        case .prev:
-            return .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
-        case .none:
-            return .identity
+        case .next: return .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
+        case .prev: return .asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .leading))
+        case .none: return .identity
         }
     }
 
-    // MARK: - Paging actions (Unchanged)
+    // MARK: - Paging
     private func goNext() {
         guard canNext else { return }
         slideDir = .next
-        withAnimation(.easeInOut(duration: 0.28)) {
-            index += 1
-        }
+        withAnimation(.easeInOut(duration: 0.28)) { index += 1 }
     }
     private func goPrev() {
         guard canPrev else { return }
         slideDir = .prev
-        withAnimation(.easeInOut(duration: 0.28)) {
-            index -= 1
-        }
+        withAnimation(.easeInOut(duration: 0.28)) { index -= 1 }
     }
 
-    // MARK: - Speak / Repeat (Unchanged)
+    // MARK: - Read / Repeat
     private func readTapped() {
         if repeatReadingEnabled {
             if isRepeating { stopRepeating() } else { startRepeating() }
         } else {
-            onSpeak(card) { }
+            speakOnce()
         }
     }
+
+    private func ensureVBSettings() async {
+        guard vbSettings == nil, !isFetchingSettings else { return }
+        isFetchingSettings = true
+        defer { isFetchingSettings = false }
+        vbSettings = try? await DataServices.shared.settingsService.fetchVBSetting().attributes
+    }
+
+    private func speakOnce() {
+        guard let vb = vbSettings else { return }
+        speechManager.stop()
+        speechManager.speak(card: card, showBaseText: showBaseText, settings: vb, onComplete: {})
+    }
+
     private func startRepeating() {
         guard !isRepeating else { return }
         isRepeating = true
+
         func loop() {
             guard isRepeating else { return }
-            onSpeak(card) {
-                DispatchQueue.main.async { if self.isRepeating { loop() } }
+            if let vb = vbSettings {
+                speechManager.speak(card: card, showBaseText: showBaseText, settings: vb) {
+                    DispatchQueue.main.async { if self.isRepeating { loop() } }
+                }
+            } else {
+                isRepeating = false
             }
         }
         loop()
@@ -252,18 +261,46 @@ struct WordDetailSheet: View {
         repeatReadingEnabled.toggle()
         if !repeatReadingEnabled { stopRepeating() }
     }
+
+    // MARK: - Delete
+    private func deleteCurrentCard() async {
+        guard index < cards.count else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+
+        let id = cards[index].id
+        do {
+            try await DataServices.shared.flashcardService.deleteFlashcard(cardId: id)
+            NotificationCenter.default.post(name: .flashcardDeleted, object: id)
+
+            // Update local list so the sheet remains coherent if multiple cards were passed in
+            var nextIndex = index
+            cards.remove(at: index)
+            if cards.isEmpty {
+                dismiss()
+                return
+            } else {
+                nextIndex = min(nextIndex, cards.count - 1)
+                withAnimation { index = nextIndex }
+            }
+            showDeleteConfirmation = false
+        } catch {
+            // You can add a toast here if desired
+            showDeleteConfirmation = false
+        }
+    }
 }
 
-
+// --- styles unchanged
 private struct DetailNavButtonStyle: ButtonStyle {
     enum Kind { case primary, secondary }
     let kind: Kind
-    var isDestructive: Bool = false // ADDED: To style the delete button
+    var isDestructive: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
         let primaryColor = isDestructive ? Color.red : Color.black
-        
+
         return configuration.label
             .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity, minHeight: 38)

@@ -55,15 +55,21 @@ struct WordSearchView: View {
                         HStack { ProgressView(); Text("Searching…") }
                     }
                     ForEach(results, id: \.id) { r in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(r.targetText).font(.headline)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(r.targetText)
+                                .font(.headline)
+
                             if !r.partOfSpeech.isEmpty {
                                 Text(r.partOfSpeech)
-                                    .font(.subheadline)
+                                    .font(.caption)
+                                    .fontWeight(.medium)
                                     .foregroundStyle(.secondary)
                             }
+
                             if !r.baseText.isEmpty {
-                                Text(r.baseText).font(.body)
+                                Text(r.baseText)
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                         .padding(.vertical, 6)
