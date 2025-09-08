@@ -11,7 +11,7 @@ struct WordSearchView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var query = ""
-    @State private var results: [SearchResult] = []
+    @State private var results: [StrapiWordDefinition] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var liveSearchTask: Task<Void, Never>? = nil    // ← debounce token
@@ -54,22 +54,19 @@ struct WordSearchView: View {
                     if isSearching {
                         HStack { ProgressView(); Text("Searching…") }
                     }
-                    ForEach(results, id: \.id) { r in
+                    ForEach(results, id: \.id) { def in
+                        let a = def.attributes
+                        let target = a.word?.data?.attributes.targetText ?? ""
+                        let base   = a.baseText ?? ""
+                        let pos    = a.partOfSpeech?.data?.attributes.name ?? ""
+
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(r.targetText)
-                                .font(.headline)
-
-                            if !r.partOfSpeech.isEmpty {
-                                Text(r.partOfSpeech)
-                                    .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundStyle(.secondary)
+                            Text(target).font(.headline)
+                            if !pos.isEmpty {
+                                Text(pos).font(.caption).fontWeight(.medium).foregroundStyle(.secondary)
                             }
-
-                            if !r.baseText.isEmpty {
-                                Text(r.baseText)
-                                    .font(.body)
-                                    .foregroundStyle(.secondary)
+                            if !base.isEmpty {
+                                Text(base).font(.body).foregroundStyle(.secondary)
                             }
                         }
                         .padding(.vertical, 6)

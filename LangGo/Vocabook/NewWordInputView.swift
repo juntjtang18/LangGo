@@ -21,7 +21,7 @@ struct NewWordInputView: View {
     @State private var isTranslating: Bool = false
     @State private var isLearningWord: Bool = false
     
-    @State private var searchResults: [SearchResult] = []
+    @State private var searchResults: [StrapiWordDefinition] = []
     @State private var isSearching: Bool = false
     @State private var searchTask: Task<Void, Never>?
     
@@ -218,15 +218,18 @@ struct NewWordInputView: View {
         speak(text: baseText, languageCode: isBaseAtBottom ? baseLanguageCode : targetLanguageCode)
     }
 
-    private func learnThisWord(result: SearchResult) {
+    private func learnThisWord(_ def: StrapiWordDefinition) {
         guard !isLearningWord else { return }
         isLearningWord = true
         Task {
             do {
-                let posRawValue = PartOfSpeech.allCases.first(where: { $0.displayName == result.partOfSpeech })?.rawValue ?? "noun"
+                let a = def.attributes
+                let posDisplay = a.partOfSpeech?.data?.attributes.name ?? "noun"
+                let posRawValue = PartOfSpeech.allCases.first(where: { $0.displayName == posDisplay })?.rawValue ?? "noun"
+
                 try await viewModel.saveNewWord(
-                    targetText: result.targetText,
-                    baseText: result.baseText,
+                    targetText: a.word?.data?.attributes.targetText ?? "",
+                    baseText: a.baseText ?? "",
                     partOfSpeech: posRawValue,
                     locale: baseLanguageCode
                 )
@@ -274,6 +277,7 @@ struct NewWordInputView: View {
             do {
                 try await Task.sleep(nanoseconds: 500_000_000)
                 let results = try await viewModel.searchForWord(term: trimmedTerm, searchBase: searchBase)
+
                 await MainActor.run { self.searchResults = results; self.isSearching = false }
             } catch {
                 if error is CancellationError || (error as? URLError)?.code == .cancelled {

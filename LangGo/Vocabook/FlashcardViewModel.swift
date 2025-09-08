@@ -110,45 +110,31 @@ class FlashcardViewModel: ObservableObject {
         }
     }
 
-    func searchForWord(term: String, searchBase: Bool) async throws -> [SearchResult] {
-        logger.info("Searching term '\(term)' (searchBase: \(searchBase))")
+    // MARK: - Translate / Search
+
+    func searchForWord(term: String, searchBase: Bool) async throws -> [StrapiWordDefinition] {
+        logger.info("Searching term '\(term, privacy: .public)' (searchBase: \(searchBase))")
+
         if searchBase {
-            let definitions = try await wordService.searchWordDefinitions(term: term)
-            return definitions.map { def in
-                let a = def.attributes
-                let isAlready = !(a.flashcards?.data.isEmpty ?? true)
-                return SearchResult(
-                    id: "def-\(def.id)",
-                    wordDefinitionId: def.id,
-                    baseText: a.baseText ?? "",
-                    targetText: a.word?.data?.attributes.targetText ?? "",
-                    partOfSpeech: a.partOfSpeech?.data?.attributes.name ?? "N/A",
-                    isAlreadyAdded: isAlready
-                )
-            }
+            // Search by BASE language → API already returns WordDefinitions
+            return try await wordService.searchWordDefinitions(term: term)
         } else {
+            // Search by TARGET language → flatten words -> definitions
             let words = try await wordService.searchWords(term: term)
-            var results: [SearchResult] = []
+            var out: [StrapiWordDefinition] = []
+            var seen = Set<Int>() // dedupe by definition id
+
             for w in words {
                 guard let defs = w.attributes.word_definitions?.data else { continue }
-                for d in defs {
-                    let a = d.attributes
-                    let isAlready = !(a.flashcards?.data.isEmpty ?? true)
-                    results.append(
-                        SearchResult(
-                            id: "word-\(w.id)-def-\(d.id)",
-                            wordDefinitionId: d.id,
-                            baseText: a.baseText ?? "",
-                            targetText: w.attributes.targetText ?? "",
-                            partOfSpeech: a.partOfSpeech?.data?.attributes.name ?? "N/A",
-                            isAlreadyAdded: isAlready
-                        )
-                    )
+                for d in defs where !seen.contains(d.id) {
+                    out.append(d)
+                    seen.insert(d.id)
                 }
             }
-            return results
+            return out
         }
     }
+
 }
 
 enum ReviewResult: String { case correct, wrong }

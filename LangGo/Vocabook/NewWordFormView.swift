@@ -8,7 +8,7 @@ struct NewWordFormView: View {
     @Binding var baseText: String
     @Binding var partOfSpeech: PartOfSpeech?
     @Binding var inputDirection: NewWordInputView.InputDirection
-    @Binding var searchResults: [SearchResult]
+    @Binding var searchResults: [StrapiWordDefinition]
     @Binding var isSearching: Bool
     //@Binding var isTranslationStale: Bool
 
@@ -22,7 +22,7 @@ struct NewWordFormView: View {
     let onDebouncedSearch: (String, Bool) -> Void
     let onTranslate: () -> Void
     let onSwap: () -> Void
-    let onLearnThis: (SearchResult) -> Void
+    let onLearnThis: (StrapiWordDefinition) -> Void
     let onSpeakTop: () -> Void
     let onSpeakBottom: () -> Void
     
@@ -55,9 +55,10 @@ struct NewWordFormView: View {
                 if isSearching {
                     HStack { Spacer(); ProgressView(); Spacer() }
                 }
-                ForEach(searchResults) { result in
+                ForEach(searchResults, id: \.id) { result in
                     searchResultRow(for: result)
                 }
+
             }
         } header: {
             HStack {
@@ -97,9 +98,10 @@ struct NewWordFormView: View {
                 if isSearching {
                     HStack { Spacer(); ProgressView(); Spacer() }
                 }
-                ForEach(searchResults) { result in
+                ForEach(searchResults, id: \.id) { result in
                     searchResultRow(for: result)
                 }
+
             }
         } header: {
             HStack {
@@ -137,29 +139,31 @@ struct NewWordFormView: View {
         }
     }
     
-    private func searchResultRow(for result: SearchResult) -> some View {
-        HStack {
-            let posText = (result.partOfSpeech != "N/A" && !result.partOfSpeech.isEmpty) ? "(\(result.partOfSpeech.lowercased()))" : ""
-            
-            Text("\(result.targetText) ") + Text(posText).foregroundColor(.secondary) + Text(" \(result.baseText)")
-            
-            Spacer()
+    private func searchResultRow(for def: StrapiWordDefinition) -> some View {
+        let a = def.attributes
+        let target = a.word?.data?.attributes.targetText ?? ""
+        let base   = a.baseText ?? ""
+        let pos    = a.partOfSpeech?.data?.attributes.name ?? ""
+        let isAlready = !(a.flashcards?.data.isEmpty ?? true)
 
-            if result.isAlreadyAdded {
+        return HStack {
+            let posText = pos.isEmpty ? "" : "(\(pos.lowercased()))"
+            Text("\(target) ") + Text(posText).foregroundColor(.secondary) + Text(" \(base)")
+            Spacer()
+            if isAlready {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
                     .foregroundColor(.gray)
             } else {
-                Button("Learn This") {
-                    onLearnThis(result)
-                }
-                .font(.caption.weight(.bold))
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                Button("Learn This") { onLearnThis(def) }
+                    .font(.caption.weight(.bold))
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
             }
         }
         .padding(.vertical, 4)
     }
+
 }
 
 private struct ProminentIconButtonStyle: ButtonStyle {

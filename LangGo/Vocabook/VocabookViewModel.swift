@@ -183,20 +183,7 @@ class VocabookViewModel: ObservableObject {
     }
     
     // MARK: - Search (target language or base if desired)
-    func searchForWord(query: String, searchBase: Bool = false) async throws -> [SearchResult] {
-        // Use WordService to hit /api/word-definitions/search and map into SearchResult
-        let definitions = try await wordService.searchWordDefinitions(term: query)
-        return definitions.map { def in
-            let a = def.attributes
-            let isAlready = !(a.flashcards?.data.isEmpty ?? true)
-            return SearchResult(
-                id: "def-\(def.id)",
-                wordDefinitionId: def.id,
-                baseText: a.baseText ?? "",
-                targetText: a.word?.data?.attributes.targetText ?? "",
-                partOfSpeech: a.partOfSpeech?.data?.attributes.name ?? "N/A",
-                isAlreadyAdded: isAlready
-            )
-        }
+    func searchForWord(query: String, searchBase: Bool = false) async throws -> [StrapiWordDefinition] {
+        try await wordService.searchWordDefinitions(term: query)
     }
 }

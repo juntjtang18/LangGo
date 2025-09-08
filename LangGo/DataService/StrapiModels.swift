@@ -283,7 +283,7 @@ struct ManyRelation<T: Codable>: Codable {
     let data: [T]
 }
 
-struct StrapiData<T: Codable>: Codable {
+struct StrapiData<T: Codable>: Codable, Identifiable {
     let id: Int
     let attributes: T
 }
