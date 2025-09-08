@@ -11,6 +11,12 @@
 import Foundation
 import os
 
+extension Notification.Name {
+    /// Posted when flashcard data has been mutated (e.g., after a review or deletion)
+    /// and views holding flashcard data should refresh themselves from the service.
+    static let flashcardsDidChange = Notification.Name("com.langGo.swift.flashcardsDidChange")
+}
+
 class FlashcardService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardService")
     private let cacheService = CacheService.shared
@@ -142,6 +148,12 @@ class FlashcardService {
         
         isAllMyFlashcardsCacheStale = true
         isReviewFlashcardsCacheStale = true
+        
+        // MODIFIED: After invalidating the cache, post the notification on the main
+        // thread. This tells any listening part of the app to re-fetch its data.
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .flashcardsDidChange, object: nil)
+        }
         
         logger.debug("✏️ SUCCESS: All flashcard caches invalidated. Stale flags set to TRUE.")
     }

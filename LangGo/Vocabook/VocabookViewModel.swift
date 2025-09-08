@@ -56,8 +56,31 @@ class VocabookViewModel: ObservableObject {
     @Published var hardToRememberCount: Int = 0
     @Published var tierStats: [StrapiTierStat] = []
     
-    // The initializer is now clean and parameter-less.
-    init() {}
+    // MODIFIED: The initializer now registers an observer for our custom notification.
+    init() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(refreshData),
+            name: .flashcardsDidChange,
+            object: nil
+        )
+    }
+    
+    // NEW: A deinitializer is added to remove the observer and prevent memory leaks.
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // NEW: This is the function called by the notification. It's marked @objc.
+    @objc private func refreshData() {
+        logger.info("📢 Received notification that flashcards changed. Refreshing data...")
+        Task {
+            // Check user's current filter setting to refresh the view correctly.
+            let dueOnly = UserDefaults.standard.bool(forKey: "isShowingDueWordsOnly")
+            await loadVocabookPages(dueOnly: dueOnly)
+            await loadStatistics()
+        }
+    }
     
     func loadStatistics() async {
         do {

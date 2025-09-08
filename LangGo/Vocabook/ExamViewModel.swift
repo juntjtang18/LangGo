@@ -9,34 +9,46 @@ enum ExamDirection {
 
 @MainActor
 class ExamViewModel: ObservableObject {
-    var flashcards: [Flashcard]
-    
-    // The service is now fetched directly from the DataServices singleton.
     private let flashcardService = DataServices.shared.flashcardService
 
+    @Published var flashcards: [Flashcard] = []
     @Published var currentCardIndex: Int = 0
     @Published var selectedOption: ExamOption?
     @Published var isAnswerSubmitted = false
     @Published var direction: ExamDirection = .baseToTarget
-    
-    // The initializer now only takes the data it needs to display.
-    init(flashcards: [Flashcard]) {
-        self.flashcards = flashcards.filter { card in
-            // CORRECTED: Access attributes directly from the wordDefinition.
-            guard let def = card.wordDefinition?.attributes else { return false }
-
-            let hasExamBase = def.examBase != nil && !def.examBase!.isEmpty
-            let hasExamTarget = def.examTarget != nil && !def.examTarget!.isEmpty
-            
-            return hasExamBase && hasExamTarget
-        }
-    }
+    @Published var errorMessage: String?
+    @Published var isLoading: Bool = false
 
     var currentCard: Flashcard? {
-        guard !flashcards.isEmpty else { return nil }
-        return flashcards[safe: currentCardIndex]
+        guard currentCardIndex >= 0 && currentCardIndex < flashcards.count else { return nil }
+        return flashcards[currentCardIndex]
     }
     
+    init() {}
+
+    func loadExamCards() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            let dueCards = try await flashcardService.fetchAllReviewFlashcards()
+            
+            // Filter for cards that are valid for an exam
+            let examReadyCards = dueCards.filter { card in
+                 guard let def = card.wordDefinition?.attributes else { return false }
+                 let hasExamBase = def.examBase != nil && !def.examBase!.isEmpty
+                 let hasExamTarget = def.examTarget != nil && !def.examTarget!.isEmpty
+                 return hasExamBase && hasExamTarget
+            }
+
+            self.flashcards = examReadyCards
+            self.currentCardIndex = 0
+            
+        } catch {
+            self.errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
     var questionText: String? {
         guard let card = currentCard else { return nil }
         return direction == .baseToTarget ? card.frontContent : card.backContent

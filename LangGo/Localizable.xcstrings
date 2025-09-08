@@ -477,6 +477,9 @@
         }
       }
     },
+    "Error: %@" : {
+
+    },
     "Exam" : {
       "localizations" : {
         "zh-Hans" : {
@@ -591,6 +594,9 @@
           }
         }
       }
+    },
+    "Loading Exam..." : {
+
     },
     "Loading stories..." : {
       "localizations" : {
@@ -728,6 +734,9 @@
     "Nice work! You’ve finished today’s due words." : {
 
     },
+    "No cards available for an exam at this time." : {
+
+    },
     "No cards available for reading." : {
       "localizations" : {
         "zh-Hans" : {
@@ -785,9 +794,6 @@
           }
         }
       }
-    },
-    "No exam questions available." : {
-
     },
     "No tier data yet." : {
 
