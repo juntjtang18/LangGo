@@ -10,44 +10,47 @@ struct WordDetailSheet: View {
     private let initialIndex: Int
     private let initialCards: [Flashcard]
     let showBaseText: Bool
-
+    let showNavRow: Bool   // ← NEW
+    
     // Sheet control
     @Environment(\.dismiss) private var dismiss
-
+    
     // Local mutable models
     @State private var cards: [Flashcard]
     @State private var index: Int
-
+    
     // Read / settings
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled: Bool = false
     @State private var isRepeating = false
     @State private var showRecorder = false
     @State private var vbSettings: VBSettingAttributes?
-
+    
     // UI state
     private enum SlideDir { case none, next, prev }
     @State private var slideDir: SlideDir = .none
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var isFetchingSettings = false
-
+    
     private var card: Flashcard { cards[index] }
     private var canPrev: Bool { index > 0 }
     private var canNext: Bool { index < cards.count - 1 }
     @StateObject private var speechManager = SpeechManager()
-
+    
     init(
         cards: [Flashcard],
         initialIndex: Int,
-        showBaseText: Bool
+        showBaseText: Bool,
+        showNavRow: Bool = true
     ) {
         self.initialCards = cards
         self._cards = State(initialValue: cards)
         self.initialIndex = initialIndex
         self._index = State(initialValue: initialIndex)
         self.showBaseText = showBaseText
+        self.showNavRow = showNavRow
     }
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Close
@@ -61,7 +64,7 @@ struct WordDetailSheet: View {
                         .padding(12)
                 }
             }
-
+            
             // Content
             ZStack {
                 content(for: card)
@@ -69,9 +72,11 @@ struct WordDetailSheet: View {
                     .transition(transitionFor(slideDir))
             }
             .animation(.easeInOut(duration: 0.28), value: card.id)
-
+            
             controlsRow
-            navRow
+            if showNavRow {
+                navRow
+            }
         }
         .padding(.bottom, 12)
         .overlay(deleteConfirmationOverlay)
@@ -79,7 +84,7 @@ struct WordDetailSheet: View {
             await ensureVBSettings()
         }
     }
-
+    
     // MARK: - Content
     @ViewBuilder
     private func content(for card: Flashcard) -> some View {
@@ -87,16 +92,16 @@ struct WordDetailSheet: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(card.wordDefinition?.attributes.word?.data?.attributes.targetText ?? card.frontContent)
                     .font(.title2.weight(.bold))
-
+                
                 if let pos = card.wordDefinition?.attributes.partOfSpeech?.data?.attributes.name {
                     Text("(\(pos))")
                         .font(.title3)
                         .foregroundColor(.secondary)
                         .italic()
                 }
-
+                
                 Spacer()
-
+                
                 Menu {
                     Button("Edit Word") {
                         // Hook up later if needed
@@ -110,23 +115,23 @@ struct WordDetailSheet: View {
                         .foregroundColor(.secondary)
                 }
             }
-
+            
             if let base = card.wordDefinition?.attributes.baseText, !base.isEmpty {
                 Text(base).font(.title3)
             }
-
+            
             Divider().padding(.vertical, 6)
-
+            
             if let ex = card.wordDefinition?.attributes.exampleSentence, !ex.isEmpty {
                 Text(ex).font(.title3)
             }
-
+            
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 12)
     }
-
+    
     // MARK: - Delete overlay
     @ViewBuilder
     private var deleteConfirmationOverlay: some View {
@@ -137,38 +142,44 @@ struct WordDetailSheet: View {
                         if !isDeleting { showDeleteConfirmation = false }
                     }
 
-                VStack(spacing: 16) {
-                    Text("Are you sure?")
-                        .font(.headline)
-                    Text("This word will be permanently deleted from your vocabook.")
-                        .font(.subheadline)
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.secondary)
-
-                    if isDeleting {
-                        ProgressView().padding(.vertical, 10)
-                    } else {
+                if isDeleting {
+                    // 🔄 No background card while deleting — just the spinner (and optional label)
+                    VStack(spacing: 10) {
+                        ProgressView()
+                        Text("Deleting…")
+                            .font(.subheadline)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 40)
+                    .allowsHitTesting(false) // block taps entirely while in-flight
+                } else {
+                    // 🗂️ Normal confirmation dialog (with background)
+                    VStack(spacing: 16) {
+                        Text("Are you sure?").font(.headline)
+                        Text("This word will be permanently deleted from your vocabook.")
+                            .font(.subheadline)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
                         HStack(spacing: 12) {
                             Button("Cancel") { showDeleteConfirmation = false }
                                 .buttonStyle(DetailNavButtonStyle(kind: .secondary))
-
-                            Button("Delete") {
-                                Task { await deleteCurrentCard() }
-                            }
-                            .buttonStyle(DetailNavButtonStyle(kind: .primary, isDestructive: true))
+                            Button("Delete") { Task { await deleteCurrentCard() } }
+                                .buttonStyle(DetailNavButtonStyle(kind: .primary, isDestructive: true))
                         }
                     }
+                    .padding()
+                    .background(Material.regularMaterial)   // ← applied only when NOT deleting
+                    .cornerRadius(20)
+                    .shadow(radius: 10)
+                    .padding(.horizontal, 40)
                 }
-                .padding()
-                .background(Material.regularMaterial)
-                .cornerRadius(20)
-                .shadow(radius: 10)
-                .padding(.horizontal, 40)
             }
             .transition(.opacity.animation(.easeInOut))
         }
     }
 
+
+    
     // MARK: - Controls
     private var controlsRow: some View {
         HStack(spacing: 28) {
@@ -183,13 +194,13 @@ struct WordDetailSheet: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 12)
     }
-
+    
     private var navRow: some View {
         HStack(spacing: 12) {
             Button("Previous") { goPrev() }
                 .buttonStyle(DetailNavButtonStyle(kind: .secondary))
                 .disabled(!canPrev)
-
+            
             Button("Next") { goNext() }
                 .buttonStyle(DetailNavButtonStyle(kind: .primary))
                 .disabled(!canNext)
@@ -197,7 +208,7 @@ struct WordDetailSheet: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
     }
-
+    
     private func transitionFor(_ dir: SlideDir) -> AnyTransition {
         switch dir {
         case .next: return .asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing))
@@ -205,7 +216,7 @@ struct WordDetailSheet: View {
         case .none: return .identity
         }
     }
-
+    
     // MARK: - Paging
     private func goNext() {
         guard canNext else { return }
@@ -217,7 +228,7 @@ struct WordDetailSheet: View {
         slideDir = .prev
         withAnimation(.easeInOut(duration: 0.28)) { index -= 1 }
     }
-
+    
     // MARK: - Read / Repeat
     private func readTapped() {
         if repeatReadingEnabled {
@@ -226,24 +237,24 @@ struct WordDetailSheet: View {
             speakOnce()
         }
     }
-
+    
     private func ensureVBSettings() async {
         guard vbSettings == nil, !isFetchingSettings else { return }
         isFetchingSettings = true
         defer { isFetchingSettings = false }
         vbSettings = try? await DataServices.shared.settingsService.fetchVBSetting().attributes
     }
-
+    
     private func speakOnce() {
         guard let vb = vbSettings else { return }
         speechManager.stop()
         speechManager.speak(card: card, showBaseText: showBaseText, settings: vb, onComplete: {})
     }
-
+    
     private func startRepeating() {
         guard !isRepeating else { return }
         isRepeating = true
-
+        
         func loop() {
             guard isRepeating else { return }
             if let vb = vbSettings {
@@ -261,7 +272,7 @@ struct WordDetailSheet: View {
         repeatReadingEnabled.toggle()
         if !repeatReadingEnabled { stopRepeating() }
     }
-
+    
     // MARK: - Delete
     private func deleteCurrentCard() async {
         guard index < cards.count else { return }
@@ -273,21 +284,24 @@ struct WordDetailSheet: View {
             try await DataServices.shared.flashcardService.deleteFlashcard(cardId: id)
             NotificationCenter.default.post(name: .flashcardDeleted, object: id)
 
-            // Update local list so the sheet remains coherent if multiple cards were passed in
-            var nextIndex = index
-            cards.remove(at: index)
-            if cards.isEmpty {
+            // Always close after delete (no navigation to other words)
+            await MainActor.run {
+                showDeleteConfirmation = false
                 dismiss()
-                return
-            } else {
-                nextIndex = min(nextIndex, cards.count - 1)
-                withAnimation { index = nextIndex }
             }
-            showDeleteConfirmation = false
         } catch {
-            // You can add a toast here if desired
-            showDeleteConfirmation = false
+            await MainActor.run {
+                showDeleteConfirmation = false
+                // (Optional) Show a toast or alert here.
+            }
         }
+    }
+
+    // MARK: - Helper
+    @inline(__always)
+    private func nextIndexAfterDeletion(deleting i: Int, totalCount: Int) -> Int {
+        // If deleting the last item, select the previous one; otherwise select the same slot
+        return (i == totalCount - 1) ? max(0, i - 1) : i
     }
 }
 

@@ -361,6 +361,9 @@
     "Delete Word" : {
 
     },
+    "Deleting…" : {
+
+    },
     "Don't have an account? Sign Up" : {
       "localizations" : {
         "ja" : {
@@ -388,6 +391,9 @@
           }
         }
       }
+    },
+    "Don't Know" : {
+
     },
     "Done" : {
       "localizations" : {
