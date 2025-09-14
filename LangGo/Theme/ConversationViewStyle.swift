@@ -17,7 +17,7 @@ struct ConversationStyleModifier: ViewModifier {
         switch style {
         case .messageBubble(let isUser):
             content
-                .font(.system(size: 16)) // Set font size to 15pt
+                .font(.system(size: 15)) // Set font size to 15pt
                 .padding()
                 .background(isUser ? theme.primary.opacity(0.8) : theme.secondary.opacity(0.8))
                 .foregroundColor(theme.text)
@@ -26,7 +26,7 @@ struct ConversationStyleModifier: ViewModifier {
         case .micButton(let isListening):
             content
                 .font(.system(size: 36)) // Reduced font size
-                .frame(width: 76, height: 76) // Reduced frame size by ~20%
+                .frame(width: 50, height: 50) // Reduced frame size by ~20%
                 .background(isListening ? Color.red.opacity(0.8) : theme.accent)
                 .foregroundColor(.white)
                 .clipShape(Circle())

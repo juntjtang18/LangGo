@@ -110,7 +110,7 @@ struct FlashcardReviewView: View {
                         
                         HStack(spacing: 20) {
                             Button(action: { markCard(.wrong) }) {
-                                Text("Don't Knowffftt").style(.wrongButton)
+                                Text("Don't Know").style(.wrongButton)
                             }
                             
                             Button(action: { markCard(.correct) }) {
