@@ -1,0 +1,186 @@
+<svg width="1800" height="1120" viewBox="0 0 1800 1120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1800" y2="1120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1020"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="curriculum" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="content2" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="component2" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="support2" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+    <filter id="shadow2" x="-60" y="-60" width="2000" height="1300" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#000000" flood-opacity="0.30"/>
+    </filter>
+    <marker id="arrBlue2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#60A5FA"/>
+    </marker>
+    <marker id="arrPurple2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#C084FC"/>
+    </marker>
+    <marker id="arrGreen2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34D399"/>
+    </marker>
+    <marker id="arrAmber2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#FBBF24"/>
+    </marker>
+    <style>
+      .title { font: 700 34px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #F8FAFC; }
+      .subtitle { font: 500 17px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #CBD5E1; }
+      .nodeTitle { font: 700 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #FFFFFF; }
+      .nodeBody { font: 500 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #E5E7EB; }
+      .tiny { font: 600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #D1D5DB; }
+      .edge { font: 600 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #E5E7EB; }
+      .legend { font: 600 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #E5E7EB; }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1120" fill="url(#bg2)"/>
+  <g opacity="0.15">
+    <circle cx="180" cy="120" r="120" fill="#2563EB"/>
+    <circle cx="1550" cy="160" r="150" fill="#8B5CF6"/>
+    <circle cx="1530" cy="920" r="170" fill="#10B981"/>
+  </g>
+
+  <text x="70" y="78" class="title">Lesson Content Collections + Section Components</text>
+  <text x="70" y="110" class="subtitle">Strapi relationship map for module, unit, lesson, section, word, word_definition, and section dynamic zone components</text>
+
+  <g filter="url(#shadow2)">
+    <rect x="95" y="180" rx="26" ry="26" width="270" height="140" fill="url(#curriculum)" opacity="0.97"/>
+    <text x="125" y="235" class="nodeTitle">modules</text>
+    <text x="125" y="268" class="nodeBody">Localized collection</text>
+    <text x="125" y="296" class="tiny">1 module → many units</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="430" y="180" rx="26" ry="26" width="270" height="170" fill="url(#curriculum)" opacity="0.97"/>
+    <text x="460" y="235" class="nodeTitle">units</text>
+    <text x="460" y="268" class="nodeBody">Belongs to a module</text>
+    <text x="460" y="296" class="nodeBody">Has lesson ordering</text>
+    <text x="460" y="324" class="tiny">1 unit → many lessons</text>
+    <text x="460" y="344" class="tiny">Has self relation: precondition / unlocks</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="770" y="165" rx="28" ry="28" width="320" height="190" fill="url(#curriculum)" opacity="0.98"/>
+    <text x="805" y="222" class="nodeTitle">lessons</text>
+    <text x="805" y="255" class="nodeBody">Belongs to a unit</text>
+    <text x="805" y="283" class="nodeBody">Has sections[]</text>
+    <text x="805" y="311" class="nodeBody">Also links lessonlevel, user_words,</text>
+    <text x="805" y="339" class="nodeBody">user_sentences</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="1180" y="145" rx="30" ry="30" width="360" height="240" fill="url(#curriculum)" opacity="0.99"/>
+    <text x="1215" y="205" class="nodeTitle">sections</text>
+    <text x="1215" y="238" class="nodeBody">Belongs to a lesson</text>
+    <text x="1215" y="266" class="nodeBody">Has order</text>
+    <text x="1215" y="294" class="nodeBody">Has dynamic zone: components[]</text>
+    <text x="1215" y="322" class="nodeBody">Has word_definitions[]</text>
+    <text x="1215" y="350" class="tiny">1 section → many word_definitions</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="1060" y="530" rx="28" ry="28" width="350" height="180" fill="url(#content2)" opacity="0.98"/>
+    <text x="1095" y="588" class="nodeTitle">word_definitions</text>
+    <text x="1095" y="621" class="nodeBody">Localized definitions / examples / POS</text>
+    <text x="1095" y="649" class="nodeBody">Belongs to a word</text>
+    <text x="1095" y="677" class="nodeBody">Belongs to a section</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="660" y="560" rx="26" ry="26" width="250" height="150" fill="url(#content2)" opacity="0.97"/>
+    <text x="690" y="615" class="nodeTitle">words</text>
+    <text x="690" y="648" class="nodeBody">Canonical target_text</text>
+    <text x="690" y="676" class="tiny">1 word → many word_definitions</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="1470" y="540" rx="26" ry="26" width="250" height="150" fill="url(#support2)" opacity="0.97"/>
+    <text x="1500" y="595" class="nodeTitle">sentences</text>
+    <text x="1500" y="628" class="nodeBody">Referenced by sent-ref</text>
+    <text x="1500" y="656" class="tiny">one sent-ref → one sentence</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="120" y="520" rx="28" ry="28" width="450" height="360" fill="#0F172A" opacity="0.98" stroke="#334155" stroke-width="1.5"/>
+    <text x="155" y="580" class="nodeTitle">section.components dynamic zone</text>
+    <text x="155" y="614" class="nodeBody">Allowed component types:</text>
+
+    <rect x="155" y="645" rx="16" ry="16" width="165" height="52" fill="url(#component2)" opacity="0.96"/>
+    <text x="180" y="678" class="nodeBody">a.word-ref</text>
+
+    <rect x="340" y="645" rx="16" ry="16" width="165" height="52" fill="url(#component2)" opacity="0.96"/>
+    <text x="365" y="678" class="nodeBody">a.video</text>
+
+    <rect x="155" y="715" rx="16" ry="16" width="165" height="52" fill="url(#component2)" opacity="0.96"/>
+    <text x="180" y="748" class="nodeBody">a.sent-ref</text>
+
+    <rect x="340" y="715" rx="16" ry="16" width="165" height="52" fill="url(#component2)" opacity="0.96"/>
+    <text x="365" y="748" class="nodeBody">a.quiz</text>
+
+    <rect x="155" y="785" rx="16" ry="16" width="165" height="52" fill="url(#component2)" opacity="0.96"/>
+    <text x="180" y="818" class="nodeBody">a.pagebreaker</text>
+
+    <rect x="340" y="785" rx="16" ry="16" width="165" height="52" fill="url(#component2)" opacity="0.96"/>
+    <text x="356" y="818" class="nodeBody">a.external-video</text>
+
+    <text x="155" y="860" class="tiny">Only a.sent-ref has an explicit collection relation:</text>
+    <text x="155" y="886" class="tiny">a.sent-ref.sentence → api::sentence.sentence</text>
+  </g>
+
+  <path d="M 365 250 C 395 250, 405 250, 430 250" stroke="#60A5FA" stroke-width="5" fill="none" marker-end="url(#arrBlue2)"/>
+  <text x="372" y="232" class="edge">units[]</text>
+
+  <path d="M 700 255 C 735 255, 742 255, 770 255" stroke="#60A5FA" stroke-width="5" fill="none" marker-end="url(#arrBlue2)"/>
+  <text x="710" y="237" class="edge">lessons[]</text>
+
+  <path d="M 1090 255 C 1135 255, 1145 255, 1180 255" stroke="#60A5FA" stroke-width="5" fill="none" marker-end="url(#arrBlue2)"/>
+  <text x="1102" y="237" class="edge">sections[]</text>
+
+  <path d="M 1360 385 C 1360 445, 1305 475, 1260 530" stroke="#C084FC" stroke-width="5" fill="none" marker-end="url(#arrPurple2)"/>
+  <text x="1325" y="468" class="edge">word_definitions[]</text>
+
+  <path d="M 1060 605 C 1010 605, 965 605, 910 605" stroke="#C084FC" stroke-width="5" fill="none" marker-end="url(#arrPurple2)"/>
+  <text x="930" y="586" class="edge">word</text>
+
+  <path d="M 1180 330 C 975 420, 740 520, 570 650" stroke="#34D399" stroke-width="4.5" fill="none" marker-end="url(#arrGreen2)"/>
+  <text x="800" y="470" class="edge">components dynamic zone</text>
+
+  <path d="M 570 740 C 760 740, 930 740, 1470 615" stroke="#FBBF24" stroke-width="4.5" fill="none" marker-end="url(#arrAmber2)"/>
+  <text x="840" y="718" class="edge">a.sent-ref.sentence</text>
+
+  <path d="M 565 650 C 760 650, 940 650, 1060 650" stroke="#34D399" stroke-width="4" fill="none" marker-end="url(#arrGreen2)"/>
+  <text x="780" y="632" class="edge">section can present word content alongside</text>
+
+  <path d="M 565 802 C 805 885, 1080 905, 1455 820" stroke="#34D399" stroke-width="3.5" fill="none" stroke-dasharray="10 10"/>
+  <text x="740" y="938" class="edge">other section components are embedded data/media, not collection relations</text>
+
+  <path d="M 565 600 C 520 480, 530 375, 625 350" stroke="#60A5FA" stroke-width="3.5" fill="none" stroke-dasharray="10 10"/>
+  <text x="360" y="430" class="edge">lesson also links unrelated side collections</text>
+
+  <path d="M 560 300 C 560 365, 560 380, 560 460" stroke="#60A5FA" stroke-width="3.5" fill="none" stroke-dasharray="8 10" marker-end="url(#arrBlue2)"/>
+  <text x="580" y="420" class="edge">unit.precondition / unlocks</text>
+
+  <rect x="70" y="1028" rx="18" ry="18" width="1660" height="48" fill="#0B1220" opacity="0.92" stroke="#334155" stroke-opacity="0.55"/>
+  <circle cx="110" cy="1052" r="8" fill="#2563EB"/>
+  <text x="126" y="1057" class="legend">Curriculum collections</text>
+  <circle cx="330" cy="1052" r="8" fill="#7C3AED"/>
+  <text x="346" y="1057" class="legend">Word content collections</text>
+  <circle cx="565" cy="1052" r="8" fill="#059669"/>
+  <text x="581" y="1057" class="legend">Section component layer</text>
+  <circle cx="780" cy="1052" r="8" fill="#D97706"/>
+  <text x="796" y="1057" class="legend">Supporting referenced collection</text>
+  <text x="1050" y="1057" class="legend">Dashed lines = structural/context note, not a direct schema relation field</text>
+</svg>

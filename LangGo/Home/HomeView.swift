@@ -2,6 +2,7 @@
 
 import SwiftUI
 import AVKit
+import os
 
 private struct VisibleCardPreferenceKey: PreferenceKey {
     struct CardInfo: Equatable {
@@ -18,6 +19,7 @@ private struct VisibleCardPreferenceKey: PreferenceKey {
 struct HomeView: View {
     @Environment(\.theme) var theme: Theme
     @Binding var selectedTab: Int
+    @StateObject private var viewModel = HomeViewModel()
 
     var body: some View {
         ScrollView {
@@ -72,7 +74,7 @@ struct HomeView: View {
                     Text("Daily recommendations")
                         .homeStyle(.sectionHeader)
                         .padding(.top, 8)
-                    RecommendationRow(title: "Today’s Vocabulary Review", detail: "16 cards due")
+                    RecommendationRow(title: "Today’s Vocabulary Review", detail: viewModel.reviewRecommendationText)
                     RecommendationRow(title: "Recommended Story", detail: "A Blackjack Bargainer")
                     RecommendationRow(title: "Conversation Topic", detail: "Common Courtesy Phrases")
                 }
@@ -80,6 +82,32 @@ struct HomeView: View {
             .padding()
         }
         .background(theme.background.ignoresSafeArea())
+        .task {
+            await viewModel.loadStatistics()
+        }
+    }
+}
+
+@MainActor
+private final class HomeViewModel: ObservableObject {
+    @Published private(set) var dueForReview: Int?
+
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "HomeViewModel")
+    private let strapiService = StrapiService()
+
+    var reviewRecommendationText: String {
+        guard let dueForReview else { return "Check your latest review count" }
+        return dueForReview == 0 ? "No cards due" : "\(dueForReview) cards due"
+    }
+
+    func loadStatistics() async {
+        do {
+            let stats = try await strapiService.fetchFlashcardStatistics()
+            dueForReview = stats.dueForReview
+        } catch {
+            logger.error("Failed to load home statistics: \(error.localizedDescription)")
+            dueForReview = nil
+        }
     }
 }
 
@@ -94,7 +122,7 @@ private struct FeatureRowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
 
-            // ── Upper: icon + feature name + CTA ────────────────────────────────
+            // Upper: icon + feature name + CTA
             HStack(alignment: .center, spacing: 12) {
                 // Icon
                 Image(systemName: icon)
@@ -134,7 +162,7 @@ private struct FeatureRowCard: View {
                 .buttonStyle(.plain)
             }
 
-            // ── Lower: description ──────────────────────────────────────────────
+            // Lower: description
             Text(subtitle)
                 .font(.subheadline)
                 .foregroundColor(theme.text.opacity(0.72))
@@ -149,7 +177,6 @@ private struct FeatureRowCard: View {
         )
         .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Entire card is also tappable (same as CTA)
         .contentShape(Rectangle())
         .onTapGesture(perform: action)
     }
@@ -219,7 +246,6 @@ private struct ChipWrap: View {
     @Environment(\.theme) var theme: Theme
     let chips: [String]
     var body: some View {
-        // simple wrap using flow layout
         FlexibleView(
             availableWidth: UIScreen.main.bounds.width - 32,
             data: chips,
@@ -248,7 +274,6 @@ private struct RecommendationRow: View {
     }
 }
 
-// Simple flexible/wrap layout
 private struct FlexibleView<Data: Collection, Content: View>: View where Data.Element: Hashable {
     let availableWidth: CGFloat
     let data: Data
@@ -289,7 +314,6 @@ private struct FlexibleView<Data: Collection, Content: View>: View where Data.El
     }
 }
 
-// ViewSize reader helper
 private extension View {
     func readSize(onChange: @escaping (CGSize) -> Void) -> some View {
         background(

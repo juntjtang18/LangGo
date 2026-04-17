@@ -1,0 +1,171 @@
+<svg width="1600" height="980" viewBox="0 0 1600 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#1E293B"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="content" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="support" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="log" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+    <filter id="shadow" x="-40" y="-40" width="2000" height="1200" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="14" stdDeviation="20" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#60A5FA"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34D399"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#FBBF24"/>
+    </marker>
+    <style>
+      .title { font: 700 34px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #F8FAFC; }
+      .subtitle { font: 500 17px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #CBD5E1; }
+      .nodeTitle { font: 700 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #FFFFFF; }
+      .nodeBody { font: 500 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #E2E8F0; }
+      .small { font: 600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #C7D2FE; }
+      .legend { font: 600 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #E5E7EB; }
+      .edge { font: 600 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #E5E7EB; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="980" fill="url(#bg)"/>
+
+  <g opacity="0.18">
+    <circle cx="166" cy="140" r="120" fill="#0EA5E9"/>
+    <circle cx="1430" cy="180" r="160" fill="#8B5CF6"/>
+    <circle cx="1340" cy="830" r="140" fill="#10B981"/>
+  </g>
+
+  <text x="80" y="82" class="title">Flashcard / Vocabook Collections Relationship</text>
+  <text x="80" y="114" class="subtitle">Used by review queue, Vocabook pages, add word, stats, and settings in the iOS app</text>
+
+  <g filter="url(#shadow)">
+    <rect x="565" y="250" rx="28" ry="28" width="470" height="220" fill="url(#core)" opacity="0.96"/>
+    <text x="600" y="308" class="nodeTitle">flashcards</text>
+    <text x="600" y="342" class="nodeBody">Core collection for:</text>
+    <text x="600" y="370" class="nodeBody">• /api/flashcards/mine</text>
+    <text x="600" y="398" class="nodeBody">• /api/review-flashcards</text>
+    <text x="600" y="426" class="nodeBody">• /api/flashcard-stat</text>
+    <text x="600" y="454" class="nodeBody">• review / remove actions</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="115" y="225" rx="24" ry="24" width="330" height="170" fill="url(#content)" opacity="0.96"/>
+    <text x="145" y="278" class="nodeTitle">word_definitions</text>
+    <text x="145" y="312" class="nodeBody">Card content and search/add flow</text>
+    <text x="145" y="340" class="nodeBody">Localized text, examples, POS</text>
+    <text x="145" y="368" class="small">1 word_definition → many flashcards</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="120" y="520" rx="24" ry="24" width="280" height="140" fill="url(#content)" opacity="0.96"/>
+    <text x="150" y="572" class="nodeTitle">words</text>
+    <text x="150" y="606" class="nodeBody">Canonical target word</text>
+    <text x="150" y="634" class="small">1 word → many word_definitions</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="420" y="560" rx="24" ry="24" width="280" height="140" fill="url(#content)" opacity="0.96"/>
+    <text x="450" y="612" class="nodeTitle">part_of_speeches</text>
+    <text x="450" y="646" class="nodeBody">noun / verb / adjective ...</text>
+    <text x="450" y="674" class="small">1 POS → many word_definitions</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1125" y="220" rx="24" ry="24" width="320" height="170" fill="url(#support)" opacity="0.96"/>
+    <text x="1155" y="272" class="nodeTitle">review_tires</text>
+    <text x="1155" y="306" class="nodeBody">Tier rules for due logic:</text>
+    <text x="1155" y="334" class="nodeBody">cooldown, streak bands, demotion</text>
+    <text x="1155" y="362" class="small">1 tier → many flashcards</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1145" y="500" rx="24" ry="24" width="300" height="150" fill="url(#log)" opacity="0.96"/>
+    <text x="1175" y="552" class="nodeTitle">reviewlogs</text>
+    <text x="1175" y="586" class="nodeBody">Created on each review submit</text>
+    <text x="1175" y="614" class="small">many reviewlogs → 1 flashcard</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="835" y="675" rx="24" ry="24" width="300" height="155" fill="url(#support)" opacity="0.96"/>
+    <text x="865" y="727" class="nodeTitle">vbsettings</text>
+    <text x="865" y="761" class="nodeBody">User Vocabook settings</text>
+    <text x="865" y="789" class="nodeBody">wordsPerPage, intervals</text>
+    <text x="865" y="817" class="small">1 user → 1 vbsetting</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="470" y="740" rx="24" ry="24" width="300" height="155" fill="url(#support)" opacity="0.96"/>
+    <text x="500" y="792" class="nodeTitle">user_profiles</text>
+    <text x="500" y="826" class="nodeBody">baseLanguage, proficiency,</text>
+    <text x="500" y="854" class="nodeBody">reminder settings</text>
+    <text x="500" y="882" class="small">1 user → 1 profile</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="170" y="760" rx="24" ry="24" width="220" height="120" fill="url(#panel)" opacity="0.96" stroke="#94A3B8" stroke-opacity="0.35"/>
+    <text x="200" y="808" class="nodeTitle">users</text>
+    <text x="200" y="842" class="nodeBody">plugin::users-</text>
+    <text x="200" y="866" class="nodeBody">permissions.user</text>
+  </g>
+
+  <path d="M 445 310 C 500 310, 520 310, 565 310" stroke="#60A5FA" stroke-width="5" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="465" y="292" class="edge">word_definition</text>
+
+  <path d="M 400 565 C 400 520, 300 470, 245 395" stroke="#A78BFA" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="240" y="512" class="edge">word</text>
+
+  <path d="M 560 560 C 560 500, 415 455, 325 394" stroke="#A78BFA" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="466" y="510" class="edge">part_of_speech</text>
+
+  <path d="M 1125 305 C 1080 305, 1075 305, 1035 305" stroke="#34D399" stroke-width="5" fill="none" marker-end="url(#arrowGreen)"/>
+  <text x="1048" y="286" class="edge">review_tire</text>
+
+  <path d="M 1145 575 C 1080 575, 1045 525, 980 470" stroke="#FBBF24" stroke-width="5" fill="none" marker-end="url(#arrowAmber)"/>
+  <text x="1035" y="570" class="edge">reviewlog.flashcard</text>
+
+  <path d="M 330 760 C 360 705, 470 660, 610 470" stroke="#94A3B8" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="360" y="700" class="edge">user owns flashcards</text>
+
+  <path d="M 365 760 C 410 730, 455 740, 470 790" stroke="#94A3B8" stroke-width="4" fill="none" marker-end="url(#arrowGreen)"/>
+  <text x="360" y="742" class="edge">1:1</text>
+
+  <path d="M 390 820 C 560 820, 670 820, 835 752" stroke="#94A3B8" stroke-width="4" fill="none" marker-end="url(#arrowGreen)"/>
+  <text x="610" y="800" class="edge">1:1</text>
+
+  <path d="M 770 790 C 865 790, 860 790, 835 790" stroke="#34D399" stroke-width="4" fill="none" marker-end="url(#arrowGreen)"/>
+  <text x="780" y="772" class="edge">baseLanguage drives search locale</text>
+
+  <path d="M 985 675 C 985 620, 920 560, 860 470" stroke="#34D399" stroke-width="4" fill="none" marker-end="url(#arrowGreen)"/>
+  <text x="932" y="610" class="edge">wordsPerPage shapes Vocabook pages</text>
+
+  <rect x="80" y="910" rx="16" ry="16" width="1440" height="40" fill="#0B1220" opacity="0.9" stroke="#334155" stroke-opacity="0.55"/>
+  <circle cx="112" cy="930" r="8" fill="#2563EB"/>
+  <text x="128" y="935" class="legend">Core flashcard graph</text>
+  <circle cx="330" cy="930" r="8" fill="#7C3AED"/>
+  <text x="346" y="935" class="legend">Content dictionaries</text>
+  <circle cx="565" cy="930" r="8" fill="#059669"/>
+  <text x="581" y="935" class="legend">Supporting settings/profile</text>
+  <circle cx="840" cy="930" r="8" fill="#D97706"/>
+  <text x="856" y="935" class="legend">Review history logging</text>
+  <text x="1110" y="935" class="legend">Note: “Vocabook” is app-side pagination over flashcards, not a Strapi collection.</text>
+</svg>

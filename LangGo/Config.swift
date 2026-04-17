@@ -9,11 +9,18 @@ import Foundation
 
 struct Config {
     static var strapiBaseUrl: String {
+        if let environmentOverride = ProcessInfo.processInfo.environment["STRAPI_BASE_URL"],
+           !environmentOverride.isEmpty {
+            return environmentOverride
+        }
+
         #if DEBUG
-            #if USE_LOCAL_IP
-                return "http://192.168.1.72:1338" // Use your actual IP
+            #if targetEnvironment(simulator)
+                return "http://localhost:1338"
+            #elseif USE_LOCAL_IP
+                return "http://192.168.1.66:1338" // Use your actual LAN IP on a physical device.
             #else
-                return "http://192.168.1.72:1338"
+                return "http://localhost:1338"
             #endif
         #else
             return "https://langgo-en-strapi.geniusparentingai.ca"
