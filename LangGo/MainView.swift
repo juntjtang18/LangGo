@@ -10,7 +10,6 @@ struct MainView: View {
     @State private var isShowingProfileSheet = false
     @State private var isShowingSettingSheet = false
     @State private var isShowingVocabookSettingSheet = false
-    @EnvironmentObject var voiceService: VoiceSelectionService
 
     init(authState: Binding<AuthState>) {
         _authState = authState
@@ -47,26 +46,20 @@ struct MainView: View {
         ZStack {
             TabView(selection: $selectedTab) {
                 HomeTabView(isSideMenuShowing: $isSideMenuShowing, selectedTab: $selectedTab)
-                    .tabItem { Label("Home", systemImage: "house.fill") }
+                    .tabItem { Label("Home", systemImage: "house") }
                     .tag(0)
 
                 VocabookTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Vocabulary", systemImage: "square.stack.3d.up.fill") }
+                    .tabItem { Label("Vocabook", systemImage: "doc.text") }
                     .tag(1)
 
-                // The appEnvironment parameter is no longer passed
-                ConversationTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Speaking", systemImage: "message.fill") }
+                LibraryTabView(isSideMenuShowing: $isSideMenuShowing)
+                    .tabItem { Label("Articles", systemImage: "text.alignleft") }
                     .tag(2)
-                
-                // The appEnvironment parameter is no longer passed
-                StoriesTabView(isSideMenuShowing: $isSideMenuShowing, voiceService: voiceService)
-                    .tabItem { Label("Stories", systemImage: "book.fill") }
-                    .tag(3)
 
-                TranslationTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Translation", systemImage: "captions.bubble.fill") }
-                    .tag(4)
+                AscentTabView(isSideMenuShowing: $isSideMenuShowing)
+                    .tabItem { Label("Ascent", systemImage: "person") }
+                    .tag(3)
             }
             .tint(Color.purple)
             

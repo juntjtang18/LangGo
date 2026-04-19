@@ -10,6 +10,9 @@
     "(%@)" : {
 
     },
+    "#8" : {
+
+    },
     "%@ " : {
 
     },
@@ -36,9 +39,6 @@
     "%lld" : {
 
     },
-    "%lld due" : {
-
-    },
     "%lld of %lld" : {
       "comment" : "Progress count format (e.g., 1 of 10)",
       "localizations" : {
@@ -50,7 +50,43 @@
         }
       }
     },
+    "%lld words" : {
+
+    },
+    "%lld%%" : {
+
+    },
+    "•" : {
+
+    },
+    "+%lld new" : {
+
+    },
+    "+4" : {
+
+    },
+    "+124" : {
+
+    },
+    "1,243 learners" : {
+
+    },
+    "2,847" : {
+
+    },
+    "47" : {
+
+    },
+    "60%" : {
+
+    },
+    "ACHIEVEMENTS" : {
+
+    },
     "Action successful!" : {
+
+    },
+    "Add Article" : {
 
     },
     "Add New Word" : {
@@ -98,6 +134,15 @@
     "Are you sure?" : {
 
     },
+    "Article Completed!" : {
+
+    },
+    "Articles" : {
+
+    },
+    "Ascent" : {
+
+    },
     "Back" : {
       "localizations" : {
         "ja" : {
@@ -126,10 +171,16 @@
         }
       }
     },
+    "Back to Library" : {
+
+    },
     "Base (%@)" : {
 
     },
     "Base Language" : {
+
+    },
+    "Browse & manage your vocabulary" : {
 
     },
     "by %@" : {
@@ -176,6 +227,9 @@
         }
       }
     },
+    "Choose how you'd like to add content to your library" : {
+
+    },
     "Close" : {
       "localizations" : {
         "zh-Hans" : {
@@ -186,7 +240,11 @@
         }
       }
     },
+    "Coming Soon" : {
+
+    },
     "Complete some lessons or add new words to get cards for your quiz." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -322,9 +380,6 @@
 
     },
     "Cycle Page" : {
-
-    },
-    "Daily recommendations" : {
 
     },
     "Data Options" : {
@@ -496,10 +551,10 @@
         }
       }
     },
-    "Explore by Course" : {
+    "Filter" : {
 
     },
-    "Filter" : {
+    "Filter by tags" : {
 
     },
     "Finish onboarding and get started" : {
@@ -533,6 +588,9 @@
 
     },
     "LangGo to Pro, Ready to GO!" : {
+
+    },
+    "Leaderboard" : {
 
     },
     "Learn This" : {
@@ -593,6 +651,9 @@
           }
         }
       }
+    },
+    "Loading Book..." : {
+
     },
     "Loading cards..." : {
       "localizations" : {
@@ -757,6 +818,7 @@
       }
     },
     "No Cards for Quiz" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -804,9 +866,6 @@
         }
       }
     },
-    "No tier data yet." : {
-
-    },
     "No words to show for this page." : {
 
     },
@@ -820,6 +879,9 @@
 
     },
     "Notebook Settings" : {
+
+    },
+    "Notice" : {
 
     },
     "OK" : {
@@ -850,7 +912,7 @@
         }
       }
     },
-    "Open %@" : {
+    "Opening Book..." : {
 
     },
     "Page Review" : {
@@ -998,6 +1060,9 @@
         }
       }
     },
+    "Ranked #8" : {
+
+    },
     "Read" : {
 
     },
@@ -1040,9 +1105,6 @@
           }
         }
       }
-    },
-    "Refresh statistics" : {
-
     },
     "Repeat Word" : {
 
@@ -1109,6 +1171,9 @@
         }
       }
     },
+    "Review Words" : {
+
+    },
     "Save" : {
 
     },
@@ -1147,6 +1212,9 @@
 
     },
     "Search" : {
+
+    },
+    "Search vocabulary..." : {
 
     },
     "Searching…" : {
@@ -1257,10 +1325,10 @@
     "Skip onboarding" : {
 
     },
-    "Speaking" : {
+    "Standard Voices" : {
 
     },
-    "Standard Voices" : {
+    "Start Card Review" : {
 
     },
     "Start Reading" : {
@@ -1310,23 +1378,19 @@
         }
       }
     },
-    "Streak %lld–%lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Streak %1$lld–%2$lld"
-          }
-        }
-      }
-    },
     "Target (%@)" : {
 
     },
     "Target word" : {
 
     },
+    "Tech Insights • 8 min read" : {
+
+    },
     "The correct answer is: **%@**" : {
+
+    },
+    "The Future of AI Technology" : {
 
     },
     "The top row plays the standard voice; the bottom and right buttons play your recording. Both save a reference waveform." : {
@@ -1363,7 +1427,10 @@
     "This word will be permanently deleted from your vocabook." : {
 
     },
-    "Tier Breakdown" : {
+    "Total Points" : {
+
+    },
+    "Total Vocabulary" : {
 
     },
     "Translate" : {
@@ -1441,6 +1508,12 @@
 
     },
     "Unlock with Premium" : {
+
+    },
+    "Up 4" : {
+
+    },
+    "Up 4 spots" : {
 
     },
     "Updating..." : {
@@ -1530,19 +1603,25 @@
         }
       }
     },
+    "View All" : {
+
+    },
+    "View All (12)" : {
+
+    },
+    "View Leaderboard" : {
+
+    },
     "View Mode" : {
 
     },
-    "Vocabulary" : {
+    "Vocabook" : {
 
     },
     "Vocabulary Notebook Settings" : {
 
     },
     "Want to remember 10× more — with less effort?" : {
-
-    },
-    "Welcome back!" : {
 
     },
     "Welcome to LangGo" : {
@@ -1576,9 +1655,6 @@
     "What is your native language?" : {
 
     },
-    "What would you like to practice today?" : {
-
-    },
     "Without review, most people forget 90% of new words in 2 days. Our smart Vocabulary Notebook reminds you only when you’re about to forget — not too soon, not too late." : {
 
     },
@@ -1586,6 +1662,9 @@
 
     },
     "Word Repeat" : {
+
+    },
+    "Words Due" : {
 
     },
     "Wrong" : {
@@ -1620,6 +1699,21 @@
 
     },
     "You have no words due for review." : {
+
+    },
+    "You've finished reading this article" : {
+
+    },
+    "Your complete vocabulary library" : {
+
+    },
+    "Your journey to glory" : {
+
+    },
+    "Your latest words will appear here." : {
+
+    },
+    "Your Score" : {
 
     }
   },
