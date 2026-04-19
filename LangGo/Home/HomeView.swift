@@ -287,6 +287,9 @@ struct HomeView: View {
             .background(Color(red: 0.89, green: 0.89, blue: 0.91))
             .clipShape(RoundedRectangle(cornerRadius: metrics.reviewPanelCornerRadius, style: .continuous))
 
+            Spacer()
+                .frame(height: metrics.reviewButtonTopSpacing)
+
             Button {
                 isShowingReview = true
             } label: {
@@ -299,6 +302,9 @@ struct HomeView: View {
                     .clipShape(RoundedRectangle(cornerRadius: metrics.reviewButtonCornerRadius, style: .continuous))
             }
             .buttonStyle(.plain)
+
+            Spacer()
+                .frame(height: metrics.reviewButtonTopSpacing)
         }
         .padding(.horizontal, metrics.reviewCardHorizontalPadding)
         .padding(.vertical, metrics.reviewCardVerticalPadding)
@@ -499,6 +505,7 @@ private struct HomeMetrics {
     let reviewRowsGap: CGFloat
     let reviewRowFont: CGFloat
     let reviewRowIconFont: CGFloat
+    let reviewButtonTopSpacing: CGFloat
     let reviewButtonHeight: CGFloat
     let reviewButtonCornerRadius: CGFloat
     let reviewButtonFont: CGFloat
@@ -555,26 +562,26 @@ private struct HomeMetrics {
         screenTopPadding = sy(18)
         screenBottomPadding = sy(22)
 
-        greetingFont = min(sx(28), sy(28))
-        sectionLabelFont = min(sx(13), sy(13))
+        greetingFont = min(sx(28), sy(28)) + 2
+        sectionLabelFont = min(sx(13), sy(13)) + 3
 
         afterGreetingSpacing = sy(18)
         afterSummarySpacing = sy(18)
-        beforeReviewSectionSpacing = sy(20)
-        afterSectionLabelSpacing = sy(12)
+        beforeReviewSectionSpacing = sy(24)
+        afterSectionLabelSpacing = sy(15)
         afterReviewCardSpacing = sy(18)
-        beforeAddContentSpacing = sy(18)
+        beforeAddContentSpacing = sy(22)
         beforeLibrarySpacing = sy(20)
 
         summaryCardGap = sx(8)
         summaryCardCornerRadius = sx(12)
         summaryCardHorizontalPadding = sx(10)
         summaryCardVerticalPadding = sy(11)
-        summaryTitleFont = min(sx(10), sy(10.5))
-        summaryIconFont = min(sx(10), sy(10.5))
+        summaryTitleFont = min(sx(10), sy(10.5)) + 6
+        summaryIconFont = min(sx(10), sy(10.5)) + 2
         summaryValueFont = min(sx(28), sy(29))
-        summaryDeltaFont = min(sx(12), sy(12.5))
-        summarySubtitleFont = min(sx(12), sy(12))
+        summaryDeltaFont = summaryTitleFont
+        summarySubtitleFont = summaryTitleFont
         summaryTopGap = sy(7)
         summaryValueGap = sx(2)
 
@@ -582,13 +589,13 @@ private struct HomeMetrics {
         bannerCornerRadius = sx(11)
         bannerHorizontalPadding = sx(10)
         bannerInnerGap = sx(6)
-        bannerLeadingIconFont = min(sx(12), sy(12))
-        bannerTextFont = min(sx(13), sy(13))
-        bannerLinkFont = min(sx(11), sy(11.5))
-        bannerChipFont = min(sx(10), sy(10))
+        bannerLeadingIconFont = min(sx(12), sy(12)) + 2
+        bannerTextFont = min(sx(13), sy(13)) + 2
+        bannerLinkFont = min(sx(11), sy(11.5)) + 2
+        bannerChipFont = min(sx(10), sy(10)) + 2
         bannerChipHorizontalPadding = sx(8)
         bannerChipVerticalPadding = sy(2)
-        bannerChevronFont = min(sx(10), sy(10))
+        bannerChevronFont = min(sx(10), sy(10)) + 2
         bannerMiddleSpacer = sx(2)
         bannerShadowRadius = sx(6)
         bannerShadowY = sy(2)
@@ -598,19 +605,20 @@ private struct HomeMetrics {
         reviewCardVerticalPadding = sy(16)
         reviewContentGap = sy(16)
         reviewTitleGap = sy(2)
-        reviewLabelFont = min(sx(14), sy(14))
-        reviewCountFont = min(sx(48), sy(50))
+        reviewLabelFont = min(sx(14), sy(14)) + 2
+        reviewCountFont = min(sx(48), sy(50)) + 2
         reviewIconCircle = sx(38)
-        reviewIconFont = min(sx(18), sy(18))
+        reviewIconFont = min(sx(18), sy(18)) + 2
         reviewPanelHorizontalPadding = sx(14)
         reviewPanelVerticalPadding = sy(12)
         reviewPanelCornerRadius = sx(10)
         reviewRowsGap = sy(10)
-        reviewRowFont = min(sx(15), sy(15))
-        reviewRowIconFont = min(sx(12), sy(12))
-        reviewButtonHeight = sy(46)
+        reviewRowFont = min(sx(15), sy(15)) + 2
+        reviewRowIconFont = min(sx(12), sy(12)) + 2
+        reviewButtonTopSpacing = sy(10)
+        reviewButtonHeight = sy(58)
         reviewButtonCornerRadius = sx(10)
-        reviewButtonFont = min(sx(17), sy(17))
+        reviewButtonFont = min(sx(17), sy(17)) + 5
         reviewShadowRadius = sx(8)
         reviewShadowY = sy(4)
 
@@ -620,11 +628,11 @@ private struct HomeMetrics {
         actionCardHorizontalPadding = sx(8)
         actionCardVerticalPadding = sy(8)
         actionIconCircle = sx(28)
-        actionIconFont = min(sx(14), sy(14))
-        actionTitleFont = min(sx(13), sy(13.5))
+        actionIconFont = min(sx(14), sy(14)) + 2
+        actionTitleFont = min(sx(13), sy(13.5)) + 2
         actionContentGap = sy(7)
 
-        libraryLinkFont = min(sx(13), sy(13))
+        libraryLinkFont = min(sx(13), sy(13)) + 2
         libraryCardCornerRadius = sx(12)
         libraryCardHorizontalPadding = sx(11)
         libraryCardVerticalPadding = sy(11)
@@ -632,15 +640,15 @@ private struct HomeMetrics {
         libraryTopRowGap = sx(9)
         libraryIconBox = sx(26)
         libraryIconCornerRadius = sx(8)
-        libraryIconFont = min(sx(14), sy(14))
+        libraryIconFont = min(sx(14), sy(14)) + 2
         libraryTitleGap = sy(6)
-        libraryTitleFont = min(sx(14), sy(14.5))
+        libraryTitleFont = min(sx(14), sy(14.5)) + 2
         libraryTagGap = sx(5)
-        libraryTagFont = min(sx(10), sy(10.5))
+        libraryTagFont = min(sx(10), sy(10.5)) + 2
         libraryTagHorizontalPadding = sx(7)
         libraryTagVerticalPadding = sy(2)
-        libraryMetaFont = min(sx(12), sy(12))
-        libraryChevronFont = min(sx(12), sy(12))
+        libraryMetaFont = min(sx(12), sy(12)) + 2
+        libraryChevronFont = min(sx(12), sy(12)) + 2
         libraryProgressHeight = max(5, sy(5))
     }
 }
@@ -817,10 +825,10 @@ private struct LeaderboardSheet: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Leaderboard")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
                         Text("1,243 learners")
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .font(.system(size: 18, weight: .medium, design: .rounded))
                             .foregroundStyle(Color(red: 0.47, green: 0.49, blue: 0.57))
                     }
 
@@ -830,7 +838,7 @@ private struct LeaderboardSheet: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(Color(red: 0.48, green: 0.49, blue: 0.58))
                             .frame(width: 36, height: 36)
                             .background(Color(red: 0.97, green: 0.97, blue: 0.99))
@@ -846,15 +854,15 @@ private struct LeaderboardSheet: View {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Your Score")
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .font(.system(size: 17, weight: .semibold, design: .rounded))
                                 .foregroundStyle(Color(red: 0.53, green: 0.48, blue: 0.33))
 
                             HStack(alignment: .lastTextBaseline, spacing: 8) {
                                 Text("2,847")
-                                    .font(.system(size: 42, weight: .heavy, design: .rounded))
+                                    .font(.system(size: 44, weight: .heavy, design: .rounded))
                                     .foregroundStyle(Color(red: 0.15, green: 0.17, blue: 0.22))
                                 Text("+124")
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
                             }
                         }
@@ -864,15 +872,15 @@ private struct LeaderboardSheet: View {
                         VStack(alignment: .trailing, spacing: 10) {
                             HStack(spacing: 6) {
                                 Image(systemName: "medal.star.fill")
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.system(size: 16, weight: .bold))
                                     .foregroundStyle(Color.orange)
                                 Text("#8")
-                                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                                    .font(.system(size: 30, weight: .heavy, design: .rounded))
                                     .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
                             }
 
                             Text("Up 4 spots")
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
@@ -915,11 +923,11 @@ private struct LeaderboardRow: View {
         HStack(spacing: 12) {
             if let medal = entry.medal {
                 Text(medal)
-                    .font(.system(size: 22))
+                    .font(.system(size: 24))
                     .frame(width: 30)
             } else {
                 Text("\(entry.rank)")
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .font(.system(size: 17, weight: .heavy, design: .rounded))
                     .foregroundStyle(Color(red: 0.42, green: 0.45, blue: 0.53))
                     .frame(width: 30, height: 30)
                     .background(Color(red: 0.96, green: 0.97, blue: 0.99))
@@ -927,17 +935,17 @@ private struct LeaderboardRow: View {
             }
 
             Text(entry.name)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(Color(red: 0.27, green: 0.29, blue: 0.36))
 
             Spacer()
 
             HStack(spacing: 6) {
                 Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(entry.isCurrentUser ? Color.orange : Color(red: 0.63, green: 0.65, blue: 0.72))
                 Text(entry.score)
-                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .font(.system(size: 20, weight: .heavy, design: .rounded))
                     .foregroundStyle(entry.isCurrentUser ? Color(red: 0.84, green: 0.45, blue: 0.12) : Color(red: 0.33, green: 0.36, blue: 0.44))
             }
         }

@@ -86,6 +86,9 @@
     "Action successful!" : {
 
     },
+    "Add" : {
+
+    },
     "Add Article" : {
 
     },
@@ -100,6 +103,9 @@
       }
     },
     "Add some words to your vocabook to get started." : {
+
+    },
+    "Add Tags" : {
 
     },
     "Add to VocaBook" : {
@@ -135,6 +141,9 @@
 
     },
     "Article Completed!" : {
+
+    },
+    "Article Title" : {
 
     },
     "Articles" : {
@@ -184,6 +193,9 @@
 
     },
     "by %@" : {
+
+    },
+    "Camera Access Needed" : {
 
     },
     "Cancel" : {
@@ -376,6 +388,9 @@
         }
       }
     },
+    "CUSTOM TAG" : {
+
+    },
     "Cycle All" : {
 
     },
@@ -525,6 +540,9 @@
         }
       }
     },
+    "Enter tag name" : {
+
+    },
     "Enter target word" : {
 
     },
@@ -550,6 +568,9 @@
           }
         }
       }
+    },
+    "Extracting article text from your photo." : {
+
     },
     "Filter" : {
 
@@ -753,6 +774,9 @@
         }
       }
     },
+    "New Article" : {
+
+    },
     "New Password" : {
       "localizations" : {
         "ja" : {
@@ -866,6 +890,9 @@
         }
       }
     },
+    "No tags added yet" : {
+
+    },
     "No words to show for this page." : {
 
     },
@@ -967,6 +994,12 @@
     "Previous" : {
 
     },
+    "Processing OCR..." : {
+
+    },
+    "Processing..." : {
+
+    },
     "Proficiency" : {
 
     },
@@ -1060,6 +1093,9 @@
         }
       }
     },
+    "QUICK SELECT" : {
+
+    },
     "Ranked #8" : {
 
     },
@@ -1136,6 +1172,9 @@
           }
         }
       }
+    },
+    "Retake" : {
+
     },
     "Review Complete" : {
 
@@ -1227,6 +1266,12 @@
 
     },
     "Select a Voice" : {
+
+    },
+    "Select Tags" : {
+
+    },
+    "SELECTED (%lld)" : {
 
     },
     "Session Complete!" : {
@@ -1337,6 +1382,9 @@
     "Start recording" : {
 
     },
+    "Start writing or paste your article content here..." : {
+
+    },
     "Stop" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1377,6 +1425,9 @@
           }
         }
       }
+    },
+    "TAGS" : {
+
     },
     "Target (%@)" : {
 
@@ -1517,6 +1568,12 @@
 
     },
     "Updating..." : {
+
+    },
+    "Use Photo" : {
+
+    },
+    "Use this photo for OCR?" : {
 
     },
     "USER PROFILE" : {

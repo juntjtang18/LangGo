@@ -1,5 +1,61 @@
 import SwiftUI
 
+private enum MemoryTier: String, CaseIterable {
+    case remembered
+    case monthly
+    case weekly
+    case warmup
+    case new
+
+    var title: String {
+        switch self {
+        case .remembered: return "Remembered"
+        case .monthly: return "Almost Remembered"
+        case .weekly: return "Well Practiced"
+        case .warmup: return "Getting Familiar"
+        case .new: return "New Word"
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .remembered: return Color(red: 0.00, green: 0.80, blue: 0.38)
+        case .monthly: return Color(red: 0.22, green: 0.49, blue: 1.00)
+        case .weekly: return Color(red: 0.67, green: 0.33, blue: 1.00)
+        case .warmup: return Color(red: 1.00, green: 0.59, blue: 0.04)
+        case .new: return Color(red: 0.56, green: 0.58, blue: 0.64)
+        }
+    }
+
+    static func canonicalKey(for rawTier: String?) -> String {
+        let normalized = (rawTier ?? "new")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: " ", with: "")
+
+        switch normalized {
+        case "remembered", "mastered":
+            return MemoryTier.remembered.rawValue
+        case "monthly", "almostremembered":
+            return MemoryTier.monthly.rawValue
+        case "weekly", "wellpracticed", "wellpractised":
+            return MemoryTier.weekly.rawValue
+        case "warmup", "gettingfamiliar":
+            return MemoryTier.warmup.rawValue
+        case "", "new", "newword", "newwords":
+            return MemoryTier.new.rawValue
+        default:
+            return normalized
+        }
+    }
+
+    static func from(rawTier: String?) -> MemoryTier {
+        MemoryTier(rawValue: canonicalKey(for: rawTier)) ?? .new
+    }
+}
+
 struct VocabookView: View {
     @ObservedObject var flashcardViewModel: FlashcardViewModel
     @ObservedObject var vocabookViewModel: VocabookViewModel
@@ -289,7 +345,7 @@ struct VocabookView: View {
     }
 
     private var totalVocabularyCount: Int {
-        max(vocabookViewModel.totalCards, allFlashcards.count)
+        vocabookViewModel.totalCards
     }
 
     private var recentlyAddedCards: [Flashcard] {
@@ -297,26 +353,31 @@ struct VocabookView: View {
     }
 
     private var memoryLevelRows: [MemoryLevelItem] {
-        [
-            MemoryLevelItem(title: "Remembered", subtitle: "\(countForTier("remembered")) words", count: countForTier("remembered"), accent: Color(red: 0.00, green: 0.80, blue: 0.38)),
-            MemoryLevelItem(title: "Almost Remembered", subtitle: "\(countForTier("monthly")) words", count: countForTier("monthly"), accent: Color(red: 0.22, green: 0.49, blue: 1.00)),
-            MemoryLevelItem(title: "Well Practiced", subtitle: "\(countForTier("weekly")) words", count: countForTier("weekly"), accent: Color(red: 0.67, green: 0.33, blue: 1.00)),
-            MemoryLevelItem(title: "Getting Familiar", subtitle: "\(countForTier("warmup")) words", count: countForTier("warmup"), accent: Color(red: 1.00, green: 0.59, blue: 0.04)),
-            MemoryLevelItem(title: "New Word", subtitle: "\(countForTier("new")) words", count: countForTier("new"), accent: Color(red: 0.56, green: 0.58, blue: 0.64))
-        ]
+        MemoryTier.allCases.map { tier in
+            let count = countForTier(tier)
+            return MemoryLevelItem(
+                title: tier.title,
+                subtitle: "\(count) words",
+                count: count,
+                accent: tier.accent
+            )
+        }
     }
 
     private var tierCountMap: [String: Int] {
         if !vocabookViewModel.tierStats.isEmpty {
-            return Dictionary(uniqueKeysWithValues: vocabookViewModel.tierStats.map { ($0.tier, $0.count) })
+            return vocabookViewModel.tierStats.reduce(into: [:]) { partialResult, stat in
+                let key = MemoryTier.canonicalKey(for: stat.tier)
+                partialResult[key, default: 0] += stat.count
+            }
         }
 
-        let grouped = Dictionary(grouping: allFlashcards) { ($0.reviewTire?.isEmpty == false ? $0.reviewTire! : "new") }
+        let grouped = Dictionary(grouping: allFlashcards) { MemoryTier.canonicalKey(for: $0.reviewTire) }
         return grouped.mapValues(\.count)
     }
 
-    private func countForTier(_ tier: String) -> Int {
-        tierCountMap[tier] ?? 0
+    private func countForTier(_ tier: MemoryTier) -> Int {
+        tierCountMap[tier.rawValue] ?? 0
     }
 
     private var isInitialLoading: Bool {
@@ -600,23 +661,11 @@ private struct RecentWordCard: View {
     }
 
     private var tierTitle: String {
-        switch card.reviewTire {
-        case "remembered": return "Remembered"
-        case "monthly": return "Almost Remembered"
-        case "weekly": return "Well Practiced"
-        case "warmup": return "Getting Familiar"
-        default: return "New Word"
-        }
+        MemoryTier.from(rawTier: card.reviewTire).title
     }
 
     private var tierColor: Color {
-        switch card.reviewTire {
-        case "remembered": return Color.green
-        case "monthly": return Color.blue
-        case "weekly": return Color.purple
-        case "warmup": return Color.orange
-        default: return Color.indigo
-        }
+        MemoryTier.from(rawTier: card.reviewTire).accent
     }
 
     var body: some View {

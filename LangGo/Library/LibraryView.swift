@@ -1,4 +1,7 @@
 import SwiftUI
+import AVFoundation
+import UIKit
+import Vision
 
 struct LibraryTabView: View {
     @Binding var isSideMenuShowing: Bool
@@ -30,6 +33,9 @@ struct LibraryView: View {
     @State private var selectedArticle: LibraryArticle?
     @State private var expandedArticleID: LibraryArticle.ID?
     @State private var isShowingAddMenu = false
+    @State private var isShowingArticleScanFlow = false
+    @State private var manualArticleDraft: ArticleDraft?
+    @State private var cameraAccessMessage: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -62,10 +68,16 @@ struct LibraryView: View {
                         withAnimation(.easeInOut(duration: 0.18)) {
                             isShowingAddMenu = false
                         }
-                    } onImportURL: {
+                        openCameraForArticleScan()
+                    } onManualInput: {
                         withAnimation(.easeInOut(duration: 0.18)) {
                             isShowingAddMenu = false
                         }
+                        manualArticleDraft = ArticleDraft(
+                            title: "",
+                            content: "",
+                            tags: []
+                        )
                     }
                     .transition(.opacity)
                 }
@@ -75,6 +87,36 @@ struct LibraryView: View {
         .navigationBarBackButtonHidden(true)
         .fullScreenCover(item: $selectedArticle) { article in
             ArticleReadingView(article: article)
+        }
+        .fullScreenCover(isPresented: $isShowingArticleScanFlow) {
+            ArticleScanFlowView(
+                onCancel: {
+                    isShowingArticleScanFlow = false
+                },
+                onSave: { draft in
+                    saveDraftAsArticle(draft)
+                    isShowingArticleScanFlow = false
+                }
+            )
+        }
+        .fullScreenCover(item: $manualArticleDraft) { draft in
+            ArticleEditorView(
+                draft: draft,
+                onCancel: {
+                    manualArticleDraft = nil
+                },
+                onSave: { draft in
+                    saveDraftAsArticle(draft, sourceLabel: "Manual")
+                    manualArticleDraft = nil
+                }
+            )
+        }
+        .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
+            Button("OK", role: .cancel) {
+                cameraAccessMessage = nil
+            }
+        } message: {
+            Text(cameraAccessMessage ?? "")
         }
     }
 
@@ -216,6 +258,62 @@ struct LibraryView: View {
             selectedMode = .myLibrary
         }
     }
+
+    private var cameraAccessAlertBinding: Binding<Bool> {
+        Binding(
+            get: { cameraAccessMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    cameraAccessMessage = nil
+                }
+            }
+        )
+    }
+
+    private func openCameraForArticleScan() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            cameraAccessMessage = "Camera is not available on this device."
+            return
+        }
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            isShowingArticleScanFlow = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        isShowingArticleScanFlow = true
+                    } else {
+                        cameraAccessMessage = "Please enable camera access in Settings to scan an article."
+                    }
+                }
+            }
+        case .denied, .restricted:
+            cameraAccessMessage = "Please enable camera access in Settings to scan an article."
+        @unknown default:
+            cameraAccessMessage = "Camera access is unavailable right now."
+        }
+    }
+
+    private func saveDraftAsArticle(_ draft: ArticleDraft, sourceLabel: String = "OCR") {
+        let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedTitle = trimmedTitle.isEmpty ? "Untitled Article" : trimmedTitle
+        let wordCount = draft.content.split { $0.isWhitespace || $0.isNewline }.count
+        let article = LibraryArticle(
+            title: normalizedTitle,
+            wordCount: wordCount,
+            newWords: max(8, min(max(wordCount / 28, 0), 60)),
+            progress: nil,
+            tag: draft.tags.first,
+            dateLabel: "Just now",
+            sourceLabel: sourceLabel
+        )
+
+        libraryArticles.insert(article, at: 0)
+        expandedArticleID = nil
+        selectedMode = .myLibrary
+    }
 }
 
 private enum LibraryMode: CaseIterable {
@@ -294,6 +392,13 @@ private struct LibraryArticle: Identifiable, Equatable {
         .init(title: "Tech Giants and Innovation", wordCount: 1280, newWords: 51, level: "Intermediate", topic: "News"),
         .init(title: "Mystery Story: The Missing Painting", wordCount: 1650, newWords: 72, level: "Advanced", topic: "Stories")
     ]
+}
+
+private struct ArticleDraft: Identifiable {
+    let id = UUID()
+    var title: String
+    var content: String
+    var tags: [String]
 }
 
 private struct LibraryMetrics {
@@ -858,7 +963,7 @@ private struct LibraryAddMenuOverlay: View {
     let metrics: LibraryMetrics
     let onDismiss: () -> Void
     let onScanArticle: () -> Void
-    let onImportURL: () -> Void
+    let onManualInput: () -> Void
 
     var body: some View {
         ZStack {
@@ -899,11 +1004,11 @@ private struct LibraryAddMenuOverlay: View {
                 )
 
                 LibraryAddOptionCard(
-                    icon: "link",
-                    title: "Import from URL",
-                    subtitle: "Paste a link to fetch article content",
+                    icon: "square.and.pencil",
+                    title: "Manual Input",
+                    subtitle: "Type or paste article content yourself",
                     metrics: metrics,
-                    action: onImportURL
+                    action: onManualInput
                 )
             }
             .padding(metrics.addMenuCardPadding)
@@ -960,6 +1065,621 @@ private struct LibraryAddOptionCard: View {
             .clipShape(RoundedRectangle(cornerRadius: metrics.addMenuOptionCornerRadius, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct CameraCaptureView: UIViewControllerRepresentable {
+    let onImagePicked: (UIImage) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImagePicked: onImagePicked, onCancel: onCancel)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.cameraCaptureMode = .photo
+        picker.delegate = context.coordinator
+        picker.modalPresentationStyle = .fullScreen
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let onImagePicked: (UIImage) -> Void
+        let onCancel: () -> Void
+
+        init(onImagePicked: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
+            self.onImagePicked = onImagePicked
+            self.onCancel = onCancel
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onCancel()
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let image = info[.originalImage] as? UIImage {
+                onImagePicked(image)
+            } else {
+                onCancel()
+            }
+        }
+    }
+}
+
+private struct ArticleScanFlowView: View {
+    @State private var stage: ArticleScanStage = .review
+    @State private var isShowingCamera = true
+    @State private var scannedImage: UIImage?
+    @State private var articleDraft: ArticleDraft?
+    @State private var isProcessing = false
+
+    let onCancel: () -> Void
+    let onSave: (ArticleDraft) -> Void
+
+    var body: some View {
+        Group {
+            switch stage {
+            case .review:
+                if let scannedImage {
+                    ScanPhotoReviewView(
+                        image: scannedImage,
+                        isProcessing: isProcessing,
+                        onRetake: {
+                            self.scannedImage = nil
+                            isShowingCamera = true
+                        },
+                        onConfirm: {
+                            beginOCRProcessing(for: scannedImage)
+                        }
+                    )
+                } else {
+                    Color.black.ignoresSafeArea()
+                }
+            case .processing:
+                OCRProcessingView()
+            case .editor:
+                if let articleDraft {
+                    ArticleEditorView(
+                        draft: articleDraft,
+                        onCancel: onCancel,
+                        onSave: onSave
+                    )
+                }
+            }
+        }
+        .background(Color.black.ignoresSafeArea())
+        .onAppear {
+            if scannedImage == nil {
+                isShowingCamera = true
+            }
+        }
+        .fullScreenCover(isPresented: $isShowingCamera) {
+            CameraCaptureView { image in
+                scannedImage = image
+                stage = .review
+                isShowingCamera = false
+            } onCancel: {
+                if scannedImage == nil {
+                    onCancel()
+                } else {
+                    isShowingCamera = false
+                }
+            }
+        }
+    }
+
+    private func beginOCRProcessing(for image: UIImage) {
+        guard !isProcessing else { return }
+        isProcessing = true
+        stage = .processing
+
+        Task {
+            let extractedText = await OCRService.recognizeText(from: image)
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d, yyyy h:mm a"
+
+            let draft = ArticleDraft(
+                title: "Article \(formatter.string(from: Date()))",
+                content: extractedText,
+                tags: []
+            )
+
+            await MainActor.run {
+                articleDraft = draft
+                isProcessing = false
+                stage = .editor
+            }
+        }
+    }
+}
+
+private enum ArticleScanStage {
+    case review
+    case processing
+    case editor
+}
+
+private struct ScanPhotoReviewView: View {
+    let image: UIImage
+    let isProcessing: Bool
+    let onRetake: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.ignoresSafeArea()
+
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 20)
+
+            VStack(spacing: 12) {
+                Text("Use this photo for OCR?")
+                    .font(.system(size: 23, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white)
+
+                HStack(spacing: 12) {
+                    Button(action: onRetake) {
+                        Text("Retake")
+                            .font(.system(size: 19, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(Color.white.opacity(0.16))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isProcessing)
+
+                    Button(action: onConfirm) {
+                        HStack(spacing: 8) {
+                            if isProcessing {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                            Text(isProcessing ? "Processing..." : "Use Photo")
+                                .font(.system(size: 19, weight: .bold, design: .rounded))
+                        }
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(Color(red: 0.19, green: 0.48, blue: 0.98))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isProcessing)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 28)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.0),
+                        Color.black.opacity(0.72)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        }
+    }
+}
+
+private struct ArticleEditorView: View {
+    @State private var draft: ArticleDraft
+    @State private var isShowingTagSheet = false
+    @State private var customTagInput = ""
+    @FocusState private var isCustomTagFocused: Bool
+
+    let onCancel: () -> Void
+    let onSave: (ArticleDraft) -> Void
+
+    init(draft: ArticleDraft, onCancel: @escaping () -> Void, onSave: @escaping (ArticleDraft) -> Void) {
+        _draft = State(initialValue: draft)
+        self.onCancel = onCancel
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.white.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                topBar
+                content
+            }
+
+            if isShowingTagSheet {
+                tagSheetOverlay
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: isShowingTagSheet)
+    }
+
+    private var topBar: some View {
+        HStack {
+            Button("Cancel") {
+                onCancel()
+            }
+            .font(.system(size: 21, weight: .medium))
+            .foregroundStyle(Color(red: 0.10, green: 0.45, blue: 0.98))
+
+            Spacer()
+
+            Text("New Article")
+                .font(.system(size: 21, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.14, green: 0.16, blue: 0.22))
+
+            Spacer()
+
+            Button("Save") {
+                onSave(draft)
+            }
+            .font(.system(size: 21, weight: .semibold))
+            .foregroundStyle(canSave ? Color(red: 0.10, green: 0.45, blue: 0.98) : Color(red: 0.78, green: 0.79, blue: 0.83))
+            .disabled(!canSave)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 14)
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("TAGS")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.51, green: 0.53, blue: 0.59))
+
+                    Spacer()
+
+                    Button {
+                        isShowingTagSheet = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                            Text("Add Tags")
+                        }
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(Color(red: 0.10, green: 0.45, blue: 0.98))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if draft.tags.isEmpty {
+                    Text("No tags added yet")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color(red: 0.72, green: 0.73, blue: 0.78))
+                } else {
+                    FlexibleTagLayout(spacing: 8, rowSpacing: 8) {
+                        ForEach(draft.tags, id: \.self) { tag in
+                            editorSelectedTag(tag)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            Rectangle()
+                .fill(Color(red: 0.90, green: 0.91, blue: 0.94))
+                .frame(height: 1)
+
+            ZStack(alignment: .leading) {
+                if draft.title.isEmpty {
+                    Text("Article Title")
+                        .font(.system(size: 27, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.75, green: 0.76, blue: 0.80))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 18)
+                }
+
+                TextField("", text: $draft.title)
+                    .font(.system(size: 27, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.14, green: 0.16, blue: 0.22))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 18)
+            }
+
+            Rectangle()
+                .fill(Color(red: 0.90, green: 0.91, blue: 0.94))
+                .frame(height: 1)
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $draft.content)
+                    .font(.system(size: 21, weight: .regular, design: .default))
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+
+                if draft.content.isEmpty {
+                    Text("Start writing or paste your article content here...")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color(red: 0.74, green: 0.75, blue: 0.79))
+                        .padding(.horizontal, 21)
+                        .padding(.top, 20)
+                }
+            }
+        }
+    }
+
+    private func editorSelectedTag(_ tag: String) -> some View {
+        HStack(spacing: 6) {
+            Text(tag)
+            Button {
+                draft.tags.removeAll { $0 == tag }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+            }
+            .buttonStyle(.plain)
+        }
+        .font(.system(size: 17, weight: .bold, design: .rounded))
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Color(red: 0.10, green: 0.45, blue: 0.98)))
+    }
+
+    private var tagSheetOverlay: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(0.34)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    isShowingTagSheet = false
+                    isCustomTagFocused = false
+                }
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Select Tags")
+                        .font(.system(size: 19, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.14, green: 0.16, blue: 0.22))
+
+                    Spacer()
+
+                    Button {
+                        isShowingTagSheet = false
+                        isCustomTagFocused = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 19, weight: .medium))
+                            .foregroundStyle(Color(red: 0.52, green: 0.54, blue: 0.60))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 18)
+
+                Rectangle()
+                    .fill(Color(red: 0.92, green: 0.93, blue: 0.96))
+                    .frame(height: 1)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("CUSTOM TAG")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.51, green: 0.53, blue: 0.59))
+
+                    HStack(spacing: 10) {
+                        TextField("Enter tag name", text: $customTagInput)
+                            .font(.system(size: 21, weight: .medium))
+                            .padding(.horizontal, 14)
+                            .frame(height: 44)
+                            .background(Color(red: 0.96, green: 0.96, blue: 0.98))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(isCustomTagFocused ? Color(red: 0.10, green: 0.45, blue: 0.98) : Color.clear, lineWidth: 1.5)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .focused($isCustomTagFocused)
+
+                        Button("Add") {
+                            addCustomTag()
+                        }
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 58, height: 44)
+                        .background(Color(red: 0.10, green: 0.45, blue: 0.98))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .disabled(customTagInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .opacity(customTagInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+                    }
+
+                    Text("QUICK SELECT")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.51, green: 0.53, blue: 0.59))
+                        .padding(.top, 2)
+
+                    FlexibleTagLayout(spacing: 10, rowSpacing: 10) {
+                        ForEach(LibraryTag.mockTags, id: \.self) { tag in
+                            Button {
+                                toggleTag(tag)
+                            } label: {
+                                Text(tag)
+                                    .font(.system(size: 19, weight: .medium, design: .rounded))
+                                    .foregroundStyle(draft.tags.contains(tag) ? Color.white : Color(red: 0.15, green: 0.17, blue: 0.22))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        Capsule()
+                                            .fill(draft.tags.contains(tag) ? Color(red: 0.10, green: 0.45, blue: 0.98) : Color(red: 0.95, green: 0.95, blue: 0.97))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    if !draft.tags.isEmpty {
+                        Rectangle()
+                            .fill(Color(red: 0.92, green: 0.93, blue: 0.96))
+                            .frame(height: 1)
+                            .padding(.top, 4)
+
+                        Text("SELECTED (\(draft.tags.count))")
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.51, green: 0.53, blue: 0.59))
+
+                        FlexibleTagLayout(spacing: 10, rowSpacing: 10) {
+                            ForEach(draft.tags, id: \.self) { tag in
+                                editorSelectedTag(tag)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 16)
+
+                Rectangle()
+                    .fill(Color(red: 0.92, green: 0.93, blue: 0.96))
+                    .frame(height: 1)
+
+                Button {
+                    isShowingTagSheet = false
+                    isCustomTagFocused = false
+                } label: {
+                    Text("Done")
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(Color(red: 0.10, green: 0.45, blue: 0.98))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+            }
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private var canSave: Bool {
+        !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+        !draft.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func addCustomTag() {
+        let trimmed = customTagInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if !draft.tags.contains(trimmed) {
+            draft.tags.append(trimmed)
+        }
+        customTagInput = ""
+        isCustomTagFocused = false
+    }
+
+    private func toggleTag(_ tag: String) {
+        if draft.tags.contains(tag) {
+            draft.tags.removeAll { $0 == tag }
+        } else {
+            draft.tags.append(tag)
+        }
+    }
+}
+
+private struct OCRProcessingView: View {
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(Color(red: 0.10, green: 0.45, blue: 0.98))
+
+                Text("Processing OCR...")
+                    .font(.system(size: 23, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.14, green: 0.16, blue: 0.22))
+
+                Text("Extracting article text from your photo.")
+                    .font(.system(size: 19, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color(red: 0.50, green: 0.52, blue: 0.58))
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 32)
+        }
+    }
+}
+
+private enum OCRService {
+    static func recognizeText(from image: UIImage) async -> String {
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let request = VNRecognizeTextRequest { request, _ in
+                    let text = (request.results as? [VNRecognizedTextObservation])?
+                        .compactMap { $0.topCandidates(1).first?.string }
+                        .joined(separator: "\n\n") ?? ""
+                    continuation.resume(returning: text)
+                }
+
+                request.recognitionLevel = .accurate
+                request.usesLanguageCorrection = true
+
+                do {
+                    let handler = try makeImageHandler(from: image)
+                    try handler.perform([request])
+                } catch {
+                    continuation.resume(returning: "")
+                }
+            }
+        }
+    }
+
+    private static func makeImageHandler(from image: UIImage) throws -> VNImageRequestHandler {
+        if let cgImage = image.cgImage {
+            return VNImageRequestHandler(
+                cgImage: cgImage,
+                orientation: CGImagePropertyOrientation(image.imageOrientation),
+                options: [:]
+            )
+        }
+
+        if let ciImage = image.ciImage {
+            return VNImageRequestHandler(
+                ciImage: ciImage,
+                orientation: CGImagePropertyOrientation(image.imageOrientation),
+                options: [:]
+            )
+        }
+
+        throw OCRFailure.invalidImage
+    }
+}
+
+private enum OCRFailure: Error {
+    case invalidImage
+}
+
+private extension CGImagePropertyOrientation {
+    init(_ orientation: UIImage.Orientation) {
+        switch orientation {
+        case .up: self = .up
+        case .down: self = .down
+        case .left: self = .left
+        case .right: self = .right
+        case .upMirrored: self = .upMirrored
+        case .downMirrored: self = .downMirrored
+        case .leftMirrored: self = .leftMirrored
+        case .rightMirrored: self = .rightMirrored
+        @unknown default: self = .up
+        }
     }
 }
 
