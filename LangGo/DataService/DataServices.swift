@@ -8,6 +8,7 @@ final class DataServices {
     let flashcardService: FlashcardService
     let wordService: WordService
     let settingsService: SettingsService
+    let articleService: ArticleService
     
     let storyService: StoryService
     let conversationService: ConversationService
@@ -21,6 +22,7 @@ final class DataServices {
 
         self.wordService = WordService(flashcardService: self.flashcardService)
         self.settingsService = SettingsService()
+        self.articleService = ArticleService()
         
         self.storyService = StoryService()
         self.conversationService = ConversationService()

@@ -3,14 +3,15 @@ Your branch is up to date with 'origin/big-refactoring'.
 
 Changes to be committed:
   (use "git restore --staged <file>..." to unstage)
-	new file:   LangGo/Ascent/AscentView.swift
+	new file:   LangGo/DataService/ArticleService.swift
+	modified:   LangGo/DataService/DataServices.swift
+	modified:   LangGo/DataService/StrapiModels.swift
 	modified:   LangGo/Home/HomeView.swift
-	new file:   LangGo/Library/LibraryView.swift
+	modified:   LangGo/Library/LibraryView.swift
 	modified:   LangGo/Localizable.xcstrings
-	modified:   LangGo/MainView.swift
-	modified:   LangGo/Vocabook/VocabookView.swift
 
-Untracked files:
-  (use "git add <file>..." to include in what will be committed)
-	m.txt
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   m.txt
 

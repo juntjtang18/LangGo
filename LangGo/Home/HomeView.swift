@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct HomeView: View {
     @Binding var selectedTab: Int
@@ -11,8 +12,10 @@ struct HomeView: View {
     @State private var isShowingQuizReview = false
     @State private var isShowingBookMode = false
     @State private var isShowingAddWord = false
+    @State private var isShowingArticleScanFlow = false
     @State private var isPreparingBookMode = false
     @State private var placeholderMessage: String?
+    @State private var cameraAccessMessage: String?
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
 
@@ -114,7 +117,7 @@ struct HomeView: View {
                         metrics: metrics,
                         items: [
                             .init(title: "Scan Article", icon: "camera", iconColor: .white, iconBackground: Color(red: 0.17, green: 0.63, blue: 0.97), background: Color(red: 0.72, green: 0.89, blue: 1.00), border: Color(red: 0.67, green: 0.85, blue: 0.99), textColor: Color(red: 0.23, green: 0.33, blue: 0.45), action: {
-                                placeholderMessage = "Article scanning will be implemented next. This entry is reserved for the OCR flow."
+                                openArticleScan()
                             }),
                             .init(title: "Import Text", icon: "doc.text", iconColor: .white, iconBackground: Color(red: 0.17, green: 0.63, blue: 0.97), background: Color(red: 0.72, green: 0.89, blue: 1.00), border: Color(red: 0.67, green: 0.85, blue: 0.99), textColor: Color(red: 0.23, green: 0.33, blue: 0.45), action: {
                                 placeholderMessage = "Text article import will be backed by the new article input flow."
@@ -168,6 +171,24 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $isShowingAddWord) {
             NewWordInputView(viewModel: flashcardViewModel)
+        }
+        .fullScreenCover(isPresented: $isShowingArticleScanFlow) {
+            UserArticleScanFlowView(
+                onCancel: {
+                    isShowingArticleScanFlow = false
+                },
+                onSaved: {
+                    isShowingArticleScanFlow = false
+                    selectedTab = 2
+                }
+            )
+        }
+        .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
+            Button("OK", role: .cancel) {
+                cameraAccessMessage = nil
+            }
+        } message: {
+            Text(cameraAccessMessage ?? "")
         }
         .alert("Coming Soon", isPresented: placeholderAlertBinding) {
             Button("OK", role: .cancel) {
@@ -416,6 +437,17 @@ struct HomeView: View {
         )
     }
 
+    private var cameraAccessAlertBinding: Binding<Bool> {
+        Binding(
+            get: { cameraAccessMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    cameraAccessMessage = nil
+                }
+            }
+        )
+    }
+
     private var bookModeConfig: BookModeConfig? {
         let allPageIds = (vocabookViewModel.vocabook?.vocapages ?? []).map(\.id).sorted()
         guard !allPageIds.isEmpty else { return nil }
@@ -439,6 +471,32 @@ struct HomeView: View {
             } else {
                 placeholderMessage = "No words are available in book mode yet."
             }
+        }
+    }
+
+    private func openArticleScan() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            cameraAccessMessage = "Camera is not available on this device."
+            return
+        }
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            isShowingArticleScanFlow = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        isShowingArticleScanFlow = true
+                    } else {
+                        cameraAccessMessage = "Please enable camera access in Settings to scan an article."
+                    }
+                }
+            }
+        case .denied, .restricted:
+            cameraAccessMessage = "Please enable camera access in Settings to scan an article."
+        @unknown default:
+            cameraAccessMessage = "Camera access is unavailable right now."
         }
     }
 }

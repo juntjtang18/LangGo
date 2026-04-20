@@ -27,15 +27,30 @@ struct LibraryTabView: View {
 }
 
 struct LibraryView: View {
+    private let articlePageSize = 10
+    private let maxCachedArticlePages = 3
+
     @State private var selectedMode: LibraryMode = .myLibrary
-    @State private var libraryArticles = LibraryArticle.myLibraryMocks
+    @State private var libraryArticles: [LibraryArticle] = []
     @State private var discoverArticles = LibraryArticle.discoverMocks
     @State private var selectedArticle: LibraryArticle?
     @State private var expandedArticleID: LibraryArticle.ID?
     @State private var isShowingAddMenu = false
     @State private var isShowingArticleScanFlow = false
-    @State private var manualArticleDraft: ArticleDraft?
+    @State private var articleEditorDraft: ArticleDraft?
+    @State private var availableTags: [String] = []
+    @State private var libraryFilterTags: [String] = []
+    @State private var selectedFilterTags: Set<String> = []
+    @State private var tagPageIndex = 0
+    @State private var hasLoadedLibrary = false
+    @State private var isLoadingLibrary = false
+    @State private var isLoadingNextArticlePage = false
+    @State private var isLoadingPreviousArticlePage = false
+    @State private var cachedArticlePages: [Int: [LibraryArticle]] = [:]
+    @State private var cachedArticlePageOrder: [Int] = []
+    @State private var totalArticlePages = 1
     @State private var cameraAccessMessage: String?
+    @State private var articleErrorMessage: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -47,7 +62,7 @@ struct LibraryView: View {
                     modePicker(metrics: metrics)
 
                     if selectedMode == .myLibrary {
-                        tagFilters(metrics: metrics)
+                        tagFilters(metrics: metrics, availableWidth: proxy.size.width - (metrics.horizontalPadding * 2))
                         libraryList(metrics: metrics)
                     } else {
                         discoverList(metrics: metrics)
@@ -73,13 +88,23 @@ struct LibraryView: View {
                         withAnimation(.easeInOut(duration: 0.18)) {
                             isShowingAddMenu = false
                         }
-                        manualArticleDraft = ArticleDraft(
+                        articleEditorDraft = ArticleDraft(
+                            articleId: nil,
                             title: "",
                             content: "",
-                            tags: []
+                            tags: [],
+                            sourceLabel: "Manual"
                         )
                     }
                     .transition(.opacity)
+                }
+            }
+            .overlay {
+                if isLoadingLibrary && libraryArticles.isEmpty {
+                    loadingOverlay(
+                        title: "Loading Library...",
+                        message: "Fetching your tags and saved articles."
+                    )
                 }
             }
         }
@@ -90,26 +115,31 @@ struct LibraryView: View {
         }
         .fullScreenCover(isPresented: $isShowingArticleScanFlow) {
             ArticleScanFlowView(
+                availableTags: availableTags,
                 onCancel: {
                     isShowingArticleScanFlow = false
                 },
                 onSave: { draft in
-                    saveDraftAsArticle(draft)
+                    try await saveDraftAsArticle(draft)
                     isShowingArticleScanFlow = false
                 }
             )
         }
-        .fullScreenCover(item: $manualArticleDraft) { draft in
+        .fullScreenCover(item: $articleEditorDraft) { draft in
             ArticleEditorView(
                 draft: draft,
+                availableTags: availableTags,
                 onCancel: {
-                    manualArticleDraft = nil
+                    articleEditorDraft = nil
                 },
                 onSave: { draft in
-                    saveDraftAsArticle(draft, sourceLabel: "Manual")
-                    manualArticleDraft = nil
+                    try await saveDraftAsArticle(draft, sourceLabel: draft.sourceLabel ?? "Manual")
+                    articleEditorDraft = nil
                 }
             )
+        }
+        .task {
+            await loadLibraryDataIfNeeded()
         }
         .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
             Button("OK", role: .cancel) {
@@ -117,6 +147,13 @@ struct LibraryView: View {
             }
         } message: {
             Text(cameraAccessMessage ?? "")
+        }
+        .alert("Article Error", isPresented: articleErrorAlertBinding) {
+            Button("OK", role: .cancel) {
+                articleErrorMessage = nil
+            }
+        } message: {
+            Text(articleErrorMessage ?? "")
         }
     }
 
@@ -187,8 +224,12 @@ struct LibraryView: View {
         .clipShape(RoundedRectangle(cornerRadius: metrics.segmentCornerRadius, style: .continuous))
     }
 
-    private func tagFilters(metrics: LibraryMetrics) -> some View {
-        VStack(alignment: .leading, spacing: metrics.filterSpacing) {
+    private func tagFilters(metrics: LibraryMetrics, availableWidth: CGFloat) -> some View {
+        let pages = buildTagPages(tags: resolvedFilterTags, availableWidth: availableWidth, metrics: metrics)
+        let resolvedPageIndex = min(tagPageIndex, max(pages.count - 1, 0))
+        let currentRows = pages.isEmpty ? [] : pages[resolvedPageIndex]
+
+        return VStack(alignment: .leading, spacing: metrics.filterSpacing) {
             HStack(spacing: metrics.compactSpacing) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: metrics.filterIconFont, weight: .semibold))
@@ -199,23 +240,75 @@ struct LibraryView: View {
                     .foregroundStyle(Color(red: 0.58, green: 0.60, blue: 0.67))
             }
 
-            FlexibleTagLayout(spacing: metrics.tagSpacing, rowSpacing: metrics.tagRowSpacing) {
-                ForEach(LibraryTag.mockTags, id: \.self) { tag in
-                    Text(tag)
-                        .font(.system(size: metrics.tagFont, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color(red: 0.44, green: 0.47, blue: 0.55))
-                        .padding(.horizontal, metrics.tagHorizontalPadding)
-                        .padding(.vertical, metrics.tagVerticalPadding)
-                        .background(Color(red: 0.95, green: 0.95, blue: 0.97))
-                        .clipShape(Capsule())
+            if currentRows.isEmpty {
+                Text("No tags yet")
+                    .font(.system(size: metrics.tagFont, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.58, green: 0.60, blue: 0.67))
+            } else {
+                VStack(alignment: .leading, spacing: metrics.tagRowSpacing) {
+                    ForEach(Array(currentRows.enumerated()), id: \.offset) { _, row in
+                        HStack(spacing: metrics.tagSpacing) {
+                            ForEach(row, id: \.self) { tag in
+                                tagChip(tag, metrics: metrics, isSelected: selectedFilterTags.contains(tag))
+                                    .onTapGesture {
+                                        toggleFilterTag(tag)
+                                    }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+
+                if pages.count > 1 {
+                    HStack(spacing: metrics.compactSpacing) {
+                        Spacer()
+
+                        Button {
+                            tagPageIndex = max(0, resolvedPageIndex - 1)
+                        } label: {
+                            Text("<")
+                                .font(.system(size: metrics.tagFont, weight: .bold, design: .rounded))
+                                .foregroundStyle(resolvedPageIndex > 0 ? Color(red: 0.32, green: 0.29, blue: 0.98) : Color(red: 0.77, green: 0.78, blue: 0.82))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(resolvedPageIndex == 0)
+
+                        Text("\(resolvedPageIndex + 1)/\(pages.count)")
+                            .font(.system(size: metrics.progressLabelFont, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.58, green: 0.60, blue: 0.67))
+
+                        Button {
+                            tagPageIndex = min(pages.count - 1, resolvedPageIndex + 1)
+                        } label: {
+                            Text(">")
+                                .font(.system(size: metrics.tagFont, weight: .bold, design: .rounded))
+                                .foregroundStyle(resolvedPageIndex < pages.count - 1 ? Color(red: 0.32, green: 0.29, blue: 0.98) : Color(red: 0.77, green: 0.78, blue: 0.82))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(resolvedPageIndex >= pages.count - 1)
+                    }
                 }
             }
         }
     }
 
     private func libraryList(metrics: LibraryMetrics) -> some View {
-        VStack(spacing: metrics.cardSpacing) {
-            ForEach(libraryArticles) { article in
+        LazyVStack(spacing: metrics.cardSpacing) {
+            if isLoadingPreviousArticlePage && !displayedLibraryArticles.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, metrics.compactSpacing)
+            }
+
+            if isLoadingLibrary && displayedLibraryArticles.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, metrics.cardPadding * 2)
+            } else if displayedLibraryArticles.isEmpty {
+                emptyLibraryCard(metrics: metrics)
+            }
+
+            ForEach(displayedLibraryArticles) { article in
                 LibraryArticleCard(
                     article: article,
                     metrics: metrics,
@@ -227,8 +320,20 @@ struct LibraryView: View {
                     },
                     onStartReading: {
                         selectedArticle = article
+                    },
+                    onEdit: {
+                        beginEditing(article)
                     }
                 )
+                .onAppear {
+                    handleArticleAppearance(article)
+                }
+            }
+
+            if isLoadingNextArticlePage && !displayedLibraryArticles.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, metrics.compactSpacing)
             }
         }
     }
@@ -270,6 +375,29 @@ struct LibraryView: View {
         )
     }
 
+    private var articleErrorAlertBinding: Binding<Bool> {
+        Binding(
+            get: { articleErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    articleErrorMessage = nil
+                }
+            }
+        )
+    }
+
+    private var resolvedFilterTags: [String] {
+        let tags = libraryFilterTags
+        return Array(NSOrderedSet(array: tags)) as? [String] ?? tags
+    }
+
+    private var displayedLibraryArticles: [LibraryArticle] {
+        guard !selectedFilterTags.isEmpty else { return libraryArticles }
+        return libraryArticles.filter { article in
+            selectedFilterTags.isSubset(of: Set(article.tags))
+        }
+    }
+
     private func openCameraForArticleScan() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
             cameraAccessMessage = "Camera is not available on this device."
@@ -296,24 +424,377 @@ struct LibraryView: View {
         }
     }
 
-    private func saveDraftAsArticle(_ draft: ArticleDraft, sourceLabel: String = "OCR") {
-        let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedTitle = trimmedTitle.isEmpty ? "Untitled Article" : trimmedTitle
-        let wordCount = draft.content.split { $0.isWhitespace || $0.isNewline }.count
+    @MainActor
+    private func loadLibraryDataIfNeeded() async {
+        guard !hasLoadedLibrary else { return }
+        hasLoadedLibrary = true
+        await loadLibraryData()
+    }
+
+    @MainActor
+    private func loadLibraryData() async {
+        isLoadingLibrary = true
+
+        do {
+            let articleService = DataServices.shared.articleService
+            async let tagsTask = articleService.fetchMyUsedArticleTags()
+            async let articlesTask = articleService.fetchMyUserArticles(page: 1, pageSize: articlePageSize)
+
+            let tags = try await tagsTask
+            let response = try await articlesTask
+
+            let usedTags = tags.compactMap { $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .sorted()
+            availableTags = usedTags
+            libraryFilterTags = usedTags
+            tagPageIndex = 0
+            totalArticlePages = max(response.meta?.pagination?.pageCount ?? 1, 1)
+            cachedArticlePages = [1: (response.data ?? []).map(mapUserArticle(_:))]
+            cachedArticlePageOrder = response.data?.isEmpty == false ? [1] : []
+            rebuildArticleWindow()
+        } catch {
+            articleErrorMessage = error.localizedDescription
+        }
+
+        isLoadingLibrary = false
+    }
+
+    @MainActor
+    private func saveDraftAsArticle(_ draft: ArticleDraft, sourceLabel: String = "OCR") async throws {
+        let persisted = try await persistUserArticleDraft(draft, sourceLabel: sourceLabel)
+        expandedArticleID = nil
+        selectedMode = .myLibrary
+        upsertLocalArticle(
+            articleID: persisted.articleID,
+            title: persisted.title,
+            content: persisted.content,
+            wordCount: persisted.wordCount,
+            progress: persisted.progress ?? 0,
+            tags: persisted.tags,
+            sourceLabel: persisted.sourceLabel
+        )
+    }
+
+    private func upsertLocalArticle(
+        articleID: Int,
+        title: String,
+        content: String,
+        wordCount: Int,
+        progress: Double?,
+        tags: [String],
+        sourceLabel: String
+    ) {
+        let normalizedTags = tags
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         let article = LibraryArticle(
-            title: normalizedTitle,
+            backendId: articleID,
+            title: title,
+            content: content,
             wordCount: wordCount,
             newWords: max(8, min(max(wordCount / 28, 0), 60)),
-            progress: nil,
-            tag: draft.tags.first,
+            progress: progress,
+            tag: normalizedTags.first,
+            tags: normalizedTags,
             dateLabel: "Just now",
             sourceLabel: sourceLabel
         )
 
-        libraryArticles.insert(article, at: 0)
-        expandedArticleID = nil
-        selectedMode = .myLibrary
+        if let existingIndex = libraryArticles.firstIndex(where: { $0.backendId == articleID }) {
+            libraryArticles[existingIndex] = article
+            for page in cachedArticlePages.keys {
+                if let pageIndex = cachedArticlePages[page]?.firstIndex(where: { $0.backendId == articleID }) {
+                    cachedArticlePages[page]?[pageIndex] = article
+                }
+            }
+        } else {
+            if cachedArticlePages[1] != nil {
+                cachedArticlePages[1]?.insert(article, at: 0)
+                if let firstPageCount = cachedArticlePages[1]?.count, firstPageCount > articlePageSize {
+                    cachedArticlePages[1]?.removeLast(firstPageCount - articlePageSize)
+                }
+            } else {
+                cachedArticlePages[1] = [article]
+                cachedArticlePageOrder = [1]
+            }
+        }
+
+        rebuildArticleWindow()
+        let mergedTags = Array(NSOrderedSet(array: availableTags + normalizedTags)) as? [String] ?? (availableTags + normalizedTags)
+        let sortedTags = mergedTags.sorted()
+        availableTags = sortedTags
+        libraryFilterTags = sortedTags
     }
+
+    private func toggleFilterTag(_ tag: String) {
+        if selectedFilterTags.contains(tag) {
+            selectedFilterTags.remove(tag)
+        } else {
+            selectedFilterTags.insert(tag)
+        }
+    }
+
+    private func handleArticleAppearance(_ article: LibraryArticle) {
+        guard selectedMode == .myLibrary, !displayedLibraryArticles.isEmpty else { return }
+
+        if article.id == displayedLibraryArticles.first?.id {
+            Task {
+                await loadPreviousArticlePageIfNeeded()
+            }
+        }
+
+        if article.id == displayedLibraryArticles.last?.id {
+            Task {
+                await loadNextArticlePageIfNeeded()
+            }
+        }
+    }
+
+    @MainActor
+    private func loadNextArticlePageIfNeeded() async {
+        guard !isLoadingLibrary, !isLoadingNextArticlePage else { return }
+        guard let lastPage = cachedArticlePageOrder.max(), lastPage < totalArticlePages else { return }
+
+        isLoadingNextArticlePage = true
+        defer { isLoadingNextArticlePage = false }
+
+        await loadArticlePage(lastPage + 1, direction: .next)
+    }
+
+    @MainActor
+    private func loadPreviousArticlePageIfNeeded() async {
+        guard !isLoadingLibrary, !isLoadingPreviousArticlePage else { return }
+        guard let firstPage = cachedArticlePageOrder.min(), firstPage > 1 else { return }
+
+        isLoadingPreviousArticlePage = true
+        defer { isLoadingPreviousArticlePage = false }
+
+        await loadArticlePage(firstPage - 1, direction: .previous)
+    }
+
+    @MainActor
+    private func loadArticlePage(_ page: Int, direction: ArticlePageDirection) async {
+        guard cachedArticlePages[page] == nil else { return }
+
+        do {
+            let response = try await DataServices.shared.articleService.fetchMyUserArticles(page: page, pageSize: articlePageSize)
+            totalArticlePages = max(response.meta?.pagination?.pageCount ?? totalArticlePages, totalArticlePages)
+            cachedArticlePages[page] = (response.data ?? []).map(mapUserArticle(_:))
+            cachedArticlePageOrder.append(page)
+            cachedArticlePageOrder = cachedArticlePageOrder.sorted()
+            trimArticlePageWindow(for: direction)
+            rebuildArticleWindow()
+        } catch {
+            articleErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func trimArticlePageWindow(for direction: ArticlePageDirection) {
+        while cachedArticlePageOrder.count > maxCachedArticlePages {
+            let pageToDrop: Int
+            switch direction {
+            case .next:
+                pageToDrop = cachedArticlePageOrder.min() ?? cachedArticlePageOrder[0]
+            case .previous:
+                pageToDrop = cachedArticlePageOrder.max() ?? cachedArticlePageOrder[cachedArticlePageOrder.count - 1]
+            }
+
+            cachedArticlePages.removeValue(forKey: pageToDrop)
+            cachedArticlePageOrder.removeAll { $0 == pageToDrop }
+        }
+    }
+
+    private func rebuildArticleWindow() {
+        let orderedPages = cachedArticlePageOrder.sorted()
+        libraryArticles = orderedPages.flatMap { cachedArticlePages[$0] ?? [] }
+    }
+
+    private func tagChip(_ tag: String, metrics: LibraryMetrics, isSelected: Bool) -> some View {
+        Text(tag)
+            .font(.system(size: metrics.tagFont, weight: .semibold, design: .rounded))
+            .foregroundStyle(isSelected ? Color.white : Color(red: 0.44, green: 0.47, blue: 0.55))
+            .padding(.horizontal, metrics.tagHorizontalPadding)
+            .padding(.vertical, metrics.tagVerticalPadding)
+            .background(isSelected ? Color(red: 0.32, green: 0.29, blue: 0.98) : Color(red: 0.95, green: 0.95, blue: 0.97))
+            .clipShape(Capsule())
+    }
+
+    private func buildTagPages(tags: [String], availableWidth: CGFloat, metrics: LibraryMetrics) -> [[[String]]] {
+        guard !tags.isEmpty else { return [] }
+
+        let font = UIFont.systemFont(ofSize: metrics.tagFont, weight: .semibold)
+        var rows: [[String]] = []
+        var currentRow: [String] = []
+        var currentRowWidth: CGFloat = 0
+
+        for tag in tags {
+            let textWidth = (tag as NSString).size(withAttributes: [.font: font]).width
+            let chipWidth = textWidth + (metrics.tagHorizontalPadding * 2)
+            let candidateWidth = currentRow.isEmpty ? chipWidth : currentRowWidth + metrics.tagSpacing + chipWidth
+
+            if candidateWidth <= availableWidth || currentRow.isEmpty {
+                currentRow.append(tag)
+                currentRowWidth = candidateWidth
+            } else {
+                rows.append(currentRow)
+                currentRow = [tag]
+                currentRowWidth = chipWidth
+            }
+        }
+
+        if !currentRow.isEmpty {
+            rows.append(currentRow)
+        }
+
+        var pages: [[[String]]] = []
+        var rowIndex = 0
+        while rowIndex < rows.count {
+            pages.append(Array(rows[rowIndex..<min(rowIndex + 2, rows.count)]))
+            rowIndex += 2
+        }
+
+        return pages
+    }
+
+    private func mapUserArticle(_ article: StrapiUserArticle) -> LibraryArticle {
+        let title = article.attributes.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = article.attributes.content ?? ""
+        let tagNames = article.attributes.articleTags?.data.compactMap { $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty } ?? []
+        let wordCount = article.attributes.wordCount ?? content.split { $0.isWhitespace || $0.isNewline }.count
+
+        return LibraryArticle(
+            backendId: article.id,
+            title: (title?.isEmpty == false ? title : "Untitled Article") ?? "Untitled Article",
+            content: content,
+            wordCount: wordCount,
+            newWords: max(8, min(max(wordCount / 28, 0), 60)),
+            progress: article.attributes.progress,
+            tag: tagNames.first,
+            tags: tagNames,
+            dateLabel: relativeDateLabel(for: article.attributes.lastReadAt),
+            sourceLabel: "My Article"
+        )
+    }
+
+    private func relativeDateLabel(for date: Date?) -> String {
+        guard let date else { return "Saved" }
+        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+    }
+
+    private func beginEditing(_ article: LibraryArticle) {
+        articleEditorDraft = ArticleDraft(
+            articleId: article.backendId,
+            title: article.title,
+            content: article.content ?? "",
+            tags: article.tags,
+            sourceLabel: article.sourceLabel ?? "Manual"
+        )
+    }
+
+    private func emptyLibraryCard(metrics: LibraryMetrics) -> some View {
+        VStack(alignment: .leading, spacing: metrics.metaSpacing) {
+            Text("No saved articles yet")
+                .font(.system(size: metrics.cardTitleFont, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.19, green: 0.21, blue: 0.26))
+
+            Text("Use Scan Article or Manual Input to create your first article.")
+                .font(.system(size: metrics.cardMetaFont, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.50, green: 0.52, blue: 0.59))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(metrics.cardPadding)
+        .background(Color.white)
+        .overlay(
+            RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous)
+                .stroke(Color(red: 0.90, green: 0.91, blue: 0.94), lineWidth: metrics.cardBorderWidth)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
+    }
+
+    private func loadingOverlay(title: String, message: String) -> some View {
+        ZStack {
+            Color.white.opacity(0.82)
+                .ignoresSafeArea()
+
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(Color(red: 0.32, green: 0.29, blue: 0.98))
+
+                Text(title)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.14, green: 0.16, blue: 0.22))
+
+                Text(message)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color(red: 0.50, green: 0.52, blue: 0.58))
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
+            .padding(.horizontal, 36)
+        }
+    }
+}
+
+private struct PersistedUserArticleDraft {
+    let articleID: Int
+    let title: String
+    let content: String
+    let wordCount: Int
+    let progress: Double?
+    let tags: [String]
+    let sourceLabel: String
+}
+
+private func persistUserArticleDraft(_ draft: ArticleDraft, sourceLabel: String = "OCR") async throws -> PersistedUserArticleDraft {
+    let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let normalizedTitle = trimmedTitle.isEmpty ? "Untitled Article" : trimmedTitle
+    let wordCount = draft.content.split { $0.isWhitespace || $0.isNewline }.count
+    let articleService = await DataServices.shared.articleService
+    let savedTags = try await articleService.findOrCreateArticleTags(tags: draft.tags)
+    let tagIDs = savedTags.map(\.id)
+    let tagNames = savedTags.compactMap { $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+    let savedArticle: StrapiUserArticle
+
+    if let articleId = draft.articleId {
+        savedArticle = try await articleService.updateUserArticle(
+            articleId: articleId,
+            title: normalizedTitle,
+            content: draft.content,
+            languageCode: nil,
+            wordCount: wordCount,
+            progress: 0,
+            lastReadAt: Date(),
+            articleTagIds: tagIDs
+        )
+    } else {
+        savedArticle = try await articleService.createUserArticle(
+            title: normalizedTitle,
+            content: draft.content,
+            languageCode: nil,
+            wordCount: wordCount,
+            progress: 0,
+            lastReadAt: Date(),
+            articleTagIds: tagIDs
+        )
+    }
+
+    return PersistedUserArticleDraft(
+        articleID: savedArticle.id,
+        title: normalizedTitle,
+        content: draft.content,
+        wordCount: wordCount,
+        progress: savedArticle.attributes.progress,
+        tags: tagNames,
+        sourceLabel: sourceLabel
+    )
 }
 
 private enum LibraryMode: CaseIterable {
@@ -328,6 +809,11 @@ private enum LibraryMode: CaseIterable {
     }
 }
 
+private enum ArticlePageDirection {
+    case previous
+    case next
+}
+
 private enum LibraryTag {
     static let mockTags = [
         "Technology", "AI", "Science", "Environment",
@@ -337,11 +823,14 @@ private enum LibraryTag {
 
 private struct LibraryArticle: Identifiable, Equatable {
     let id: UUID
+    let backendId: Int?
     let title: String
+    let content: String?
     let wordCount: Int
     let newWords: Int
     var progress: Double?
     let tag: String?
+    let tags: [String]
     let dateLabel: String?
     let sourceLabel: String?
     let level: String?
@@ -349,22 +838,28 @@ private struct LibraryArticle: Identifiable, Equatable {
 
     init(
         id: UUID = UUID(),
+        backendId: Int? = nil,
         title: String,
+        content: String? = nil,
         wordCount: Int,
         newWords: Int,
         progress: Double? = nil,
         tag: String? = nil,
+        tags: [String] = [],
         dateLabel: String? = nil,
         sourceLabel: String? = nil,
         level: String? = nil,
         topic: String? = nil
     ) {
         self.id = id
+        self.backendId = backendId
         self.title = title
+        self.content = content
         self.wordCount = wordCount
         self.newWords = newWords
         self.progress = progress
         self.tag = tag
+        self.tags = tags
         self.dateLabel = dateLabel
         self.sourceLabel = sourceLabel
         self.level = level
@@ -396,9 +891,11 @@ private struct LibraryArticle: Identifiable, Equatable {
 
 private struct ArticleDraft: Identifiable {
     let id = UUID()
+    var articleId: Int?
     var title: String
     var content: String
     var tags: [String]
+    var sourceLabel: String?
 }
 
 private struct LibraryMetrics {
@@ -576,6 +1073,7 @@ private struct LibraryArticleCard: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     let onStartReading: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: isExpanded ? metrics.expandedSpacing : metrics.metaSpacing) {
@@ -647,6 +1145,21 @@ private struct LibraryArticleCard: View {
                             .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius * 0.72, style: .continuous))
                     }
                     .buttonStyle(.plain)
+
+                    Button(action: onEdit) {
+                        Text("Edit Article")
+                            .font(.system(size: metrics.buttonFont, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.23, green: 0.25, blue: 0.31))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: metrics.expandedButtonHeight)
+                            .background(Color.white.opacity(0.88))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: metrics.cardCornerRadius * 0.72, style: .continuous)
+                                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius * 0.72, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
             } else if let progress = article.progress {
                 VStack(alignment: .leading, spacing: metrics.progressSpacing) {
@@ -702,14 +1215,17 @@ private struct ArticleReadingView: View {
     @Environment(\.dismiss) private var dismiss
     let article: LibraryArticle
 
-    private let bodyParagraphs: [String] = [
-        "Artificial intelligence has rapidly evolved from a theoretical concept into a transformative force reshaping industries worldwide. The advent of machine learning algorithms has enabled computers to process vast amounts of data with unprecedented efficiency.",
-        "In recent years, we've witnessed remarkable breakthroughs in natural language processing, computer vision, and autonomous systems. These advancements have profound implications for how we work, communicate, and solve complex problems.",
-        "The integration of AI into everyday applications has become ubiquitous. From voice assistants that manage our schedules to recommendation systems that curate our content consumption, AI has seamlessly woven itself into the fabric of modern life.",
-        "However, this technological revolution also presents significant challenges. Questions about ethics, privacy, and the societal impact of automation demand careful consideration. As AI systems become more sophisticated, ensuring transparency and accountability becomes increasingly critical.",
-        "Looking forward, the trajectory of AI development suggests even more dramatic transformations on the horizon. Emerging paradigms in deep learning and neural architecture design promise to unlock capabilities we've only begun to imagine.",
-        "The key to harnessing AI's potential lies in fostering interdisciplinary collaboration between technologists, policymakers, and ethicists. Only through collective effort can we navigate the complexities of this new era and ensure that AI serves the broader interests of humanity."
-    ]
+    private var bodyParagraphs: [String] {
+        let content = article.content?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if content.isEmpty {
+            return ["No article content is available yet."]
+        }
+
+        return content
+            .components(separatedBy: CharacterSet.newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -1113,6 +1629,60 @@ private struct CameraCaptureView: UIViewControllerRepresentable {
     }
 }
 
+struct UserArticleScanFlowView: View {
+    @State private var availableTags: [String] = []
+    @State private var articleErrorMessage: String?
+
+    let onCancel: () -> Void
+    let onSaved: () -> Void
+
+    var body: some View {
+        ArticleScanFlowView(
+            availableTags: availableTags,
+            onCancel: onCancel,
+            onSave: { draft in
+                _ = try await persistUserArticleDraft(draft, sourceLabel: draft.sourceLabel ?? "OCR")
+                await MainActor.run {
+                    onSaved()
+                }
+            }
+        )
+        .task {
+            await loadAvailableTags()
+        }
+        .alert("Article Error", isPresented: articleErrorAlertBinding) {
+            Button("OK", role: .cancel) {
+                articleErrorMessage = nil
+            }
+        } message: {
+            Text(articleErrorMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func loadAvailableTags() async {
+        do {
+            let tags = try await DataServices.shared.articleService.fetchMyUsedArticleTags()
+            availableTags = tags.compactMap { $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .sorted()
+        } catch {
+            articleErrorMessage = error.localizedDescription
+        }
+    }
+
+    private var articleErrorAlertBinding: Binding<Bool> {
+        Binding(
+            get: { articleErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    articleErrorMessage = nil
+                }
+            }
+        )
+    }
+}
+
 private struct ArticleScanFlowView: View {
     @State private var stage: ArticleScanStage = .review
     @State private var isShowingCamera = true
@@ -1120,8 +1690,9 @@ private struct ArticleScanFlowView: View {
     @State private var articleDraft: ArticleDraft?
     @State private var isProcessing = false
 
+    let availableTags: [String]
     let onCancel: () -> Void
-    let onSave: (ArticleDraft) -> Void
+    let onSave: (ArticleDraft) async throws -> Void
 
     var body: some View {
         Group {
@@ -1148,6 +1719,7 @@ private struct ArticleScanFlowView: View {
                 if let articleDraft {
                     ArticleEditorView(
                         draft: articleDraft,
+                        availableTags: availableTags,
                         onCancel: onCancel,
                         onSave: onSave
                     )
@@ -1186,9 +1758,11 @@ private struct ArticleScanFlowView: View {
             formatter.dateFormat = "MMM d, yyyy h:mm a"
 
             let draft = ArticleDraft(
+                articleId: nil,
                 title: "Article \(formatter.string(from: Date()))",
                 content: extractedText,
-                tags: []
+                tags: [],
+                sourceLabel: "OCR"
             )
 
             await MainActor.run {
@@ -1281,13 +1855,22 @@ private struct ArticleEditorView: View {
     @State private var draft: ArticleDraft
     @State private var isShowingTagSheet = false
     @State private var customTagInput = ""
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
     @FocusState private var isCustomTagFocused: Bool
 
+    let availableTags: [String]
     let onCancel: () -> Void
-    let onSave: (ArticleDraft) -> Void
+    let onSave: (ArticleDraft) async throws -> Void
 
-    init(draft: ArticleDraft, onCancel: @escaping () -> Void, onSave: @escaping (ArticleDraft) -> Void) {
+    init(
+        draft: ArticleDraft,
+        availableTags: [String],
+        onCancel: @escaping () -> Void,
+        onSave: @escaping (ArticleDraft) async throws -> Void
+    ) {
         _draft = State(initialValue: draft)
+        self.availableTags = availableTags
         self.onCancel = onCancel
         self.onSave = onSave
     }
@@ -1305,8 +1888,19 @@ private struct ArticleEditorView: View {
                 tagSheetOverlay
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+
+            if isSaving {
+                saveProgressOverlay
+            }
         }
         .animation(.easeInOut(duration: 0.18), value: isShowingTagSheet)
+        .alert("Unable to Save", isPresented: saveErrorBinding) {
+            Button("OK", role: .cancel) {
+                saveErrorMessage = nil
+            }
+        } message: {
+            Text(saveErrorMessage ?? "")
+        }
     }
 
     private var topBar: some View {
@@ -1319,18 +1913,18 @@ private struct ArticleEditorView: View {
 
             Spacer()
 
-            Text("New Article")
+            Text(draft.articleId == nil ? "New Article" : "Edit Article")
                 .font(.system(size: 21, weight: .bold, design: .rounded))
                 .foregroundStyle(Color(red: 0.14, green: 0.16, blue: 0.22))
 
             Spacer()
 
             Button("Save") {
-                onSave(draft)
+                performSave()
             }
             .font(.system(size: 21, weight: .semibold))
             .foregroundStyle(canSave ? Color(red: 0.10, green: 0.45, blue: 0.98) : Color(red: 0.78, green: 0.79, blue: 0.83))
-            .disabled(!canSave)
+            .disabled(!canSave || isSaving)
         }
         .padding(.horizontal, 16)
         .padding(.top, 14)
@@ -1505,7 +2099,7 @@ private struct ArticleEditorView: View {
                         .padding(.top, 2)
 
                     FlexibleTagLayout(spacing: 10, rowSpacing: 10) {
-                        ForEach(LibraryTag.mockTags, id: \.self) { tag in
+                        ForEach(resolvedAvailableTags, id: \.self) { tag in
                             Button {
                                 toggleTag(tag)
                             } label: {
@@ -1573,6 +2167,64 @@ private struct ArticleEditorView: View {
     private var canSave: Bool {
         !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         !draft.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var resolvedAvailableTags: [String] {
+        let tags = availableTags.isEmpty ? LibraryTag.mockTags : availableTags
+        return Array(NSOrderedSet(array: tags)) as? [String] ?? tags
+    }
+
+    private var saveErrorBinding: Binding<Bool> {
+        Binding(
+            get: { saveErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    saveErrorMessage = nil
+                }
+            }
+        )
+    }
+
+    private var saveProgressOverlay: some View {
+        ZStack {
+            Color.white.opacity(0.86)
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(Color(red: 0.10, green: 0.45, blue: 0.98))
+
+                Text("Saving Article...")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.14, green: 0.16, blue: 0.22))
+
+                Text("Updating your article and tags.")
+                    .font(.system(size: 17, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color(red: 0.50, green: 0.52, blue: 0.58))
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
+            .padding(.horizontal, 32)
+        }
+    }
+
+    private func performSave() {
+        guard !isSaving else { return }
+
+        Task {
+            isSaving = true
+            do {
+                try await onSave(draft)
+            } catch {
+                saveErrorMessage = error.localizedDescription
+            }
+            isSaving = false
+        }
     }
 
     private func addCustomTag() {

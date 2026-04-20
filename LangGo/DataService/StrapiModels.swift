@@ -425,6 +425,79 @@ struct TranslateWordInContextResponse: Decodable {
     let partOfSpeech: String
 }
 
+// MARK: - User Article Models
+struct StrapiArticleTag: Codable, Identifiable {
+    let id: Int
+    let attributes: StrapiArticleTagAttributes
+}
+
+struct StrapiArticleTagAttributes: Codable {
+    let tag: String?
+}
+
+struct StrapiUserArticle: Codable, Identifiable {
+    let id: Int
+    let attributes: StrapiUserArticleAttributes
+}
+
+struct StrapiUserArticleAttributes: Codable {
+    let title: String?
+    let content: String?
+    let languageCode: String?
+    let wordCount: Int?
+    let progress: Double?
+    let lastReadAt: Date?
+    let articleTags: ManyRelation<StrapiArticleTag>?
+
+    enum CodingKeys: String, CodingKey {
+        case title, content, progress
+        case languageCode = "language_code"
+        case wordCount = "word_count"
+        case lastReadAt = "last_read_at"
+        case articleTags = "article_tags"
+    }
+}
+
+struct CreateArticleTagRequest: Encodable {
+    let data: CreateArticleTagPayload
+}
+
+struct CreateArticleTagPayload: Encodable {
+    let tag: String
+    let user: Int
+}
+
+struct UpdateArticleTagRequest: Encodable {
+    let data: UpdateArticleTagPayload
+}
+
+struct UpdateArticleTagPayload: Encodable {
+    let tag: String
+}
+
+struct SaveUserArticleRequest: Encodable {
+    let data: SaveUserArticlePayload
+}
+
+struct SaveUserArticlePayload: Encodable {
+    let title: String
+    let content: String
+    let languageCode: String?
+    let wordCount: Int?
+    let user: Int
+    let progress: Double?
+    let lastReadAt: Date?
+    let articleTags: [Int]
+
+    enum CodingKeys: String, CodingKey {
+        case title, content, user, progress
+        case languageCode = "language_code"
+        case wordCount = "word_count"
+        case lastReadAt = "last_read_at"
+        case articleTags = "article_tags"
+    }
+}
+
 
 struct Flashcard: Codable, Identifiable, Equatable {
     let id: Int

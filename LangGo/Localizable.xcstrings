@@ -53,6 +53,16 @@
     "%lld words" : {
 
     },
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
     "%lld%%" : {
 
     },
@@ -66,6 +76,12 @@
 
     },
     "+124" : {
+
+    },
+    "<" : {
+
+    },
+    ">" : {
 
     },
     "1,243 learners" : {
@@ -141,6 +157,9 @@
 
     },
     "Article Completed!" : {
+
+    },
+    "Article Error" : {
 
     },
     "Article Title" : {
@@ -497,6 +516,9 @@
 
     },
     "Due Words" : {
+
+    },
+    "Edit Article" : {
 
     },
     "Edit Word" : {
@@ -890,7 +912,13 @@
         }
       }
     },
+    "No saved articles yet" : {
+
+    },
     "No tags added yet" : {
+
+    },
+    "No tags yet" : {
 
     },
     "No words to show for this page." : {
@@ -1247,6 +1275,9 @@
     "Save to Vocabook" : {
 
     },
+    "Saving Article..." : {
+
+    },
     "Saving..." : {
 
     },
@@ -1527,6 +1558,9 @@
     "Type or hold to speak..." : {
 
     },
+    "Unable to Save" : {
+
+    },
     "Unit 1 Introductions" : {
       "localizations" : {
         "ja" : {
@@ -1567,10 +1601,16 @@
     "Up 4 spots" : {
 
     },
+    "Updating your article and tags." : {
+
+    },
     "Updating..." : {
 
     },
     "Use Photo" : {
+
+    },
+    "Use Scan Article or Manual Input to create your first article." : {
 
     },
     "Use this photo for OCR?" : {
