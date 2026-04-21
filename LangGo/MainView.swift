@@ -45,7 +45,7 @@ struct MainView: View {
     var body: some View {
         ZStack {
             TabView(selection: $selectedTab) {
-                HomeTabView(isSideMenuShowing: $isSideMenuShowing, selectedTab: $selectedTab)
+                HomeTabView(selectedTab: $selectedTab)
                     .tabItem { Label("Home", systemImage: "house") }
                     .tag(0)
 
@@ -60,6 +60,14 @@ struct MainView: View {
                 AscentTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Ascent", systemImage: "person") }
                     .tag(3)
+
+                NavigationStack {
+                    ProfileView(showsDismissButton: false) {
+                        authState = .loggedOut
+                    }
+                }
+                .tabItem { Label("Profile", systemImage: "person.crop.circle") }
+                .tag(4)
             }
             .tint(Color.purple)
             
@@ -84,7 +92,9 @@ struct MainView: View {
             }
         }
         .fullScreenCover(isPresented: $isShowingProfileSheet) {
-            ProfileView()
+            ProfileView {
+                authState = .loggedOut
+            }
         }
         .sheet(isPresented: $isShowingSettingSheet) {
             SettingView()

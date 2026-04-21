@@ -83,6 +83,12 @@ class SettingsService {
     }
 
     private func fetchLevels(for locale: String) async throws -> [ProficiencyLevel] {
+        if !isRefreshModeEnabled,
+           let cachedLevels = SettingsCache.loadProficiencyLevels(locale: locale, using: cacheService) {
+            logger.debug("✅ Returning proficiency levels from cache for locale \(locale, privacy: .public).")
+            return cachedLevels
+        }
+
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/proficiency-levels") else { throw URLError(.badURL) }
         urlComponents.queryItems = [
             URLQueryItem(name: "locale", value: locale),
@@ -90,6 +96,8 @@ class SettingsService {
         ]
         guard let url = urlComponents.url else { throw URLError(.badURL) }
         let response: StrapiListResponse<ProficiencyLevel> = try await networkManager.fetchDirect(from: url)
-        return response.data ?? []
+        let levels = response.data ?? []
+        SettingsCache.storeProficiencyLevels(levels, locale: locale, using: cacheService)
+        return levels
     }
 }

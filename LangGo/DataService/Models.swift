@@ -8,6 +8,13 @@ struct UserProfileAttributes: Codable {
     let reminder_enabled: Bool?
     let baseLanguage: String?
     let telephone: String?
+    let bio: String?
+    let avatar_img: MediaRelation?
+
+    enum CodingKeys: String, CodingKey {
+        case proficiency, reminder_enabled, baseLanguage, telephone, avatar_img
+        case bio = "Bio"
+    }
 }
 
 struct Language: Hashable, Identifiable {

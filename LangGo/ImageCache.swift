@@ -1,40 +1,76 @@
 // GeniusParentingAISwift/ImageCache.swift
 import SwiftUI
 
+extension Notification.Name {
+    static let imageCacheDidInvalidate = Notification.Name("ImageCacheDidInvalidate")
+}
+
 // MARK: - Image Caching System
 class ImageCache {
     static let shared = NSCache<NSURL, UIImage>()
     private init() {}
+
+    static func removeImage(for url: URL) {
+        shared.removeObject(forKey: url as NSURL)
+        NotificationCenter.default.post(name: .imageCacheDidInvalidate, object: url)
+    }
+
+    static func removeAllImages() {
+        shared.removeAllObjects()
+        NotificationCenter.default.post(name: .imageCacheDidInvalidate, object: nil)
+    }
 }
 
 @MainActor
 class ImageLoader: ObservableObject {
     @Published var image: UIImage?
-    private let url: URL
-    init(url: URL) { self.url = url }
-    func load() {
-        if let cachedImage = ImageCache.shared.object(forKey: url as NSURL) {
+    private var currentURL: URL?
+    private var currentTask: Task<Void, Never>?
+
+    deinit {
+        currentTask?.cancel()
+    }
+
+    func load(from url: URL, forceReload: Bool = false) {
+        currentTask?.cancel()
+        currentURL = url
+
+        if !forceReload, let cachedImage = ImageCache.shared.object(forKey: url as NSURL) {
             self.image = cachedImage
             return
         }
-        // Capture url locally to avoid accessing self.url in the closure
-        let requestUrl = self.url
-        URLSession.shared.dataTask(with: requestUrl) { data, response, error in
-            guard let data = data, let loadedImage = UIImage(data: data), error == nil else { return }
-            ImageCache.shared.setObject(loadedImage, forKey: requestUrl as NSURL)
-            DispatchQueue.main.async {
-                self.image = loadedImage
+
+        image = nil
+        let requestURL = url
+        currentTask = Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: requestURL)
+                guard !Task.isCancelled, let loadedImage = UIImage(data: data) else { return }
+                ImageCache.shared.setObject(loadedImage, forKey: requestURL as NSURL)
+                if currentURL == requestURL {
+                    image = loadedImage
+                }
+            } catch {
+                if !Task.isCancelled, currentURL == requestURL {
+                    image = nil
+                }
             }
-        }.resume()
+        }
+    }
+
+    func handleInvalidation(for invalidatedURL: URL?, currentViewURL: URL) {
+        guard invalidatedURL == nil || invalidatedURL == currentViewURL else { return }
+        load(from: currentViewURL, forceReload: true)
     }
 }
 
 struct CachedAsyncImage: View {
-    @StateObject private var loader: ImageLoader
+    @StateObject private var loader = ImageLoader()
+    let url: URL
     let contentMode: ContentMode
 
     init(url: URL, contentMode: ContentMode = .fill) {
-        _loader = StateObject(wrappedValue: ImageLoader(url: url))
+        self.url = url
         self.contentMode = contentMode
     }
     
@@ -47,6 +83,12 @@ struct CachedAsyncImage: View {
             } else {
                 ProgressView()
             }
-        }.onAppear { loader.load() }
+        }
+        .task(id: url) {
+            loader.load(from: url)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .imageCacheDidInvalidate)) { notification in
+            loader.handleInvalidation(for: notification.object as? URL, currentViewURL: url)
+        }
     }
 }

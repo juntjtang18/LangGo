@@ -1,109 +1,175 @@
 import SwiftUI
 import KeychainAccess
 import os
+import AVFoundation
 
 struct ProfileView: View {
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var userSession: UserSessionManager
 
-    // ✅ Use the session (single source of truth) instead of UserDefaults
-    @EnvironmentObject var userSession: UserSessionManager
+    let showsDismissButton: Bool
+    let onLogout: (() -> Void)?
 
     private let authService = DataServices.shared.authService
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "ProfileView")
+    private let keychain = Keychain(service: Config.keychainService)
 
-    // State for existing fields
     @State private var username: String = ""
     @State private var email: String = ""
-    @State private var currentPassword = ""
-    @State private var newPassword = ""
-    @State private var confirmNewPassword = ""
-
-    // State for new profile fields
+    @State private var fullName: String = ""
+    @State private var phoneNumber: String = ""
+    @State private var bio: String = ""
     @State private var proficiencyId: Int = 0
     @State private var proficiencyLevels: [ProficiencyLevel] = []
-
-    // Base language
     @State private var baseLanguageCode: String = "en"
-    private let availableLanguages = LanguageSettings.availableLanguages
+    @State private var remindersEnabled = false
 
-    @State private var remindersEnabled: Bool = false
-
-    // UI state
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var isLoading = false
+    @State private var isShowingEditProfile = false
 
-    private let keychain = Keychain(service: Config.keychainService)
-    private let logger = Logger(subsystem: "com.langGo.swift", category: "ProfileView")
+    private let availableLanguages = LanguageSettings.availableLanguages
+
+    init(showsDismissButton: Bool = true, onLogout: (() -> Void)? = nil) {
+        self.showsDismissButton = showsDismissButton
+        self.onLogout = onLogout
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Form {
-                    Section(header: Text("USER PROFILE")) {
-                        HStack {
-                            Text("Username")
-                            Spacer()
-                            TextField("Username", text: $username)
-                                .multilineTextAlignment(.trailing)
-                                .autocapitalization(.none)
-                        }
-                        HStack {
-                            Text("Email")
-                            Spacer()
-                            Text(email)
-                                .foregroundColor(.gray)
-                        }
+                Color(.systemGroupedBackground).ignoresSafeArea()
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        profileHeaderCard
+
+                        profileSection(
+                            title: "ACCOUNT",
+                            items: [
+                                .init(
+                                    title: "Privacy & Security",
+                                    subtitle: "Password, data privacy",
+                                    icon: "lock.fill",
+                                    iconTint: Color(red: 0.35, green: 0.63, blue: 0.98),
+                                    iconBackground: Color(red: 0.92, green: 0.96, blue: 1.00),
+                                    action: { isShowingEditProfile = true }
+                                )
+                            ]
+                        )
+
+                        profileSection(
+                            title: "NOTIFICATIONS",
+                            items: [
+                                .init(
+                                    title: "Study Reminders",
+                                    subtitle: remindersEnabled ? "Daily learning notifications" : "Reminders are off",
+                                    icon: "bell.fill",
+                                    iconTint: Color(red: 0.42, green: 0.84, blue: 0.53),
+                                    iconBackground: Color(red: 0.93, green: 0.99, blue: 0.94),
+                                    action: { isShowingEditProfile = true }
+                                )
+                            ]
+                        )
+
+                        profileSection(
+                            title: "PREFERENCES",
+                            items: [
+                                .init(
+                                    title: "Language",
+                                    subtitle: currentLanguageName,
+                                    icon: "globe",
+                                    iconTint: Color(red: 0.43, green: 0.39, blue: 0.99),
+                                    iconBackground: Color(red: 0.94, green: 0.93, blue: 1.00),
+                                    action: { isShowingEditProfile = true }
+                                )
+                            ]
+                        )
+
+                        profileSection(
+                            title: "LEGAL",
+                            items: [
+                                .init(
+                                    title: "Privacy Policy",
+                                    subtitle: "How we handle your data",
+                                    icon: "shield.fill",
+                                    iconTint: Color(red: 0.55, green: 0.59, blue: 0.68),
+                                    iconBackground: Color(red: 0.95, green: 0.96, blue: 0.97),
+                                    action: { showPlaceholder("Privacy Policy will be linked here.") }
+                                ),
+                                .init(
+                                    title: "Terms of Service",
+                                    subtitle: "User agreement",
+                                    icon: "doc.text.fill",
+                                    iconTint: Color(red: 0.55, green: 0.59, blue: 0.68),
+                                    iconBackground: Color(red: 0.95, green: 0.96, blue: 0.97),
+                                    action: { showPlaceholder("Terms of Service will be linked here.") }
+                                )
+                            ]
+                        )
+
+                        profileSection(
+                            title: "ABOUT",
+                            items: [
+                                .init(
+                                    title: "Help & Support",
+                                    subtitle: "FAQs, contact us",
+                                    icon: "info.circle.fill",
+                                    iconTint: Color(red: 0.76, green: 0.49, blue: 0.98),
+                                    iconBackground: Color(red: 0.97, green: 0.94, blue: 1.00),
+                                    action: { showPlaceholder("Help & Support will be linked here.") }
+                                )
+                            ],
+                            footer: "Version 1.0.0"
+                        )
+
+                        logoutButton
                     }
-
-                    Section(header: Text("LEARNING PREFERENCES")) {
-                        Picker("Base Language", selection: $baseLanguageCode) {
-                            ForEach(availableLanguages) { lang in
-                                Text(lang.name).tag(lang.id)
-                            }
-                        }
-
-                        if proficiencyLevels.isEmpty {
-                            Text("Proficiency levels could not be loaded.")
-                                .foregroundColor(.secondary)
-                        } else {
-                            Picker("Proficiency", selection: $proficiencyId) {
-                                ForEach(proficiencyLevels) { level in
-                                    Text(level.attributes.displayName).tag(level.id)
-                                }
-                            }
-                        }
-
-                        Toggle("Review Reminders", isOn: $remindersEnabled)
-                    }
-
-                    Section(header: Text("CHANGE PASSWORD")) {
-                        SecureField("Current Password", text: $currentPassword)
-                        SecureField("New Password", text: $newPassword)
-                        SecureField("Confirm New Password", text: $confirmNewPassword)
-                    }
-
-                    Button("Save Changes") {
-                        Task { await updateProfile() }
-                    }
-                    .disabled(isLoading)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
                 }
                 .disabled(isLoading)
 
                 if isLoading {
-                    ProgressView().scaleEffect(1.5)
+                    ProgressView()
+                        .scaleEffect(1.2)
                 }
             }
             .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Back") { dismiss() }
+                if showsDismissButton {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Back") {
+                            dismiss()
+                        }
+                    }
                 }
             }
             .task {
                 await loadUserProfile()
             }
-            .alert("Profile Update", isPresented: $showAlert) {
+            .sheet(isPresented: $isShowingEditProfile) {
+                NavigationStack {
+                    ProfileEditView(
+                        fullName: $fullName,
+                        username: $username,
+                        email: email,
+                        avatarImageURL: avatarImageURL,
+                        phoneNumber: $phoneNumber,
+                        bio: $bio,
+                        isLoading: isLoading,
+                        onSave: {
+                            Task {
+                                await updateProfile()
+                            }
+                        }
+                    )
+                }
+            }
+            .alert("Profile", isPresented: $showAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alertMessage)
@@ -111,40 +177,213 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Data loading
+    private var profileHeaderCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                ProfileAvatarCircle(
+                    imageURL: avatarImageURL,
+                    initials: initialsText,
+                    size: 58,
+                    fontSize: 24
+                )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(displayName)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.16, green: 0.17, blue: 0.21))
+
+                    Text(email)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.47, green: 0.50, blue: 0.56))
+
+                    Text(joinedLabel)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.60, green: 0.63, blue: 0.69))
+                }
+            }
+
+            Button {
+                isShowingEditProfile = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("Edit Profile")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Color(red: 0.09, green: 0.47, blue: 0.95))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(red: 0.90, green: 0.91, blue: 0.94), lineWidth: 1)
+        )
+    }
+
+    private func profileSection(title: String, items: [ProfileMenuItem], footer: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 0.61, green: 0.63, blue: 0.68))
+                .padding(.leading, 10)
+
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    Button {
+                        item.action()
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(item.iconBackground)
+                                    .frame(width: 28, height: 28)
+
+                                Image(systemName: item.icon)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(item.iconTint)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title)
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(Color(red: 0.18, green: 0.19, blue: 0.23))
+
+                                Text(item.subtitle)
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(Color(red: 0.55, green: 0.58, blue: 0.64))
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color(red: 0.77, green: 0.78, blue: 0.82))
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(height: 62)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < items.count - 1 {
+                        Divider()
+                            .padding(.leading, 52)
+                    }
+                }
+
+                if let footer {
+                    Divider()
+                    HStack {
+                        Text(footer)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.60, green: 0.62, blue: 0.68))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 38)
+                }
+            }
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private var logoutButton: some View {
+        Button {
+            keychain["jwt"] = nil
+            userSession.logout()
+            onLogout?()
+            if showsDismissButton {
+                dismiss()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 15, weight: .bold))
+                Text("Log Out")
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(Color.red)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(Color.red.opacity(0.75), lineWidth: 1.2)
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 4)
+    }
+
+    private var currentLanguageName: String {
+        availableLanguages.first(where: { $0.id == baseLanguageCode })?.name ?? "English"
+    }
+
+    private var initialsText: String {
+        let parts = displayName.split(separator: " ").prefix(2)
+        let letters = parts.compactMap { $0.first }.map(String.init).joined()
+        return letters.isEmpty ? "LG" : letters.uppercased()
+    }
+
+    private var avatarImageURL: URL? {
+        resolvedMediaURL(from: userSession.currentUser?.user_profile?.avatar_img?.data?.attributes.url)
+    }
+
+    private var displayName: String {
+        let trimmedName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            return trimmedName
+        }
+        return username.isEmpty ? "LangGo User" : username
+    }
+
+    private var joinedLabel: String {
+        "Joined January 2026"
+    }
+
+    private func showPlaceholder(_ message: String) {
+        alertMessage = message
+        showAlert = true
+    }
 
     private func loadUserProfile() async {
         isLoading = true
         defer { isLoading = false }
 
         do {
-            // Always fetch fresh and reflect into session
             let user = try await authService.fetchCurrentUser()
-            UserSessionManager.shared.login(user: user) // keeps session in sync
+            UserSessionManager.shared.login(user: user)
 
-            // Use user's baseLanguage (fallback to "en") to fetch levels
             let locale = user.user_profile?.baseLanguage ?? "en"
             let levels = try await DataServices.shared.settingsService.fetchProficiencyLevels(locale: locale)
 
-            // Fill UI state
-            self.proficiencyLevels = levels
-            self.username = user.username
-            self.email = user.email
-            self.baseLanguageCode = user.user_profile?.baseLanguage ?? "en"
-            self.remindersEnabled = user.user_profile?.reminder_enabled ?? false
+            proficiencyLevels = levels
+            username = user.username
+            fullName = UserDefaults.standard.string(forKey: "profileDisplayName") ?? user.username
+            email = user.email
+            baseLanguageCode = user.user_profile?.baseLanguage ?? "en"
+            remindersEnabled = user.user_profile?.reminder_enabled ?? false
+            phoneNumber = user.user_profile?.telephone ?? UserDefaults.standard.string(forKey: "profilePhoneNumber") ?? ""
+            bio = user.user_profile?.bio ?? UserDefaults.standard.string(forKey: "profileBio") ?? ""
 
             let selectedKey = user.user_profile?.proficiency
-            self.proficiencyId = levels.first(where: { $0.attributes.key == selectedKey })?.id
-                ?? levels.first?.id ?? 0
-
+            proficiencyId = levels.first(where: { $0.attributes.key == selectedKey })?.id ?? levels.first?.id ?? 0
         } catch {
             logger.error("Failed to load user profile: \(error.localizedDescription, privacy: .public)")
             alertMessage = "Could not load your profile. Please try again."
             showAlert = true
         }
     }
-
-    // MARK: - Save
 
     private func updateProfile() async {
         isLoading = true
@@ -156,27 +395,21 @@ struct ProfileView: View {
             return
         }
 
-        var messages: [String] = []
+        let didSave = await updateUserProfileDetails(userId: currentUser.id)
 
-        await updateLearningPreferences(userId: currentUser.id, messages: &messages)
+        guard didSave else { return }
 
-        // Only call username update if actually changed
-        if !username.isEmpty && username != currentUser.username {
-            await updateUsername(userId: currentUser.id, messages: &messages)
-        }
-
-        if !newPassword.isEmpty {
-            await changePassword(messages: &messages)
-        }
-
-        alertMessage = messages.isEmpty ? "No changes were made." : messages.joined(separator: "\n")
-        showAlert = true
+        UserDefaults.standard.set(fullName, forKey: "profileDisplayName")
+        UserDefaults.standard.set(phoneNumber, forKey: "profilePhoneNumber")
+        UserDefaults.standard.set(bio, forKey: "profileBio")
+        isShowingEditProfile = false
     }
 
-    private func updateLearningPreferences(userId: Int, messages: inout [String]) async {
-        guard let selectedLevel = proficiencyLevels.first(where: { $0.id == self.proficiencyId }) else {
-            messages.append("Could not save proficiency, levels were not loaded correctly.")
-            return
+    private func updateUserProfileDetails(userId: Int) async -> Bool {
+        guard let selectedLevel = proficiencyLevels.first(where: { $0.id == proficiencyId }) else {
+            alertMessage = "Could not save proficiency, levels were not loaded correctly."
+            showAlert = true
+            return false
         }
 
         let proficiencyKeyToSave = selectedLevel.attributes.key
@@ -185,18 +418,21 @@ struct ProfileView: View {
             let payload = UserProfileUpdatePayload(
                 baseLanguage: baseLanguageCode,
                 proficiency: proficiencyKeyToSave,
-                reminder_enabled: remindersEnabled
+                reminder_enabled: remindersEnabled,
+                telephone: phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             )
 
             try await authService.updateUserProfile(userId: userId, payload: payload)
 
-            // ✅ Reflect changes into the in-memory session user (so UI stays consistent)
             if let old = userSession.currentUser {
                 let updatedProfile = UserProfileAttributes(
                     proficiency: proficiencyKeyToSave,
                     reminder_enabled: remindersEnabled,
                     baseLanguage: baseLanguageCode,
-                    telephone: old.user_profile?.telephone
+                    telephone: phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                    bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                    avatar_img: old.user_profile?.avatar_img
                 )
                 let updatedUser = StrapiUser(
                     id: old.id,
@@ -207,64 +443,712 @@ struct ProfileView: View {
                 userSession.currentUser = updatedUser
             }
 
-            messages.append("Learning preferences updated.")
-            logger.info("User preferences updated for user ID \(userId).")
+            logger.info("User profile updated for user ID \(userId).")
+            return true
         } catch {
-            let errorText = "Failed to update preferences: \(error.localizedDescription)"
-            messages.append(errorText)
+            alertMessage = "Failed to update profile: \(error.localizedDescription)"
+            showAlert = true
+            let errorText = alertMessage
             logger.error("\(errorText, privacy: .public)")
+            return false
         }
     }
+}
 
-    private func updateUsername(userId: Int, messages: inout [String]) async {
-        do {
-            let updatedUser = try await authService.updateUsername(userId: userId, username: username)
+private struct ProfileMenuItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let subtitle: String
+    let icon: String
+    let iconTint: Color
+    let iconBackground: Color
+    let action: () -> Void
+}
 
-            // ✅ Update the in-memory session user
-            userSession.currentUser = updatedUser
+private struct ProfileEditView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var userSession: UserSessionManager
+    @FocusState private var focusedField: Field?
 
-            messages.append("Username updated successfully!")
-            logger.info("Username updated to \(updatedUser.username, privacy: .public)")
-        } catch {
-            let msg: String
-            switch error {
-            case let nsError as NSError where nsError.domain == "NetworkManager.StrapiError":
-                msg = nsError.localizedDescription
-            default:
-                msg = "Failed to update username: \(error.localizedDescription)"
+    @Binding var fullName: String
+    @Binding var username: String
+    let email: String
+    let avatarImageURL: URL?
+    @Binding var phoneNumber: String
+    @Binding var bio: String
+    let isLoading: Bool
+    let onSave: () -> Void
+    private let authService = DataServices.shared.authService
+
+    @State private var localAvatarImageURL: URL?
+    @State private var capturedAvatarImage: UIImage?
+    @State private var isShowingUploadOptions = false
+    @State private var isShowingCamera = false
+    @State private var isShowingPhotoLibrary = false
+    @State private var isUploadingAvatar = false
+    @State private var cameraAccessMessage: String?
+    @State private var lastAvatarPickerSource: UIImagePickerController.SourceType = .camera
+
+    private enum Field {
+        case name
+        case phone
+        case bio
+    }
+
+    var body: some View {
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(spacing: 10) {
+                        ZStack(alignment: .bottomTrailing) {
+                            ProfileAvatarCircle(
+                                imageURL: localAvatarImageURL ?? avatarImageURL,
+                                initials: initials,
+                                size: 92,
+                                fontSize: 36
+                            )
+
+                            Button(action: showUploadOptions) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color(red: 0.09, green: 0.47, blue: 0.95))
+                                        .frame(width: 28, height: 28)
+
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .offset(x: 4, y: 3)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 10)
+
+                        Button("Change Profile Photo") {
+                            showUploadOptions()
+                        }
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.09, green: 0.47, blue: 0.95))
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    labeledField("USERNAME") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(username)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.54))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 14)
+                                .frame(height: 44)
+                                .background(Color(red: 0.95, green: 0.96, blue: 0.97))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(fieldBorder(isReadOnly: true))
+
+                            Text("Username cannot be changed right now")
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundStyle(Color(red: 0.59, green: 0.61, blue: 0.67))
+                                .padding(.leading, 4)
+                        }
+                    }
+
+                    labeledField("EMAIL") {
+                        Text(email)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.54))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .frame(height: 44)
+                            .background(Color(red: 0.95, green: 0.96, blue: 0.97))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(fieldBorder(isReadOnly: true))
+                    }
+
+                    labeledField("NAME") {
+                        TextField("Alex Johnson", text: $fullName)
+                            .focused($focusedField, equals: .name)
+                            .textInputAutocapitalization(.words)
+                            .padding(.horizontal, 14)
+                            .frame(height: 44)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(fieldBorder(for: .name))
+                    }
+
+                    labeledField("PHONE (OPTIONAL)") {
+                        TextField("+1 (555) 123-4567", text: $phoneNumber)
+                            .focused($focusedField, equals: .phone)
+                            .keyboardType(.phonePad)
+                            .padding(.horizontal, 14)
+                            .frame(height: 44)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(fieldBorder(for: .phone))
+                    }
+
+                    labeledField("BIO") {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            ZStack(alignment: .topLeading) {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.white)
+                                    .overlay(fieldBorder(for: .bio))
+                                    .frame(height: 92)
+
+                                TextEditor(text: $bio)
+                                    .focused($focusedField, equals: .bio)
+                                    .scrollContentBackground(.hidden)
+                                    .background(Color.clear)
+                                    .frame(height: 76)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                            }
+
+                            Text("\(min(bio.count, 150))/150")
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundStyle(Color(red: 0.59, green: 0.61, blue: 0.67))
+                        }
+                    }
+
+                    Button {
+                        onSave()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Save Changes")
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(Color(red: 0.09, green: 0.47, blue: 0.95))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoading)
+                    .padding(.top, 6)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            messages.append(msg)
-            logger.error("Failed to update username: \(msg, privacy: .public)")
+        }
+        .disabled(isLoading)
+        .task {
+            localAvatarImageURL = avatarImageURL
+        }
+        .fullScreenCover(isPresented: $isShowingCamera) {
+            ProfileImagePickerView(sourceType: .camera) { image in
+                capturedAvatarImage = image
+                isShowingCamera = false
+            } onCancel: {
+                isShowingCamera = false
+            }
+        }
+        .fullScreenCover(isPresented: $isShowingPhotoLibrary) {
+            ProfileImagePickerView(sourceType: .photoLibrary) { image in
+                capturedAvatarImage = image
+                isShowingPhotoLibrary = false
+            } onCancel: {
+                isShowingPhotoLibrary = false
+            }
+        }
+        .fullScreenCover(isPresented: isShowingPhotoReviewBinding) {
+            if let capturedAvatarImage {
+                ProfilePhotoReviewView(
+                    image: capturedAvatarImage,
+                    isProcessing: isUploadingAvatar,
+                    onRetake: {
+                        self.capturedAvatarImage = nil
+                        reopenLastAvatarSource()
+                    },
+                    onConfirm: {
+                        Task {
+                            await uploadAvatar(capturedAvatarImage)
+                        }
+                    }
+                )
+            } else {
+                Color.black.ignoresSafeArea()
+            }
+        }
+        .alert("Profile Photo", isPresented: cameraAlertBinding) {
+            Button("OK", role: .cancel) {
+                cameraAccessMessage = nil
+            }
+        } message: {
+            Text(cameraAccessMessage ?? "")
+        }
+        .overlay {
+            if isLoading || isUploadingAvatar || isShowingUploadOptions {
+                ZStack {
+                    Color.black.opacity(isShowingUploadOptions ? 0.18 : 0.08)
+                        .ignoresSafeArea()
+
+                    if isShowingUploadOptions {
+                        VStack {
+                            Spacer()
+
+                            ProfilePhotoOptionsSheet(
+                                onClose: { isShowingUploadOptions = false },
+                                onChooseFromGallery: {
+                                    isShowingUploadOptions = false
+                                    openPhotoLibrary()
+                                },
+                                onTakePhoto: {
+                                    isShowingUploadOptions = false
+                                    openCamera()
+                                },
+                                onCancel: { isShowingUploadOptions = false }
+                            )
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.regular)
+                            Text(isUploadingAvatar ? "Uploading Photo..." : "Saving...")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(Color(red: 0.34, green: 0.36, blue: 0.42))
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 18)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Edit Profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Back") {
+                    dismiss()
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Save") {
+                    onSave()
+                }
+                .disabled(isLoading)
+            }
         }
     }
 
-    private func changePassword(messages: inout [String]) async {
-        guard newPassword == confirmNewPassword else {
-            messages.append("Failed to change password: New passwords do not match.")
+    private var initials: String {
+        let source = fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? username : fullName
+        let parts = source.split(separator: " ").prefix(2)
+        let letters = parts.compactMap { $0.first }.map(String.init).joined()
+        return letters.isEmpty ? "LG" : letters.uppercased()
+    }
+
+    @ViewBuilder
+    private func labeledField<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color(red: 0.50, green: 0.52, blue: 0.58))
+            content()
+        }
+    }
+
+    private func fieldBorder(for field: Field? = nil, isReadOnly: Bool = false) -> some View {
+        let isFocused = field != nil && focusedField == field
+        return RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .stroke(
+                isFocused ? Color(red: 0.09, green: 0.47, blue: 0.95) : (isReadOnly ? Color(red: 0.89, green: 0.90, blue: 0.93) : Color(red: 0.88, green: 0.90, blue: 0.94)),
+                lineWidth: isFocused ? 1.6 : 1
+            )
+    }
+
+    private func showUploadOptions() {
+        isShowingUploadOptions = true
+    }
+
+    private func openCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            cameraAccessMessage = "Camera is not available on this device."
+            return
+        }
+        lastAvatarPickerSource = .camera
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            isShowingCamera = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        isShowingCamera = true
+                    } else {
+                        cameraAccessMessage = "Please allow camera access in Settings to take a profile photo."
+                    }
+                }
+            }
+        case .denied, .restricted:
+            cameraAccessMessage = "Please allow camera access in Settings to take a profile photo."
+        @unknown default:
+            cameraAccessMessage = "Camera access is unavailable right now."
+        }
+    }
+
+    private func openPhotoLibrary() {
+        guard UIImagePickerController.isSourceTypeAvailable(.photoLibrary) else {
+            cameraAccessMessage = "Photo library is not available on this device."
+            return
+        }
+        lastAvatarPickerSource = .photoLibrary
+        isShowingPhotoLibrary = true
+    }
+
+    private func reopenLastAvatarSource() {
+        switch lastAvatarPickerSource {
+        case .camera:
+            isShowingCamera = true
+        case .photoLibrary, .savedPhotosAlbum:
+            isShowingPhotoLibrary = true
+        @unknown default:
+            isShowingUploadOptions = true
+        }
+    }
+
+    @MainActor
+    private func uploadAvatar(_ image: UIImage) async {
+        isUploadingAvatar = true
+        defer { isUploadingAvatar = false }
+
+        guard let imageData = image.jpegData(compressionQuality: 0.88) else {
+            cameraAccessMessage = "Could not prepare the photo for upload."
             return
         }
 
         do {
-            let _: EmptyResponse = try await authService.changePassword(
-                currentPassword: currentPassword,
-                newPassword: newPassword,
-                confirmNewPassword: confirmNewPassword
+            let previousAvatarURL = localAvatarImageURL ?? avatarImageURL
+            let updatedProfile = try await authService.uploadUserAvatarImage(
+                imageData,
+                fileName: "avatar-\(UUID().uuidString).jpg",
+                mimeType: "image/jpeg"
             )
-            messages.append("Password changed successfully!")
-            currentPassword = ""
-            newPassword = ""
-            confirmNewPassword = ""
-            logger.info("Password changed successfully.")
-        } catch {
-            let msg: String
-            switch error {
-            case let nsError as NSError where nsError.domain == "NetworkManager.StrapiError":
-                msg = nsError.localizedDescription
-            default:
-                msg = "Failed to change password: \(error.localizedDescription)"
+
+            if let oldUser = userSession.currentUser {
+                userSession.currentUser = StrapiUser(
+                    id: oldUser.id,
+                    username: oldUser.username,
+                    email: oldUser.email,
+                    user_profile: updatedProfile
+                )
             }
-            messages.append(msg)
-            logger.error("Failed to change password: \(msg, privacy: .public)")
+
+            let newAvatarURL = resolvedMediaURL(from: updatedProfile.avatar_img?.data?.attributes.url)
+            if let previousAvatarURL {
+                ImageCache.removeImage(for: previousAvatarURL)
+            }
+            if let newAvatarURL {
+                ImageCache.removeImage(for: newAvatarURL)
+            }
+            localAvatarImageURL = newAvatarURL
+            capturedAvatarImage = nil
+        } catch {
+            cameraAccessMessage = "Failed to upload profile photo: \(error.localizedDescription)"
+        }
+    }
+
+    private var cameraAlertBinding: Binding<Bool> {
+        Binding(
+            get: { cameraAccessMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    cameraAccessMessage = nil
+                }
+            }
+        )
+    }
+
+    private var isShowingPhotoReviewBinding: Binding<Bool> {
+        Binding(
+            get: { capturedAvatarImage != nil },
+            set: { newValue in
+                if !newValue {
+                    capturedAvatarImage = nil
+                }
+            }
+        )
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
+}
+
+private struct ProfileAvatarCircle: View {
+    let imageURL: URL?
+    let initials: String
+    let size: CGFloat
+    let fontSize: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.42, green: 0.34, blue: 0.98), Color(red: 0.56, green: 0.21, blue: 0.92)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+
+            if let imageURL {
+                CachedAsyncImage(url: imageURL, contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else {
+                Text(initials)
+                    .font(.system(size: fontSize, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+        }
+    }
+}
+
+private struct ProfilePhotoOptionsSheet: View {
+    let onClose: () -> Void
+    let onChooseFromGallery: () -> Void
+    let onTakePhoto: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Change Profile Photo")
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
+
+                Spacer()
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color(red: 0.55, green: 0.57, blue: 0.63))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 22)
+            .padding(.bottom, 18)
+
+            Divider()
+
+            VStack(spacing: 14) {
+                ProfilePhotoOptionCard(
+                    icon: "photo",
+                    iconTint: Color(red: 0.20, green: 0.56, blue: 0.98),
+                    iconBackground: Color(red: 0.90, green: 0.95, blue: 1.00),
+                    title: "Choose from Gallery",
+                    subtitle: "Select a photo from your album",
+                    action: onChooseFromGallery
+                )
+
+                ProfilePhotoOptionCard(
+                    icon: "camera",
+                    iconTint: Color(red: 0.25, green: 0.73, blue: 0.40),
+                    iconBackground: Color(red: 0.90, green: 0.98, blue: 0.92),
+                    title: "Take Photo",
+                    subtitle: "Use camera to take a new photo",
+                    action: onTakePhoto
+                )
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 16)
+            .padding(.bottom, 18)
+
+            Divider()
+
+            Button(action: onCancel) {
+                Text("Cancel")
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.19, green: 0.20, blue: 0.24))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color(red: 0.86, green: 0.88, blue: 0.92), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 22)
+            .padding(.top, 14)
+            .padding(.bottom, 18)
+        }
+        .background(Color(red: 0.98, green: 0.98, blue: 0.99))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.bottom, 10)
+    }
+}
+
+private struct ProfilePhotoOptionCard: View {
+    let icon: String
+    let iconTint: Color
+    let iconBackground: Color
+    let title: String
+    let subtitle: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(iconBackground)
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(iconTint)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
+
+                    Text(subtitle)
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color(red: 0.53, green: 0.55, blue: 0.61))
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 68)
+            .background(Color(red: 0.95, green: 0.95, blue: 0.97))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private func resolvedMediaURL(from rawURL: String?) -> URL? {
+    guard let rawURL, !rawURL.isEmpty else { return nil }
+    if rawURL.hasPrefix("http://") || rawURL.hasPrefix("https://") {
+        return URL(string: rawURL)
+    }
+    return URL(string: "\(Config.strapiBaseUrl)\(rawURL)")
+}
+
+private struct ProfileImagePickerView: UIViewControllerRepresentable {
+    let sourceType: UIImagePickerController.SourceType
+    let onImagePicked: (UIImage) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImagePicked: onImagePicked, onCancel: onCancel)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = sourceType
+        if sourceType == .camera {
+            picker.cameraCaptureMode = .photo
+        }
+        picker.delegate = context.coordinator
+        picker.modalPresentationStyle = .fullScreen
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let onImagePicked: (UIImage) -> Void
+        let onCancel: () -> Void
+
+        init(onImagePicked: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
+            self.onImagePicked = onImagePicked
+            self.onCancel = onCancel
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onCancel()
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            if let image = info[.originalImage] as? UIImage {
+                onImagePicked(image)
+            } else {
+                onCancel()
+            }
+        }
+    }
+}
+
+private struct ProfilePhotoReviewView: View {
+    let image: UIImage
+    let isProcessing: Bool
+    let onRetake: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                }
+                .frame(height: 52)
+
+                Spacer(minLength: 0)
+
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .padding(.horizontal, 18)
+
+                Spacer(minLength: 18)
+
+                HStack(spacing: 14) {
+                    Button(action: onRetake) {
+                        Text("Retake")
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(Color.white.opacity(0.16))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isProcessing)
+
+                    Button(action: onConfirm) {
+                        Text(isProcessing ? "Uploading..." : "Use Photo")
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isProcessing)
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 28)
+            }
         }
     }
 }

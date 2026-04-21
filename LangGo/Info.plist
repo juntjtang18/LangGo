@@ -6,6 +6,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>LangGo uses the camera to scan article images and extract text with OCR.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LangGo uses your photo library so you can choose a profile photo.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

@@ -80,11 +80,6 @@ struct HomeView: View {
                     summaryCardsView(metrics: metrics)
 
                     Spacer()
-                        .frame(height: metrics.afterSummarySpacing)
-
-                    leaderboardBanner(metrics: metrics)
-
-                    Spacer()
                         .frame(height: metrics.beforeReviewSectionSpacing)
 
                     sectionLabel("READY TO REVIEW", metrics: metrics)
@@ -138,9 +133,6 @@ struct HomeView: View {
             .background(Color.white)
         }
         .background(Color.white.ignoresSafeArea())
-        .fullScreenCover(isPresented: $isShowingLeaderboard) {
-            LeaderboardSheet(entries: leaderboardEntries)
-        }
         .fullScreenCover(isPresented: $isShowingReview) {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
@@ -224,51 +216,6 @@ struct HomeView: View {
                 SummaryCardView(card: card, metrics: metrics)
             }
         }
-    }
-
-    private func leaderboardBanner(metrics: HomeMetrics) -> some View {
-        Button {
-            isShowingLeaderboard = true
-        } label: {
-            HStack(spacing: metrics.bannerInnerGap) {
-                Image(systemName: "medal.star.fill")
-                    .font(.system(size: metrics.bannerLeadingIconFont, weight: .bold))
-                    .foregroundStyle(Color(red: 0.92, green: 0.57, blue: 0.12))
-
-                Text("Ranked #8")
-                    .font(.system(size: metrics.bannerTextFont, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(red: 0.48, green: 0.30, blue: 0.05))
-
-                Text("+4")
-                    .font(.system(size: metrics.bannerChipFont, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, metrics.bannerChipHorizontalPadding)
-                    .padding(.vertical, metrics.bannerChipVerticalPadding)
-                    .background(Capsule().fill(Color(red: 0.47, green: 0.77, blue: 0.14)))
-
-                Spacer(minLength: metrics.bannerMiddleSpacer)
-
-                Text("View Leaderboard")
-                    .font(.system(size: metrics.bannerLinkFont, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(red: 0.48, green: 0.30, blue: 0.05))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: metrics.bannerChevronFont, weight: .bold))
-                    .foregroundStyle(Color(red: 0.95, green: 0.67, blue: 0.17))
-            }
-            .padding(.horizontal, metrics.bannerHorizontalPadding)
-            .frame(height: metrics.bannerHeight)
-            .background(Color(red: 1.00, green: 0.93, blue: 0.70))
-            .overlay(
-                RoundedRectangle(cornerRadius: metrics.bannerCornerRadius, style: .continuous)
-                    .stroke(Color(red: 0.99, green: 0.77, blue: 0.31), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: metrics.bannerCornerRadius, style: .continuous))
-            .shadow(color: Color(red: 0.98, green: 0.76, blue: 0.29).opacity(0.16), radius: metrics.bannerShadowRadius, y: metrics.bannerShadowY)
-        }
-        .buttonStyle(.plain)
     }
 
     private func reviewCard(metrics: HomeMetrics) -> some View {

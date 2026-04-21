@@ -171,16 +171,79 @@ struct UserProfileUpdatePayload: Encodable {
     let baseLanguage: String
     let proficiency: String? // Changed from Int?
     let reminder_enabled: Bool?
+    let telephone: String?
+    let bio: String?
+
+    init(
+        baseLanguage: String,
+        proficiency: String?,
+        reminder_enabled: Bool?,
+        telephone: String? = nil,
+        bio: String? = nil
+    ) {
+        self.baseLanguage = baseLanguage
+        self.proficiency = proficiency
+        self.reminder_enabled = reminder_enabled
+        self.telephone = telephone
+        self.bio = bio
+    }
 
     enum CodingKeys: String, CodingKey {
-        case baseLanguage, proficiency
+        case baseLanguage, proficiency, telephone
         case reminder_enabled = "reminder_enabled"
+        case bio = "Bio"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(baseLanguage, forKey: .baseLanguage)
+        try container.encodeIfPresent(proficiency, forKey: .proficiency)
+        try container.encodeIfPresent(reminder_enabled, forKey: .reminder_enabled)
+        try container.encodeIfPresent(telephone, forKey: .telephone)
+        try container.encodeIfPresent(bio, forKey: .bio)
     }
 }
 
 // Add this struct to wrap the payload
 struct UserProfileUpdatePayloadWrapper: Encodable {
     let data: UserProfileUpdatePayload
+}
+
+struct UserAvatarUpdatePayload: Encodable {
+    let avatarImageId: Int
+
+    enum CodingKeys: String, CodingKey {
+        case avatarImageId = "avatar_img"
+    }
+}
+
+struct UserAvatarUpdatePayloadWrapper: Encodable {
+    let data: UserAvatarUpdatePayload
+}
+
+struct UploadedMediaFile: Codable, Identifiable {
+    let id: Int
+    let name: String?
+    let alternativeText: String?
+    let caption: String?
+    let width: Int?
+    let height: Int?
+    let formats: [String: MediaFormat]?
+    let hash: String?
+    let ext: String?
+    let mime: String?
+    let size: Double?
+    let url: String?
+    let previewUrl: String?
+    let provider: String?
+    let createdAt: String?
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, caption, width, height, formats, hash, ext, mime, size, url, provider, createdAt, updatedAt
+        case alternativeText
+        case previewUrl
+    }
 }
 
 

@@ -21,20 +21,14 @@ class FlashcardService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardService")
     private let cacheService = CacheService.shared
     private let networkManager = NetworkManager.shared
-    
-    private var isAllMyFlashcardsCacheStale = true
-    private var isReviewFlashcardsCacheStale = true
-    
-    private let allMyFlashcardsCacheKey = "allMyFlashcards"
-    private let reviewFlashcardsCacheKey = "allMyReviewFlashcards"
-    private let flashcardStatisticsCacheKey = "flashcardStatistics"
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
     }
     
     func fetchFlashcardStatistics() async throws -> StrapiStatistics {
-        if !isRefreshModeEnabled, let cachedStats = cacheService.load(type: StrapiStatistics.self, from: flashcardStatisticsCacheKey) {
+        if !isRefreshModeEnabled,
+           let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
             logger.debug("✅ Returning flashcard statistics from cache.")
             return cachedStats
         }
@@ -45,13 +39,14 @@ class FlashcardService {
         let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
         let stats = resp.data
 
-        cacheService.save(stats, key: flashcardStatisticsCacheKey)
+        FlashcardCache.storeStatistics(stats, using: cacheService)
         logger.debug("💾 Saved fetched statistics to cache.")
         return stats
     }
 
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
-        if !isReviewFlashcardsCacheStale, let cached = cacheService.load(type: [Flashcard].self, from: reviewFlashcardsCacheKey) {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
             logger.debug("✅ Review cache is FRESH. Returning \(cached.count) cards.")
             return cached
         }
@@ -69,9 +64,8 @@ class FlashcardService {
         }
         
         logger.debug("✅ Fetched \(allCards.count) review flashcards.")
-        cacheService.save(allCards, key: reviewFlashcardsCacheKey)
-        isReviewFlashcardsCacheStale = false
-        logger.debug("✅ Review cache updated. Flag set to FALSE.")
+        FlashcardCache.storeReviewFlashcards(allCards, using: cacheService)
+        logger.debug("✅ Review cache updated.")
         return allCards
     }
 
@@ -142,12 +136,7 @@ class FlashcardService {
     }
 
     func invalidateAllFlashcardCaches() {
-        cacheService.delete(key: allMyFlashcardsCacheKey)
-        cacheService.delete(key: reviewFlashcardsCacheKey)
-        cacheService.delete(key: flashcardStatisticsCacheKey)
-        
-        isAllMyFlashcardsCacheStale = true
-        isReviewFlashcardsCacheStale = true
+        FlashcardCache.invalidateAfterFlashcardWrite(using: cacheService)
         
         // MODIFIED: After invalidating the cache, post the notification on the main
         // thread. This tells any listening part of the app to re-fetch its data.
@@ -155,11 +144,12 @@ class FlashcardService {
             NotificationCenter.default.post(name: .flashcardsDidChange, object: nil)
         }
         
-        logger.debug("✏️ SUCCESS: All flashcard caches invalidated. Stale flags set to TRUE.")
+        logger.debug("✏️ SUCCESS: All flashcard caches invalidated.")
     }
     
     private func getOrFetchAllMyFlashcards() async throws -> [Flashcard] {
-        if !isAllMyFlashcardsCacheStale, let cached = cacheService.load(type: [Flashcard].self, from: allMyFlashcardsCacheKey) {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
             logger.debug("✅ Returning all 'my flashcards' from cache.")
             return cached
         }
@@ -176,8 +166,7 @@ class FlashcardService {
             currentPage += 1
         }
         
-        cacheService.save(allCards, key: allMyFlashcardsCacheKey)
-        isAllMyFlashcardsCacheStale = false
+        FlashcardCache.storeAllMyFlashcards(allCards, using: cacheService)
         logger.debug("💾 Saved all 'my flashcards' to cache.")
         return allCards
     }

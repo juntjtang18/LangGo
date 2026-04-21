@@ -63,6 +63,9 @@
         }
       }
     },
+    "%lld/150" : {
+
+    },
     "%lld%%" : {
 
     },
@@ -72,7 +75,7 @@
     "+%lld new" : {
 
     },
-    "+4" : {
+    "+1 (555) 123-4567" : {
 
     },
     "+124" : {
@@ -147,6 +150,9 @@
     "AI Conversation Partner" : {
 
     },
+    "Alex Johnson" : {
+
+    },
     "All Words" : {
 
     },
@@ -205,9 +211,6 @@
     "Base (%@)" : {
 
     },
-    "Base Language" : {
-
-    },
     "Browse & manage your vocabulary" : {
 
     },
@@ -231,6 +234,7 @@
       }
     },
     "CHANGE PASSWORD" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -257,6 +261,9 @@
           }
         }
       }
+    },
+    "Change Profile Photo" : {
+
     },
     "Choose how you'd like to add content to your library" : {
 
@@ -286,6 +293,7 @@
       }
     },
     "Confirm New Password" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -380,6 +388,7 @@
       }
     },
     "Current Password" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -521,6 +530,9 @@
     "Edit Article" : {
 
     },
+    "Edit Profile" : {
+
+    },
     "Edit Word" : {
 
     },
@@ -627,9 +639,6 @@
     "Input Text (%@)" : {
 
     },
-    "LangGo" : {
-
-    },
     "LangGo to Pro, Ready to GO!" : {
 
     },
@@ -647,6 +656,7 @@
       }
     },
     "LEARNING PREFERENCES" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -734,6 +744,9 @@
         }
       }
     },
+    "Log Out" : {
+
+    },
     "Login" : {
       "localizations" : {
         "ja" : {
@@ -796,10 +809,14 @@
         }
       }
     },
+    "Network timing log" : {
+
+    },
     "New Article" : {
 
     },
     "New Password" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -1031,9 +1048,6 @@
     "Proficiency" : {
 
     },
-    "Proficiency levels could not be loaded." : {
-
-    },
     "Profile" : {
       "localizations" : {
         "ja" : {
@@ -1062,10 +1076,11 @@
         }
       }
     },
-    "Profile / Menu" : {
+    "Profile Photo" : {
 
     },
     "Profile Update" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -1122,9 +1137,6 @@
       }
     },
     "QUICK SELECT" : {
-
-    },
-    "Ranked #8" : {
 
     },
     "Read" : {
@@ -1205,9 +1217,6 @@
 
     },
     "Review Complete" : {
-
-    },
-    "Review Reminders" : {
 
     },
     "Review Session" : {
@@ -1607,6 +1616,12 @@
     "Updating..." : {
 
     },
+    "Uploading Photo..." : {
+
+    },
+    "Uploading..." : {
+
+    },
     "Use Photo" : {
 
     },
@@ -1617,6 +1632,7 @@
 
     },
     "USER PROFILE" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -1645,6 +1661,7 @@
       }
     },
     "Username" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -1671,6 +1688,9 @@
           }
         }
       }
+    },
+    "Username cannot be changed right now" : {
+
     },
     "Verifying Session..." : {
       "localizations" : {
