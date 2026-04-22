@@ -5,6 +5,7 @@ import AVFoundation
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var languageSettings: LanguageSettings
     @EnvironmentObject private var userSession: UserSessionManager
 
     let showsDismissButton: Bool
@@ -28,7 +29,11 @@ struct ProfileView: View {
     @State private var showAlert = false
     @State private var isLoading = false
     @State private var isUpdatingReminders = false
+    @State private var isUpdatingBaseLanguage = false
     @State private var isShowingEditProfile = false
+    @State private var isShowingLanguageSelection = false
+    @State private var isShowingPrivacyPolicy = false
+    @State private var isShowingTermsOfService = false
     @State private var isShowingPrivacySecurity = false
 
     private let availableLanguages = LanguageSettings.availableLanguages
@@ -72,7 +77,7 @@ struct ProfileView: View {
                                     icon: "globe",
                                     iconTint: Color(red: 0.43, green: 0.39, blue: 0.99),
                                     iconBackground: Color(red: 0.94, green: 0.93, blue: 1.00),
-                                    action: { isShowingEditProfile = true }
+                                    action: { isShowingLanguageSelection = true }
                                 )
                             ]
                         )
@@ -86,7 +91,7 @@ struct ProfileView: View {
                                     icon: "shield.fill",
                                     iconTint: Color(red: 0.55, green: 0.59, blue: 0.68),
                                     iconBackground: Color(red: 0.95, green: 0.96, blue: 0.97),
-                                    action: { showPlaceholder("Privacy Policy will be linked here.") }
+                                    action: { isShowingPrivacyPolicy = true }
                                 ),
                                 .init(
                                     title: "Terms of Service",
@@ -94,23 +99,14 @@ struct ProfileView: View {
                                     icon: "doc.text.fill",
                                     iconTint: Color(red: 0.55, green: 0.59, blue: 0.68),
                                     iconBackground: Color(red: 0.95, green: 0.96, blue: 0.97),
-                                    action: { showPlaceholder("Terms of Service will be linked here.") }
+                                    action: { isShowingTermsOfService = true }
                                 )
                             ]
                         )
 
                         profileSection(
                             title: "ABOUT",
-                            items: [
-                                .init(
-                                    title: "Help & Support",
-                                    subtitle: "FAQs, contact us",
-                                    icon: "info.circle.fill",
-                                    iconTint: Color(red: 0.76, green: 0.49, blue: 0.98),
-                                    iconBackground: Color(red: 0.97, green: 0.94, blue: 1.00),
-                                    action: { showPlaceholder("Help & Support will be linked here.") }
-                                )
-                            ],
+                            items: [],
                             footer: "Version 1.0.0"
                         )
 
@@ -140,6 +136,22 @@ struct ProfileView: View {
                         }
                     }
                 )
+            }
+            .navigationDestination(isPresented: $isShowingLanguageSelection) {
+                ProfileBaseLanguageView(
+                    availableLanguages: availableLanguages,
+                    selectedLanguageCode: baseLanguageCode,
+                    isSaving: isUpdatingBaseLanguage,
+                    onSave: { languageCode in
+                        await updateBaseLanguage(to: languageCode)
+                    }
+                )
+            }
+            .navigationDestination(isPresented: $isShowingPrivacyPolicy) {
+                PrivacyPolicyView()
+            }
+            .navigationDestination(isPresented: $isShowingTermsOfService) {
+                TermsOfServiceView()
             }
             .toolbar {
                 if showsDismissButton {
@@ -282,7 +294,9 @@ struct ProfileView: View {
                 }
 
                 if let footer {
-                    Divider()
+                    if !items.isEmpty {
+                        Divider()
+                    }
                     HStack {
                         Text(footer)
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -572,6 +586,29 @@ struct ProfileView: View {
             logger.error("Failed to update reminder setting: \(error.localizedDescription, privacy: .public)")
         }
     }
+
+    @MainActor
+    private func updateBaseLanguage(to languageCode: String) async {
+        guard !isUpdatingBaseLanguage else { return }
+        guard languageCode != baseLanguageCode else {
+            isShowingLanguageSelection = false
+            return
+        }
+
+        isUpdatingBaseLanguage = true
+        defer { isUpdatingBaseLanguage = false }
+
+        do {
+            try await authService.updateBaseLanguage(languageCode: languageCode)
+            baseLanguageCode = languageCode
+            languageSettings.applyLocalSelection(languageCode)
+            isShowingLanguageSelection = false
+        } catch {
+            alertMessage = "Failed to update base language: \(error.localizedDescription)"
+            showAlert = true
+            logger.error("Failed to update base language: \(error.localizedDescription, privacy: .public)")
+        }
+    }
 }
 
 private struct ProfileMenuItem: Identifiable {
@@ -582,6 +619,375 @@ private struct ProfileMenuItem: Identifiable {
     let iconTint: Color
     let iconBackground: Color
     let action: () -> Void
+}
+
+private struct PrivacyPolicySection: Identifiable {
+    let id = UUID()
+    let title: String
+    let paragraphs: [String]
+}
+
+private struct PrivacyPolicyView: View {
+    private let sections: [PrivacyPolicySection] = [
+        .init(
+            title: "Overview",
+            paragraphs: [
+                "LangGo is a language-learning app focused on vocabulary review and article reading. This Privacy Policy explains what information the app uses and how that information supports the product."
+            ]
+        ),
+        .init(
+            title: "Information We Use",
+            paragraphs: [
+                "Your account information may include your email address, username, profile settings, avatar image, and language preferences.",
+                "Learning data may include vocabulary entries, flashcard review progress, saved articles, article tags, and related study activity you create inside the app."
+            ]
+        ),
+        .init(
+            title: "How Information Is Used",
+            paragraphs: [
+                "We use account and profile information to authenticate you, keep your preferences in sync, and personalize the learning experience.",
+                "We use study data to provide vocabulary review, article reading, language assistance, and progress-related features inside the app."
+            ]
+        ),
+        .init(
+            title: "Camera, Photos, and Microphone",
+            paragraphs: [
+                "If you choose to scan an article or update your profile photo, the app may request access to your camera or photo library.",
+                "If you use speaking or pronunciation features, the app may request microphone or speech recognition access. These permissions are only used for the features you choose to use."
+            ]
+        ),
+        .init(
+            title: "Third-Party Services",
+            paragraphs: [
+                "The app communicates with LangGo backend services to store account data, study content, and learning progress.",
+                "If the app uses platform services such as Apple system frameworks for speech, media, or notifications, those services are used only to support app functionality."
+            ]
+        ),
+        .init(
+            title: "Data Retention and Account Control",
+            paragraphs: [
+                "Your learning data and profile information remain associated with your account until you edit or delete them, or until you delete your account.",
+                "If you delete your account from the app, the request is sent to the backend and your account data is scheduled for removal according to backend handling rules."
+            ]
+        ),
+        .init(
+            title: "Data Sharing",
+            paragraphs: [
+                "LangGo does not sell your personal information. Information is shared only as needed to operate the service, comply with legal obligations, or fulfill requests you initiate inside the app."
+            ]
+        ),
+        .init(
+            title: "Contact",
+            paragraphs: [
+                "If you have questions about privacy or data handling, contact the LangGo support team using the support channel provided in the app or on the LangGo website."
+            ]
+        ),
+        .init(
+            title: "Effective Date",
+            paragraphs: [
+                "Effective date: April 21, 2026."
+            ]
+        )
+    ]
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                policyIntroCard
+
+                ForEach(sections) { section in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(section.title)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(section.paragraphs, id: \.self) { paragraph in
+                                Text(paragraph)
+                                    .font(.system(size: 15, weight: .regular, design: .rounded))
+                                    .foregroundStyle(Color(red: 0.37, green: 0.39, blue: 0.45))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color(red: 0.90, green: 0.91, blue: 0.94), lineWidth: 1)
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle("Privacy Policy")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var policyIntroCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("LangGo Privacy Policy")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
+
+            Text("This policy explains how LangGo uses account information, learning content, and device permissions when you use the app.")
+                .font(.system(size: 15, weight: .regular, design: .rounded))
+                .foregroundStyle(Color(red: 0.37, green: 0.39, blue: 0.45))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.95, green: 0.97, blue: 1.00),
+                    Color(red: 0.98, green: 0.99, blue: 1.00)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(red: 0.87, green: 0.90, blue: 0.96), lineWidth: 1)
+        )
+    }
+}
+
+private struct TermsSection: Identifiable {
+    let id = UUID()
+    let title: String
+    let paragraphs: [String]
+}
+
+private struct TermsOfServiceView: View {
+    private let sections: [TermsSection] = [
+        .init(
+            title: "Acceptance of Terms",
+            paragraphs: [
+                "By creating an account, accessing, or using LangGo, you agree to these Terms of Service. If you do not agree, you should stop using the app and related services."
+            ]
+        ),
+        .init(
+            title: "Eligibility and Account Responsibility",
+            paragraphs: [
+                "You are responsible for maintaining the confidentiality of your account credentials and for activity that occurs under your account.",
+                "You agree to provide accurate account information and to keep your profile information reasonably up to date."
+            ]
+        ),
+        .init(
+            title: "Service Description",
+            paragraphs: [
+                "LangGo provides vocabulary learning, flashcard review, article reading, OCR-based article import, and related language-learning tools.",
+                "Features may change over time. We may modify, improve, limit, or discontinue parts of the service as needed."
+            ]
+        ),
+        .init(
+            title: "User Content",
+            paragraphs: [
+                "You may create or upload content such as saved words, articles, tags, profile text, and images. You remain responsible for the content you submit.",
+                "You represent that you have the right to upload or use the content you submit and that it does not violate applicable law or the rights of others."
+            ]
+        ),
+        .init(
+            title: "Acceptable Use",
+            paragraphs: [
+                "You agree not to use LangGo to upload unlawful, infringing, abusive, deceptive, or harmful content.",
+                "You agree not to interfere with the service, attempt unauthorized access, abuse APIs or infrastructure, or use the app in a way that could impair service availability for others."
+            ]
+        ),
+        .init(
+            title: "Subscriptions, Payments, and Purchases",
+            paragraphs: [
+                "If paid plans, subscriptions, or in-app purchases are offered, billing and renewal terms will be presented at the time of purchase.",
+                "Apple-managed purchases are subject to Apple’s billing rules, including renewal, cancellation, and refund handling where applicable."
+            ]
+        ),
+        .init(
+            title: "Privacy",
+            paragraphs: [
+                "Your use of LangGo is also governed by the Privacy Policy. Please review the Privacy Policy to understand how account data, learning data, and permissions are used."
+            ]
+        ),
+        .init(
+            title: "Termination",
+            paragraphs: [
+                "You may stop using the service at any time. You may also request account deletion through the app where that feature is available.",
+                "We may suspend or terminate access if we reasonably believe you violated these Terms, abused the service, or created legal, operational, or security risk."
+            ]
+        ),
+        .init(
+            title: "Disclaimers",
+            paragraphs: [
+                "LangGo is provided on an \"as is\" and \"as available\" basis to the extent permitted by law. We do not guarantee uninterrupted availability, complete accuracy, or that the service will always be error-free.",
+                "Language-learning suggestions, OCR extraction, translations, and AI-assisted outputs may be incomplete or inaccurate and should be reviewed by the user."
+            ]
+        ),
+        .init(
+            title: "Limitation of Liability",
+            paragraphs: [
+                "To the extent permitted by law, LangGo and its operators are not liable for indirect, incidental, special, consequential, or exemplary damages arising from your use of the service.",
+                "Where liability cannot be excluded, it will be limited to the minimum extent permitted by applicable law."
+            ]
+        ),
+        .init(
+            title: "Changes to These Terms",
+            paragraphs: [
+                "We may update these Terms from time to time. Continued use of the service after updated terms take effect means you accept the revised Terms."
+            ]
+        ),
+        .init(
+            title: "Contact",
+            paragraphs: [
+                "If you have questions about these Terms, contact the LangGo support team through the support channel provided in the app or on the LangGo website."
+            ]
+        ),
+        .init(
+            title: "Effective Date",
+            paragraphs: [
+                "Effective date: April 21, 2026."
+            ]
+        )
+    ]
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                introCard
+
+                ForEach(sections) { section in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(section.title)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(section.paragraphs, id: \.self) { paragraph in
+                                Text(paragraph)
+                                    .font(.system(size: 15, weight: .regular, design: .rounded))
+                                    .foregroundStyle(Color(red: 0.37, green: 0.39, blue: 0.45))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color(red: 0.90, green: 0.91, blue: 0.94), lineWidth: 1)
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle("Terms of Service")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var introCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("LangGo Terms of Service")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
+
+            Text("These terms describe the rules for using LangGo, your account responsibilities, and the limits and conditions that apply to the service.")
+                .font(.system(size: 15, weight: .regular, design: .rounded))
+                .foregroundStyle(Color(red: 0.37, green: 0.39, blue: 0.45))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.96, green: 0.97, blue: 1.00),
+                    Color(red: 0.99, green: 0.99, blue: 1.00)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(red: 0.88, green: 0.90, blue: 0.95), lineWidth: 1)
+        )
+    }
+}
+
+private struct ProfileBaseLanguageView: View {
+    let availableLanguages: [Language]
+    let selectedLanguageCode: String
+    let isSaving: Bool
+    let onSave: @MainActor (String) async -> Void
+
+    @State private var draftLanguageCode: String
+
+    init(
+        availableLanguages: [Language],
+        selectedLanguageCode: String,
+        isSaving: Bool,
+        onSave: @escaping @MainActor (String) async -> Void
+    ) {
+        self.availableLanguages = availableLanguages
+        self.selectedLanguageCode = selectedLanguageCode
+        self.isSaving = isSaving
+        self.onSave = onSave
+        _draftLanguageCode = State(initialValue: selectedLanguageCode)
+    }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(availableLanguages) { language in
+                    Button {
+                        draftLanguageCode = language.id
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(language.name)
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundStyle(Color.primary)
+
+                            Spacer()
+
+                            if draftLanguageCode == language.id {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundStyle(Color(red: 0.09, green: 0.47, blue: 0.95))
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSaving)
+                }
+            } footer: {
+                Text("Choose the language you want LangGo to use as your native language when learning vocabulary.")
+            }
+        }
+        .navigationTitle("Base Language")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if isSaving {
+                    ProgressView()
+                } else {
+                    Button("Save") {
+                        Task {
+                            await onSave(draftLanguageCode)
+                        }
+                    }
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .disabled(draftLanguageCode == selectedLanguageCode)
+                }
+            }
+        }
+    }
 }
 
 private struct ProfilePrivacySecurityView: View {

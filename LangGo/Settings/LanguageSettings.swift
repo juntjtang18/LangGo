@@ -7,6 +7,7 @@ import os
 class LanguageSettings: ObservableObject {
     private let authService = DataServices.shared.authService
     private let logger = Logger(subsystem: "com.langGo.swift", category: "LanguageSettings")
+    private var isApplyingExternalSelection = false
 
     // LanguageSettings.swift
     @Published var selectedLanguageCode: String {
@@ -15,6 +16,8 @@ class LanguageSettings: ObservableObject {
 
             // Always persist locally
             UserDefaults.standard.set(selectedLanguageCode, forKey: "selectedLanguage")
+
+            guard !isApplyingExternalSelection else { return }
 
             // 🚫 Skip server update if not authenticated
             guard UserSessionManager.shared.currentUser != nil else {
@@ -45,6 +48,16 @@ class LanguageSettings: ObservableObject {
 
         let initialCode = savedCode ?? appMatch ?? defaultCode
         self.selectedLanguageCode = initialCode
+    }
+
+    func applyLocalSelection(_ languageCode: String) {
+        UserDefaults.standard.set(languageCode, forKey: "selectedLanguage")
+
+        guard selectedLanguageCode != languageCode else { return }
+
+        isApplyingExternalSelection = true
+        selectedLanguageCode = languageCode
+        isApplyingExternalSelection = false
     }
 
     
