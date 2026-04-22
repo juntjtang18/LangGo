@@ -27,7 +27,9 @@ struct ProfileView: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var isLoading = false
+    @State private var isUpdatingReminders = false
     @State private var isShowingEditProfile = false
+    @State private var isShowingPrivacySecurity = false
 
     private let availableLanguages = LanguageSettings.availableLanguages
 
@@ -54,24 +56,12 @@ struct ProfileView: View {
                                     icon: "lock.fill",
                                     iconTint: Color(red: 0.35, green: 0.63, blue: 0.98),
                                     iconBackground: Color(red: 0.92, green: 0.96, blue: 1.00),
-                                    action: { isShowingEditProfile = true }
+                                    action: { isShowingPrivacySecurity = true }
                                 )
                             ]
                         )
 
-                        profileSection(
-                            title: "NOTIFICATIONS",
-                            items: [
-                                .init(
-                                    title: "Study Reminders",
-                                    subtitle: remindersEnabled ? "Daily learning notifications" : "Reminders are off",
-                                    icon: "bell.fill",
-                                    iconTint: Color(red: 0.42, green: 0.84, blue: 0.53),
-                                    iconBackground: Color(red: 0.93, green: 0.99, blue: 0.94),
-                                    action: { isShowingEditProfile = true }
-                                )
-                            ]
-                        )
+                        notificationsSection
 
                         profileSection(
                             title: "PREFERENCES",
@@ -139,6 +129,18 @@ struct ProfileView: View {
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(isPresented: $isShowingPrivacySecurity) {
+                ProfilePrivacySecurityView(
+                    onAccountDeleted: {
+                        keychain["jwt"] = nil
+                        userSession.logout()
+                        onLogout?()
+                        if showsDismissButton {
+                            dismiss()
+                        }
+                    }
+                )
+            }
             .toolbar {
                 if showsDismissButton {
                     ToolbarItem(placement: .topBarLeading) {
@@ -296,6 +298,59 @@ struct ProfileView: View {
         }
     }
 
+    private var notificationsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("NOTIFICATIONS")
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 0.61, green: 0.63, blue: 0.68))
+                .padding(.leading, 10)
+
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(red: 0.93, green: 0.99, blue: 0.94))
+                        .frame(width: 42, height: 42)
+
+                    Image(systemName: "bell.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Color(red: 0.42, green: 0.84, blue: 0.53))
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Word Review Reminders")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.18, green: 0.19, blue: 0.23))
+
+                    Text("Notify when words are due")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.55, green: 0.58, blue: 0.64))
+                }
+
+                Spacer(minLength: 8)
+
+                if isUpdatingReminders {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 51, height: 31)
+                } else {
+                    Toggle("", isOn: reminderToggleBinding)
+                        .labelsHidden()
+                        .tint(Color(red: 0.27, green: 0.75, blue: 0.37))
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 74)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color(red: 0.90, green: 0.91, blue: 0.94), lineWidth: 1)
+            )
+            .opacity(isUpdatingReminders ? 0.92 : 1)
+        }
+        .animation(.easeInOut(duration: 0.18), value: isUpdatingReminders)
+    }
+
     private var logoutButton: some View {
         Button {
             keychain["jwt"] = nil
@@ -349,6 +404,19 @@ struct ProfileView: View {
 
     private var joinedLabel: String {
         "Joined January 2026"
+    }
+
+    private var reminderToggleBinding: Binding<Bool> {
+        Binding(
+            get: { remindersEnabled },
+            set: { newValue in
+                let previousValue = remindersEnabled
+                remindersEnabled = newValue
+                Task {
+                    await updateReminderEnabled(to: newValue, previousValue: previousValue)
+                }
+            }
+        )
     }
 
     private func showPlaceholder(_ message: String) {
@@ -432,7 +500,8 @@ struct ProfileView: View {
                     baseLanguage: baseLanguageCode,
                     telephone: phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                     bio: bio.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                    avatar_img: old.user_profile?.avatar_img
+                    avatar_img: old.user_profile?.avatar_img,
+                    visible_on_ladder: old.user_profile?.visible_on_ladder
                 )
                 let updatedUser = StrapiUser(
                     id: old.id,
@@ -453,6 +522,56 @@ struct ProfileView: View {
             return false
         }
     }
+
+    @MainActor
+    private func updateReminderEnabled(to newValue: Bool, previousValue: Bool) async {
+        guard !isUpdatingReminders else { return }
+        guard let currentUser = userSession.currentUser else {
+            remindersEnabled = previousValue
+            alertMessage = "No active user. Please log in again."
+            showAlert = true
+            return
+        }
+
+        isUpdatingReminders = true
+        defer { isUpdatingReminders = false }
+
+        do {
+            let currentProfile = currentUser.user_profile
+            let payload = UserProfileUpdatePayload(
+                baseLanguage: currentProfile?.baseLanguage ?? baseLanguageCode,
+                proficiency: currentProfile?.proficiency,
+                reminder_enabled: newValue,
+                telephone: currentProfile?.telephone,
+                bio: currentProfile?.bio,
+                visible_on_ladder: currentProfile?.visible_on_ladder
+            )
+
+            try await authService.updateUserProfile(userId: currentUser.id, payload: payload)
+
+            let updatedProfile = UserProfileAttributes(
+                proficiency: currentProfile?.proficiency,
+                reminder_enabled: newValue,
+                baseLanguage: currentProfile?.baseLanguage ?? baseLanguageCode,
+                telephone: currentProfile?.telephone,
+                bio: currentProfile?.bio,
+                avatar_img: currentProfile?.avatar_img,
+                visible_on_ladder: currentProfile?.visible_on_ladder
+            )
+
+            userSession.currentUser = StrapiUser(
+                id: currentUser.id,
+                username: currentUser.username,
+                email: currentUser.email,
+                user_profile: updatedProfile
+            )
+        } catch {
+            remindersEnabled = previousValue
+            alertMessage = "Failed to update notifications: \(error.localizedDescription)"
+            showAlert = true
+            logger.error("Failed to update reminder setting: \(error.localizedDescription, privacy: .public)")
+        }
+    }
 }
 
 private struct ProfileMenuItem: Identifiable {
@@ -463,6 +582,652 @@ private struct ProfileMenuItem: Identifiable {
     let iconTint: Color
     let iconBackground: Color
     let action: () -> Void
+}
+
+private struct ProfilePrivacySecurityView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var userSession: UserSessionManager
+    @FocusState private var focusedField: PasswordField?
+    let onAccountDeleted: () -> Void
+    @State private var alertMessage = ""
+    @State private var showAlert = false
+    @State private var expandedSection: SecuritySection?
+    @State private var currentPassword = ""
+    @State private var newPassword = ""
+    @State private var confirmNewPassword = ""
+    @State private var isUpdatingPassword = false
+    @State private var isShowingCurrentPassword = false
+    @State private var isShowingNewPassword = false
+    @State private var isShowingConfirmNewPassword = false
+    @State private var deleteConfirmationText = ""
+    @State private var deleteAccountPassword = ""
+    @State private var isShowingDeletePasswordPrompt = false
+    @State private var visibleOnLadder = true
+    @State private var isUpdatingVisibleOnLadder = false
+    @State private var isDeletingAccount = false
+
+    private let authService = DataServices.shared.authService
+
+    private enum SecuritySection {
+        case changePassword
+        case dataPrivacy
+        case deleteAccount
+    }
+
+    private enum PasswordField {
+        case currentPassword
+        case newPassword
+        case confirmNewPassword
+    }
+
+    var body: some View {
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                VStack(spacing: 18) {
+                    changePasswordSection
+
+                    dataPrivacySection
+
+                    deleteAccountSection
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+
+                Spacer()
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Back")
+                            .font(.system(size: 17, weight: .medium, design: .rounded))
+                    }
+                    .foregroundStyle(Color(red: 0.09, green: 0.47, blue: 0.95))
+                }
+            }
+
+            ToolbarItem(placement: .principal) {
+                Text("Privacy & Security")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.16, green: 0.17, blue: 0.21))
+            }
+        }
+        .alert("Privacy & Security", isPresented: $showAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(alertMessage)
+        }
+        .alert("Confirm Account Deletion", isPresented: $isShowingDeletePasswordPrompt) {
+            SecureField("Current password", text: $deleteAccountPassword)
+            Button("Cancel", role: .cancel) {
+                deleteAccountPassword = ""
+            }
+            Button("Delete", role: .destructive) {
+                Task {
+                    await performDeleteAccount()
+                }
+            }
+        } message: {
+            Text("Enter your current password to permanently delete your account.")
+        }
+        .onAppear {
+            visibleOnLadder = userSession.currentUser?.user_profile?.visible_on_ladder ?? true
+        }
+    }
+
+    private var changePasswordSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            securityRow(
+                title: "Change Password",
+                subtitle: "Update your password",
+                icon: "shield",
+                iconTint: Color(red: 0.19, green: 0.52, blue: 0.98),
+                iconBackground: Color(red: 0.92, green: 0.96, blue: 1.00),
+                titleColor: Color(red: 0.18, green: 0.19, blue: 0.23),
+                chevron: expandedSection == .changePassword ? "chevron.up" : "chevron.down",
+                showsOuterShape: false
+            ) {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    expandedSection = expandedSection == .changePassword ? nil : .changePassword
+                }
+            }
+
+            if expandedSection == .changePassword {
+                Rectangle()
+                    .fill(Color(red: 0.89, green: 0.90, blue: 0.93))
+                    .frame(height: 1)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    passwordField(
+                        title: "CURRENT PASSWORD",
+                        placeholder: "Enter current password",
+                        text: $currentPassword,
+                        field: .currentPassword,
+                        isRevealed: $isShowingCurrentPassword
+                    )
+
+                    passwordField(
+                        title: "NEW PASSWORD",
+                        placeholder: "Enter new password",
+                        text: $newPassword,
+                        field: .newPassword,
+                        isRevealed: $isShowingNewPassword,
+                        footnote: newPasswordFootnote
+                    )
+
+                    passwordField(
+                        title: "CONFIRM NEW PASSWORD",
+                        placeholder: "Confirm new password",
+                        text: $confirmNewPassword,
+                        field: .confirmNewPassword,
+                        isRevealed: $isShowingConfirmNewPassword,
+                        footnote: confirmPasswordFootnote,
+                        footnoteColor: confirmPasswordFootnoteColor
+                    )
+
+                    Button {
+                        Task {
+                            await updatePassword()
+                        }
+                    } label: {
+                        HStack {
+                            if isUpdatingPassword {
+                                ProgressView()
+                                    .tint(Color(red: 0.50, green: 0.52, blue: 0.58))
+                            } else {
+                                Text("Update Password")
+                                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                            }
+                        }
+                        .foregroundStyle(Color.black)
+                        .opacity(canSubmitPasswordChange ? 1 : 0.45)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 42)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color(red: 0.88, green: 0.89, blue: 0.92), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSubmitPasswordChange || isUpdatingPassword)
+                    .padding(.top, 2)
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 14)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(red: 0.86, green: 0.88, blue: 0.92), lineWidth: 1)
+        )
+    }
+
+    private var dataPrivacySection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            securityRow(
+                title: "Data & Privacy",
+                subtitle: "Manage your data",
+                icon: "shield.lefthalf.filled",
+                iconTint: Color(red: 0.44, green: 0.33, blue: 0.98),
+                iconBackground: Color(red: 0.94, green: 0.93, blue: 1.00),
+                titleColor: Color(red: 0.18, green: 0.19, blue: 0.23),
+                chevron: expandedSection == .dataPrivacy ? "chevron.up" : "chevron.down",
+                showsOuterShape: false
+            ) {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    expandedSection = expandedSection == .dataPrivacy ? nil : .dataPrivacy
+                }
+            }
+
+            if expandedSection == .dataPrivacy {
+                Rectangle()
+                    .fill(Color(red: 0.89, green: 0.90, blue: 0.93))
+                    .frame(height: 1)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Show me on the leaderboard")
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
+
+                            Text("When enabled, your progress and rank will be visible to other users on the leaderboard")
+                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(Color(red: 0.48, green: 0.50, blue: 0.56))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Toggle("", isOn: leaderboardVisibilityBinding)
+                            .labelsHidden()
+                            .toggleStyle(SwitchToggleStyle(tint: Color(red: 0.20, green: 0.78, blue: 0.38)))
+                            .disabled(isUpdatingVisibleOnLadder)
+                            .padding(.top, 2)
+                    }
+
+                    if !visibleOnLadder {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("⚠️ Note")
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color(red: 0.95, green: 0.60, blue: 0.11))
+
+                            Text("You'll still see the leaderboard, but others won't see your rank or username.")
+                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .foregroundStyle(Color(red: 0.30, green: 0.24, blue: 0.16))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .background(Color(red: 1.00, green: 0.96, blue: 0.90))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 14)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(red: 0.86, green: 0.88, blue: 0.92), lineWidth: 1)
+        )
+    }
+
+    private var deleteAccountSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            securityRow(
+                title: "Delete Account",
+                subtitle: "Permanently remove your account",
+                icon: "trash",
+                iconTint: Color(red: 1.00, green: 0.31, blue: 0.29),
+                iconBackground: Color(red: 1.00, green: 0.94, blue: 0.94),
+                titleColor: Color(red: 1.00, green: 0.31, blue: 0.29),
+                borderColor: Color(red: 1.00, green: 0.31, blue: 0.29),
+                chevron: expandedSection == .deleteAccount ? "chevron.up" : "chevron.down",
+                showsOuterShape: false
+            ) {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    expandedSection = expandedSection == .deleteAccount ? nil : .deleteAccount
+                }
+            }
+
+            if expandedSection == .deleteAccount {
+                Rectangle()
+                    .fill(Color(red: 0.97, green: 0.82, blue: 0.82))
+                    .frame(height: 1)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("This action is permanent. Enter your current password to delete your account and sign out.")
+                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color(red: 0.48, green: 0.33, blue: 0.33))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("⚠️ Warning")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.95, green: 0.60, blue: 0.11))
+
+                        Text("This action cannot be undone. All your vocabulary, progress, and account data will be permanently deleted.")
+                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(Color(red: 0.30, green: 0.24, blue: 0.16))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(Color(red: 1.00, green: 0.94, blue: 0.94))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                    deleteConfirmationField
+
+                    Button {
+                        isShowingDeletePasswordPrompt = true
+                    } label: {
+                        HStack {
+                            if isDeletingAccount {
+                                ProgressView()
+                                    .tint(Color.red)
+                            } else {
+                                Text("Delete Account")
+                                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                            }
+                        }
+                        .foregroundStyle(Color.red)
+                        .opacity(canBeginDeleteAccount ? 1 : 0.45)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 42)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.red.opacity(0.75), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canBeginDeleteAccount || isDeletingAccount)
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 14)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(red: 1.00, green: 0.31, blue: 0.29), lineWidth: 1)
+        )
+    }
+
+    private var deleteConfirmationField: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("TYPE \"DELETE\" TO CONFIRM")
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 0.59, green: 0.61, blue: 0.67))
+
+            TextField("DELETE", text: $deleteConfirmationText)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 0.19, green: 0.20, blue: 0.24))
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color(red: 0.87, green: 0.88, blue: 0.91), lineWidth: 1)
+                )
+        }
+    }
+
+    private func securityRow(
+        title: String,
+        subtitle: String,
+        icon: String,
+        iconTint: Color,
+        iconBackground: Color,
+        titleColor: Color,
+        borderColor: Color = Color(red: 0.86, green: 0.88, blue: 0.92),
+        chevron: String = "chevron.down",
+        showsOuterShape: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(iconBackground)
+                        .frame(width: 36, height: 36)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(iconTint)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(titleColor)
+
+                    Text(subtitle)
+                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.55, green: 0.58, blue: 0.64))
+                }
+
+                Spacer()
+
+                Image(systemName: chevron)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color(red: 0.76, green: 0.77, blue: 0.82))
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 64)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                if showsOuterShape {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func showPlaceholder(_ message: String) {
+        alertMessage = message
+        showAlert = true
+    }
+
+    private var canSubmitPasswordChange: Bool {
+        !currentPassword.isEmpty &&
+        newPassword.count >= 8 &&
+        !confirmNewPassword.isEmpty &&
+        newPassword == confirmNewPassword
+    }
+
+    private func passwordField(
+        title: String,
+        placeholder: String,
+        text: Binding<String>,
+        field: PasswordField,
+        isRevealed: Binding<Bool>,
+        footnote: String? = nil,
+        footnoteColor: Color = Color(red: 0.56, green: 0.58, blue: 0.64)
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 0.59, green: 0.61, blue: 0.67))
+
+            HStack(spacing: 10) {
+                Group {
+                    if isRevealed.wrappedValue {
+                        TextField(placeholder, text: text)
+                    } else {
+                        SecureField(placeholder, text: text)
+                    }
+                }
+                .focused($focusedField, equals: field)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 0.19, green: 0.20, blue: 0.24))
+
+                Button {
+                    isRevealed.wrappedValue.toggle()
+                } label: {
+                    Image(systemName: isRevealed.wrappedValue ? "eye.slash" : "eye")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.62, green: 0.64, blue: 0.69))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(
+                        focusedField == field
+                        ? Color(red: 0.17, green: 0.51, blue: 0.98)
+                        : Color(red: 0.87, green: 0.88, blue: 0.91),
+                        lineWidth: focusedField == field ? 1.5 : 1
+                    )
+            )
+
+            if let footnote {
+                Text(footnote)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(footnoteColor)
+            }
+        }
+    }
+
+    private var newPasswordFootnote: String {
+        if newPassword.isEmpty || newPassword.count >= 8 {
+            return "Must be at least 8 characters"
+        }
+
+        return "Password must be at least 8 characters"
+    }
+
+    private var confirmPasswordFootnote: String? {
+        guard !confirmNewPassword.isEmpty else { return nil }
+        guard newPassword != confirmNewPassword else { return nil }
+        return "New password and confirmation do not match"
+    }
+
+    private var confirmPasswordFootnoteColor: Color {
+        confirmPasswordFootnote == nil
+        ? Color(red: 0.56, green: 0.58, blue: 0.64)
+        : Color(red: 0.86, green: 0.25, blue: 0.22)
+    }
+
+    private var leaderboardVisibilityBinding: Binding<Bool> {
+        Binding(
+            get: { visibleOnLadder },
+            set: { newValue in
+                guard !isUpdatingVisibleOnLadder else { return }
+                let previousValue = visibleOnLadder
+                visibleOnLadder = newValue
+
+                Task {
+                    await updateVisibleOnLadder(to: newValue, previousValue: previousValue)
+                }
+            }
+        )
+    }
+
+    private var canBeginDeleteAccount: Bool {
+        deleteConfirmationText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == "DELETE"
+    }
+
+    @MainActor
+    private func updatePassword() async {
+        guard newPassword.count >= 8 else {
+            showPlaceholder("New password must be at least 8 characters.")
+            return
+        }
+
+        guard newPassword == confirmNewPassword else {
+            showPlaceholder("New password and confirmation do not match.")
+            return
+        }
+
+        isUpdatingPassword = true
+        defer { isUpdatingPassword = false }
+
+        do {
+            _ = try await authService.changePassword(
+                currentPassword: currentPassword,
+                newPassword: newPassword,
+                confirmNewPassword: confirmNewPassword
+            )
+
+            currentPassword = ""
+            newPassword = ""
+            confirmNewPassword = ""
+            focusedField = nil
+
+            withAnimation(.easeInOut(duration: 0.18)) {
+                expandedSection = nil
+            }
+
+            showPlaceholder("Password updated successfully.")
+        } catch {
+            showPlaceholder(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func updateVisibleOnLadder(to newValue: Bool, previousValue: Bool) async {
+        guard let currentUser = userSession.currentUser else {
+            visibleOnLadder = previousValue
+            showPlaceholder("No active user. Please log in again.")
+            return
+        }
+
+        isUpdatingVisibleOnLadder = true
+        defer { isUpdatingVisibleOnLadder = false }
+
+        do {
+            let profile = currentUser.user_profile
+            let payload = UserProfileUpdatePayload(
+                baseLanguage: profile?.baseLanguage ?? "en",
+                proficiency: profile?.proficiency,
+                reminder_enabled: profile?.reminder_enabled,
+                telephone: profile?.telephone,
+                bio: profile?.bio,
+                visible_on_ladder: newValue
+            )
+
+            try await authService.updateUserProfile(userId: currentUser.id, payload: payload)
+
+            let updatedProfile = UserProfileAttributes(
+                proficiency: profile?.proficiency,
+                reminder_enabled: profile?.reminder_enabled,
+                baseLanguage: profile?.baseLanguage,
+                telephone: profile?.telephone,
+                bio: profile?.bio,
+                avatar_img: profile?.avatar_img,
+                visible_on_ladder: newValue
+            )
+
+            userSession.currentUser = StrapiUser(
+                id: currentUser.id,
+                username: currentUser.username,
+                email: currentUser.email,
+                user_profile: updatedProfile
+            )
+        } catch {
+            visibleOnLadder = previousValue
+            showPlaceholder("Failed to update privacy setting: \(error.localizedDescription)")
+        }
+    }
+
+    @MainActor
+    private func performDeleteAccount() async {
+        guard !deleteAccountPassword.isEmpty else {
+            showPlaceholder("Current password is required to delete your account.")
+            return
+        }
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        do {
+            try await authService.deleteCurrentUserAccount(currentPassword: deleteAccountPassword)
+            deleteAccountPassword = ""
+            deleteConfirmationText = ""
+            focusedField = nil
+            onAccountDeleted()
+        } catch {
+            deleteAccountPassword = ""
+            showPlaceholder("Failed to delete account: \(error.localizedDescription)")
+        }
+    }
 }
 
 private struct ProfileEditView: View {

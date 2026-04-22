@@ -10,9 +10,10 @@ struct UserProfileAttributes: Codable {
     let telephone: String?
     let bio: String?
     let avatar_img: MediaRelation?
+    let visible_on_ladder: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case proficiency, reminder_enabled, baseLanguage, telephone, avatar_img
+        case proficiency, reminder_enabled, baseLanguage, telephone, avatar_img, visible_on_ladder
         case bio = "Bio"
     }
 }

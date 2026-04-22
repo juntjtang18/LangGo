@@ -87,6 +87,12 @@
     ">" : {
 
     },
+    "⚠️ Note" : {
+
+    },
+    "⚠️ Warning" : {
+
+    },
     "1,243 learners" : {
 
     },
@@ -292,6 +298,9 @@
         }
       }
     },
+    "Confirm Account Deletion" : {
+
+    },
     "Confirm New Password" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -387,6 +396,9 @@
         }
       }
     },
+    "Current password" : {
+
+    },
     "Current Password" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -454,6 +466,12 @@
       }
     },
     "Delete" : {
+
+    },
+    "DELETE" : {
+
+    },
+    "Delete Account" : {
 
     },
     "Delete Word" : {
@@ -589,6 +607,9 @@
           }
         }
       }
+    },
+    "Enter your current password to permanently delete your account." : {
+
     },
     "Error: %@" : {
 
@@ -956,6 +977,12 @@
     "Notice" : {
 
     },
+    "NOTIFICATIONS" : {
+
+    },
+    "Notify when words are due" : {
+
+    },
     "OK" : {
       "localizations" : {
         "ja" : {
@@ -1037,6 +1064,9 @@
 
     },
     "Previous" : {
+
+    },
+    "Privacy & Security" : {
 
     },
     "Processing OCR..." : {
@@ -1348,6 +1378,9 @@
     "Show Base Text" : {
 
     },
+    "Show me on the leaderboard" : {
+
+    },
     "Sign Up" : {
       "localizations" : {
         "ja" : {
@@ -1487,6 +1520,12 @@
     "The top row plays the standard voice; the bottom and right buttons play your recording. Both save a reference waveform." : {
 
     },
+    "This action cannot be undone. All your vocabulary, progress, and account data will be permanently deleted." : {
+
+    },
+    "This action is permanent. Enter your current password to delete your account and sign out." : {
+
+    },
     "This will control data refreshing behavior in a future update." : {
       "localizations" : {
         "ja" : {
@@ -1564,6 +1603,9 @@
     "Translation unavailable." : {
 
     },
+    "TYPE \"DELETE\" TO CONFIRM" : {
+
+    },
     "Type or hold to speak..." : {
 
     },
@@ -1608,6 +1650,9 @@
 
     },
     "Up 4 spots" : {
+
+    },
+    "Update Password" : {
 
     },
     "Updating your article and tags." : {
@@ -1772,6 +1817,9 @@
     "What is your native language?" : {
 
     },
+    "When enabled, your progress and rank will be visible to other users on the leaderboard" : {
+
+    },
     "Without review, most people forget 90% of new words in 2 days. Our smart Vocabulary Notebook reminds you only when you’re about to forget — not too soon, not too late." : {
 
     },
@@ -1779,6 +1827,9 @@
 
     },
     "Word Repeat" : {
+
+    },
+    "Word Review Reminders" : {
 
     },
     "Words Due" : {
@@ -1816,6 +1867,9 @@
 
     },
     "You have no words due for review." : {
+
+    },
+    "You'll still see the leaderboard, but others won't see your rank or username." : {
 
     },
     "You've finished reading this article" : {

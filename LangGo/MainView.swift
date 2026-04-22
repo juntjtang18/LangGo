@@ -57,17 +57,11 @@ struct MainView: View {
                     .tabItem { Label("Articles", systemImage: "text.alignleft") }
                     .tag(2)
 
-                AscentTabView(isSideMenuShowing: $isSideMenuShowing)
-                    .tabItem { Label("Ascent", systemImage: "person") }
-                    .tag(3)
-
-                NavigationStack {
-                    ProfileView(showsDismissButton: false) {
-                        authState = .loggedOut
-                    }
+                AscentTabView {
+                    isShowingProfileSheet = true
                 }
-                .tabItem { Label("Profile", systemImage: "person.crop.circle") }
-                .tag(4)
+                    .tabItem { Label("Ascent", systemImage: "chart.line.uptrend.xyaxis") }
+                    .tag(3)
             }
             .tint(Color.purple)
             

@@ -173,23 +173,27 @@ struct UserProfileUpdatePayload: Encodable {
     let reminder_enabled: Bool?
     let telephone: String?
     let bio: String?
+    let visible_on_ladder: Bool?
 
     init(
         baseLanguage: String,
         proficiency: String?,
         reminder_enabled: Bool?,
         telephone: String? = nil,
-        bio: String? = nil
+        bio: String? = nil,
+        visible_on_ladder: Bool? = nil
     ) {
         self.baseLanguage = baseLanguage
         self.proficiency = proficiency
         self.reminder_enabled = reminder_enabled
         self.telephone = telephone
         self.bio = bio
+        self.visible_on_ladder = visible_on_ladder
     }
 
     enum CodingKeys: String, CodingKey {
         case baseLanguage, proficiency, telephone
+        case visible_on_ladder
         case reminder_enabled = "reminder_enabled"
         case bio = "Bio"
     }
@@ -201,6 +205,7 @@ struct UserProfileUpdatePayload: Encodable {
         try container.encodeIfPresent(reminder_enabled, forKey: .reminder_enabled)
         try container.encodeIfPresent(telephone, forKey: .telephone)
         try container.encodeIfPresent(bio, forKey: .bio)
+        try container.encodeIfPresent(visible_on_ladder, forKey: .visible_on_ladder)
     }
 }
 

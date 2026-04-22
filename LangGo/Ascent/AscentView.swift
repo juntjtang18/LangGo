@@ -1,29 +1,20 @@
 import SwiftUI
 
 struct AscentTabView: View {
-    @Binding var isSideMenuShowing: Bool
+    let onShowProfile: () -> Void
 
     var body: some View {
         NavigationStack {
-            AscentView()
+            AscentView(onShowProfile: onShowProfile)
                 .navigationTitle("")
                 .toolbarBackground(.hidden, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            withAnimation(.easeInOut) { isSideMenuShowing.toggle() }
-                        } label: {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.title3)
-                                .foregroundColor(.primary)
-                        }
-                    }
-                }
         }
     }
 }
 
 struct AscentView: View {
+    let onShowProfile: () -> Void
+    @StateObject private var userSession = UserSessionManager.shared
     @State private var isShowingLeaderboard = false
 
     private let statCards: [AscentStatCard] = [
@@ -93,10 +84,25 @@ struct AscentView: View {
 
                 Spacer(minLength: metrics.compactSpacing)
 
-                Image(systemName: "gearshape")
-                    .font(.system(size: metrics.heroIconFont, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
+                Button {
+                    onShowProfile()
+                } label: {
+                    VStack(spacing: metrics.profileButtonSpacing) {
+                        AscentProfileAvatarView(
+                            imageURL: resolvedMediaURL(from: userSession.currentUser?.user_profile?.avatar_img?.data?.attributes.url),
+                            initials: profileInitials,
+                            metrics: metrics
+                        )
+
+                        Text("Profile")
+                            .font(.system(size: metrics.profileLabelFont, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(minWidth: metrics.profileTapWidth, minHeight: metrics.profileTapHeight)
                     .padding(.top, metrics.heroIconTopPadding)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
 
             VStack(alignment: .leading, spacing: metrics.cardInnerSpacing) {
@@ -201,6 +207,22 @@ struct AscentView: View {
             }
         }
     }
+
+    private var profileInitials: String {
+        let username = userSession.currentUser?.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = (username?.isEmpty == false ? username : UserDefaults.standard.string(forKey: "username")) ?? "LG"
+        let words = source
+            .split(whereSeparator: { $0 == " " || $0 == "_" || $0 == "-" })
+            .map(String.init)
+
+        if words.count >= 2 {
+            let first = words[0].prefix(1)
+            let second = words[1].prefix(1)
+            return String(first + second).uppercased()
+        }
+
+        return String(source.prefix(2)).uppercased()
+    }
 }
 
 private struct AscentStatCard: Identifiable {
@@ -242,12 +264,13 @@ private struct AscentMetrics {
 
     let titleFont: CGFloat
     let subtitleFont: CGFloat
-    let heroIconFont: CGFloat
     let pointsLabelFont: CGFloat
     let pointsFont: CGFloat
     let rankFont: CGFloat
     let rankBadgeFont: CGFloat
     let leaderboardButtonFont: CGFloat
+    let profileInitialsFont: CGFloat
+    let profileLabelFont: CGFloat
     let sectionLabelFont: CGFloat
     let viewAllFont: CGFloat
     let statTitleFont: CGFloat
@@ -261,6 +284,10 @@ private struct AscentMetrics {
     let heroCornerRadius: CGFloat
     let heroSpacing: CGFloat
     let heroIconTopPadding: CGFloat
+    let profileButtonSpacing: CGFloat
+    let profileButtonSize: CGFloat
+    let profileTapWidth: CGFloat
+    let profileTapHeight: CGFloat
     let pointsCardPadding: CGFloat
     let cardCornerRadius: CGFloat
     let innerCornerRadius: CGFloat
@@ -294,39 +321,78 @@ private struct AscentMetrics {
         textTightSpacing = scaled(3)
 
         titleFont = scaled(31)
-        subtitleFont = scaled(13.5)
-        heroIconFont = scaled(15)
-        pointsLabelFont = scaled(12)
+        subtitleFont = scaled(21)
+        pointsLabelFont = scaled(20.5)
         pointsFont = scaled(31)
         rankFont = scaled(28)
-        rankBadgeFont = scaled(11)
-        leaderboardButtonFont = scaled(15)
-        sectionLabelFont = scaled(12.5)
-        viewAllFont = scaled(12.5)
-        statTitleFont = scaled(13)
-        statValueFont = scaled(16)
-        statIconFont = scaled(11)
+        rankBadgeFont = scaled(18.5)
+        leaderboardButtonFont = scaled(22)
+        profileInitialsFont = scaled(22)
+        profileLabelFont = scaled(18.5)
+        sectionLabelFont = scaled(19.5)
+        viewAllFont = scaled(19.5)
+        statTitleFont = scaled(20)
+        statValueFont = scaled(23)
+        statIconFont = scaled(17.5)
         achievementEmojiFont = scaled(24)
-        achievementTitleFont = scaled(12.5)
-        achievementSubtitleFont = scaled(10.5)
+        achievementTitleFont = scaled(19)
+        achievementSubtitleFont = scaled(17.5)
 
         heroPadding = scaled(16)
         heroCornerRadius = scaled(18)
         heroSpacing = scaled(14)
-        heroIconTopPadding = scaled(2)
+        heroIconTopPadding = scaled(1)
+        profileButtonSpacing = scaled(6)
+        profileButtonSize = scaled(50)
+        profileTapWidth = scaled(78)
+        profileTapHeight = scaled(74)
         pointsCardPadding = scaled(12)
         cardCornerRadius = scaled(16)
         innerCornerRadius = scaled(10)
         cardInnerSpacing = scaled(10)
         badgeSpacing = scaled(6)
-        rankBadgeHorizontalPadding = scaled(8)
-        rankBadgeVerticalPadding = scaled(4)
-        leaderboardButtonVerticalPadding = scaled(10)
+        rankBadgeHorizontalPadding = scaled(10)
+        rankBadgeVerticalPadding = scaled(6)
+        leaderboardButtonVerticalPadding = scaled(12)
         statCardPadding = scaled(12)
-        statIconCircle = scaled(18)
-        statCardHeight = scaled(66)
-        achievementCardPadding = scaled(10)
-        achievementCardHeight = scaled(80)
+        statIconCircle = scaled(22)
+        statCardHeight = scaled(78)
+        achievementCardPadding = scaled(12)
+        achievementCardHeight = scaled(90)
+    }
+}
+
+private struct AscentProfileAvatarView: View {
+    let imageURL: URL?
+    let initials: String
+    let metrics: AscentMetrics
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white, Color.white.opacity(0.92)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: metrics.profileButtonSize, height: metrics.profileButtonSize)
+
+            if let imageURL {
+                CachedAsyncImage(url: imageURL, contentMode: .fill)
+                    .frame(width: metrics.profileButtonSize, height: metrics.profileButtonSize)
+                    .clipShape(Circle())
+            } else {
+                Text(initials)
+                    .font(.system(size: metrics.profileInitialsFont, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Color(red: 0.36, green: 0.24, blue: 0.94))
+            }
+        }
+        .overlay(
+            Circle()
+                .stroke(Color.white.opacity(0.40), lineWidth: 1)
+        )
     }
 }
 
@@ -400,6 +466,14 @@ private struct AscentAchievementCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
     }
+}
+
+private func resolvedMediaURL(from rawURL: String?) -> URL? {
+    guard let rawURL, !rawURL.isEmpty else { return nil }
+    if rawURL.hasPrefix("http://") || rawURL.hasPrefix("https://") {
+        return URL(string: rawURL)
+    }
+    return URL(string: "\(Config.strapiBaseUrl)\(rawURL)")
 }
 
 private struct AscentLeaderboardSheet: View {
@@ -549,6 +623,6 @@ private struct AscentLeaderboardRow: View {
 
 #Preview {
     NavigationStack {
-        AscentView()
+        AscentView(onShowProfile: {})
     }
 }

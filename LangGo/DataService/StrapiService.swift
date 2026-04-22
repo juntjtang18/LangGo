@@ -87,24 +87,46 @@ class StrapiService {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
         let payload = UserProfileUpdatePayload(baseLanguage: languageCode, proficiency: nil, reminder_enabled: nil)
         let body = UserProfileUpdatePayloadWrapper(data: payload)
-        let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
-        UserProfileCache.invalidate(using: cacheService)
+        try await CacheMutation.perform(
+            remoteWrite: {
+                let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
+            },
+            applyLocalSuccess: {
+                await UserProfileCache.patchCurrentUserProfile(using: self.cacheService) { existingProfile in
+                    UserProfileCache.mergeProfile(from: existingProfile, applying: payload)
+                }
+            }
+        )
     }
 
     func updateUserProfile(userId: Int, payload: UserProfileUpdatePayload) async throws {
         logger.debug("StrapiService: Updating user profile for user ID: \(userId).")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
         let body = UserProfileUpdatePayloadWrapper(data: payload)
-        let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
-        UserProfileCache.invalidate(using: cacheService)
+        try await CacheMutation.perform(
+            remoteWrite: {
+                let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
+            },
+            applyLocalSuccess: {
+                await UserProfileCache.patchCurrentUserProfile(using: self.cacheService) { existingProfile in
+                    UserProfileCache.mergeProfile(from: existingProfile, applying: payload)
+                }
+            }
+        )
     }
 
     func updateUserAvatarImage(mediaId: Int) async throws {
         logger.debug("StrapiService: Updating avatar image.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine") else { throw URLError(.badURL) }
         let body = UserAvatarUpdatePayloadWrapper(data: UserAvatarUpdatePayload(avatarImageId: mediaId))
-        let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
-        UserProfileCache.invalidate(using: cacheService)
+        try await CacheMutation.perform(
+            remoteWrite: {
+                let _: EmptyResponse = try await NetworkManager.shared.put(to: url, body: body)
+            },
+            applyLocalSuccess: {
+                UserProfileCache.invalidate(using: self.cacheService)
+            }
+        )
     }
 
     func uploadUserAvatarImage(
@@ -115,14 +137,22 @@ class StrapiService {
         logger.debug("StrapiService: Uploading avatar image.")
         guard let uploadURL = URL(string: "\(Config.strapiBaseUrl)/api/user-profiles/mine/avatar") else { throw URLError(.badURL) }
 
-        let response: StrapiSingleResponse<StrapiData<UserProfileAttributes>> = try await NetworkManager.shared.uploadMultipart(
-            to: uploadURL,
-            fileData: imageData,
-            fieldName: "avatar",
-            fileName: fileName,
-            mimeType: mimeType
+        let response: StrapiSingleResponse<StrapiData<UserProfileAttributes>> = try await CacheMutation.perform(
+            remoteWrite: {
+                try await NetworkManager.shared.uploadMultipart(
+                    to: uploadURL,
+                    fileData: imageData,
+                    fieldName: "avatar",
+                    fileName: fileName,
+                    mimeType: mimeType
+                ) as StrapiSingleResponse<StrapiData<UserProfileAttributes>>
+            },
+            applyLocalSuccess: { response in
+                await UserProfileCache.patchCurrentUserProfile(using: self.cacheService) { _ in
+                    response.data.attributes
+                }
+            }
         )
-        UserProfileCache.invalidate(using: cacheService)
         return response.data.attributes
     }
 
@@ -135,6 +165,17 @@ class StrapiService {
             "passwordConfirmation": confirmNewPassword
         ]
         return try await NetworkManager.shared.post(to: url, body: body)
+    }
+
+    func deleteCurrentUserAccount(currentPassword: String) async throws {
+        logger.debug("StrapiService: Deleting current user account.")
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/users/me") else { throw URLError(.badURL) }
+        try await NetworkManager.shared.delete(
+            at: url,
+            headers: ["X-Account-Delete-Password": currentPassword]
+        )
+        invalidateAllUserCaches()
+        UserProfileCache.invalidate(using: cacheService)
     }
 
     // MARK: - Flashcard & Review

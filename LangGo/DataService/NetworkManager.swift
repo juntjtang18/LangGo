@@ -98,6 +98,11 @@ class NetworkManager {
         let _: EmptyResponse = try await performRequest(url: url, method: "DELETE")
     }
 
+    /// Performs a DELETE request with additional headers, expecting an empty response.
+    func delete(at url: URL, headers: [String: String]) async throws {
+        let _: EmptyResponse = try await performRequest(url: url, method: "DELETE", headers: headers)
+    }
+
     /// Uploads a single multipart file and decodes the response.
     func uploadMultipart<ResponseBody: Decodable>(
         to url: URL,
@@ -127,7 +132,12 @@ class NetworkManager {
     // MARK: - Private Core Request Function
 
     /// Generic function to perform any HTTP request, handle authentication, errors, and decoding.
-    private func performRequest<ResponseBody: Decodable, RequestBody: Encodable>(url: URL, method: String, body: RequestBody? = nil) async throws -> ResponseBody {
+    private func performRequest<ResponseBody: Decodable, RequestBody: Encodable>(
+        url: URL,
+        method: String,
+        body: RequestBody? = nil,
+        headers: [String: String] = [:]
+    ) async throws -> ResponseBody {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -140,6 +150,10 @@ class NetworkManager {
         
         if let body = body {
             request.httpBody = try encoder.encode(body)
+        }
+
+        for (headerField, value) in headers {
+            request.setValue(value, forHTTPHeaderField: headerField)
         }
 
         // --- NEW REQUEST LOG ---
@@ -193,6 +207,15 @@ class NetworkManager {
     private func performRequest<ResponseBody: Decodable>(url: URL, method: String) async throws -> ResponseBody {
         let emptyBody: EmptyPayload? = nil
         return try await performRequest(url: url, method: method, body: emptyBody)
+    }
+
+    private func performRequest<ResponseBody: Decodable>(
+        url: URL,
+        method: String,
+        headers: [String: String]
+    ) async throws -> ResponseBody {
+        let emptyBody: EmptyPayload? = nil
+        return try await performRequest(url: url, method: method, body: emptyBody, headers: headers)
     }
 
     private func performMultipartRequest<ResponseBody: Decodable>(
