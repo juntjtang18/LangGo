@@ -1,8 +1,10 @@
 import SwiftUI
 import AVFoundation
+import os
 
 struct HomeView: View {
     @Binding var selectedTab: Int
+    @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var flashcardViewModel = FlashcardViewModel()
     @StateObject private var vocabookViewModel = VocabookViewModel()
@@ -16,53 +18,17 @@ struct HomeView: View {
     @State private var isPreparingBookMode = false
     @State private var placeholderMessage: String?
     @State private var cameraAccessMessage: String?
+    @State private var userPoints: MyUserPointsAttributes?
+    @State private var hasLoadedUserPoints = false
+    @State private var flashcardStatistics: StrapiStatistics?
+    @State private var hasLoadedFlashcardStatistics = false
+    @State private var nextFlashcardStatisticsFetchAt: Date?
+    @State private var myPointGroup: MyPointGroupData?
+    @State private var hasLoadedPointGroup = false
+    @State private var pointGroupLeaderboard: PointGroupLeaderboardData?
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
-
-    private let summaryCards: [HomeSummaryCard] = [
-        .init(
-            title: "Points",
-            value: "2.8k",
-            delta: "+124",
-            subtitle: "Beat 99%",
-            icon: "trophy",
-            background: Color(red: 1.00, green: 0.95, blue: 0.84),
-            accent: Color(red: 0.95, green: 0.57, blue: 0.11)
-        ),
-        .init(
-            title: "Words",
-            value: "156",
-            delta: "+18",
-            subtitle: "of 342",
-            icon: "globe",
-            background: Color(red: 0.90, green: 0.95, blue: 1.00),
-            accent: Color(red: 0.21, green: 0.42, blue: 0.94)
-        ),
-        .init(
-            title: "Articles",
-            value: "12",
-            delta: "+2",
-            subtitle: "89 words",
-            icon: "chart.bar",
-            background: Color(red: 0.96, green: 0.92, blue: 1.00),
-            accent: Color(red: 0.66, green: 0.34, blue: 0.95)
-        )
-    ]
-
-    private let leaderboardEntries: [LeaderboardEntry] = [
-        .init(rank: 1, name: "Sarah Chen", score: "5,234", medal: "🥇", isCurrentUser: false),
-        .init(rank: 2, name: "Mike Johnson", score: "4,892", medal: "🥈", isCurrentUser: false),
-        .init(rank: 3, name: "Emma Davis", score: "4,156", medal: "🥉", isCurrentUser: false),
-        .init(rank: 4, name: "Alex Kim", score: "3,721", medal: nil, isCurrentUser: false),
-        .init(rank: 5, name: "Lisa Wang", score: "3,298", medal: nil, isCurrentUser: false),
-        .init(rank: 6, name: "David Park", score: "3,102", medal: nil, isCurrentUser: false),
-        .init(rank: 7, name: "Maria Garcia", score: "2,956", medal: nil, isCurrentUser: false),
-        .init(rank: 8, name: "You", score: "2,847", medal: nil, isCurrentUser: true),
-        .init(rank: 9, name: "James Wilson", score: "2,734", medal: nil, isCurrentUser: false),
-        .init(rank: 10, name: "Nina Patel", score: "2,621", medal: nil, isCurrentUser: false),
-        .init(rank: 11, name: "Chris Lee", score: "2,518", medal: nil, isCurrentUser: false),
-        .init(rank: 12, name: "Sophie Brown", score: "2,401", medal: nil, isCurrentUser: false)
-    ]
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "HomeView")
 
     var body: some View {
         GeometryReader { proxy in
@@ -78,6 +44,11 @@ struct HomeView: View {
                         .frame(height: metrics.afterGreetingSpacing)
 
                     summaryCardsView(metrics: metrics)
+
+                    Spacer()
+                        .frame(height: metrics.afterSummarySpacing)
+
+                    leaderboardBanner(metrics: metrics)
 
                     Spacer()
                         .frame(height: metrics.beforeReviewSectionSpacing)
@@ -175,6 +146,12 @@ struct HomeView: View {
                 }
             )
         }
+        .fullScreenCover(isPresented: $isShowingLeaderboard) {
+            LeaderboardSheet(
+                leaderboard: resolvedPointGroupLeaderboard,
+                userPoints: resolvedUserPoints
+            )
+        }
         .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
             Button("OK", role: .cancel) {
                 cameraAccessMessage = nil
@@ -188,6 +165,35 @@ struct HomeView: View {
             }
         } message: {
             Text(placeholderMessage ?? "")
+        }
+        .task {
+            await loadUserPointsIfNeeded()
+            await loadFlashcardStatisticsIfNeeded()
+            await loadPointGroupIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flashcardsDidChange)) { _ in
+            Task {
+                await refreshFlashcardStatistics()
+            }
+        }
+        .task(id: nextFlashcardStatisticsFetchAt) {
+            guard let nextFetchAt = nextFlashcardStatisticsFetchAt else { return }
+
+            let delay = nextFetchAt.timeIntervalSinceNow
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+
+            guard !Task.isCancelled else { return }
+            guard scenePhase == .active else { return }
+
+            await refreshFlashcardStatistics()
+        }
+        .onChange(of: scenePhase) { newPhase in
+            guard newPhase == .active else { return }
+            Task {
+                await refreshFlashcardStatistics()
+            }
         }
     }
 
@@ -212,21 +218,160 @@ struct HomeView: View {
 
     private func summaryCardsView(metrics: HomeMetrics) -> some View {
         HStack(spacing: metrics.summaryCardGap) {
-            ForEach(summaryCards) { card in
-                SummaryCardView(card: card, metrics: metrics)
-            }
+            HomeRankPointsCard(metrics: metrics, userPoints: resolvedUserPoints)
+                .frame(maxWidth: .infinity)
+
+            HomeArticlesCard(metrics: metrics, userPoints: resolvedUserPoints)
+                .frame(width: metrics.articleSummaryWidth)
         }
+    }
+
+    private func leaderboardBanner(metrics: HomeMetrics) -> some View {
+        let iconSize = metrics.bannerHeight * 0.54
+        let medalCircleSize = metrics.bannerHeight * 0.62
+        let dividerHeight = metrics.bannerHeight * 0.56
+        let trailingCircleSize = metrics.bannerHeight * 0.50
+        let contentVerticalPadding = metrics.bannerHeight * 0.18
+        let isEnabled = isLeaderboardBannerEnabled
+
+        return Button {
+            guard isEnabled else { return }
+            Task {
+                await openLeaderboard()
+            }
+        } label: {
+            HStack(spacing: 0) {
+                if isEnabled {
+                    HStack(spacing: metrics.bannerInnerGap) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.26))
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.24), lineWidth: 1)
+                                )
+
+                            Image(systemName: "medal.star")
+                                .font(.system(size: iconSize, weight: .semibold))
+                                .foregroundStyle(Color(red: 0.93, green: 0.56, blue: 0.08))
+                        }
+                        .frame(width: medalCircleSize, height: medalCircleSize)
+
+                        HStack(spacing: metrics.bannerTitleGap) {
+                            Text(pointGroupBannerTitle)
+                                .font(.system(size: metrics.bannerTextFont, weight: .heavy, design: .rounded))
+                                .foregroundStyle(Color(red: 0.55, green: 0.25, blue: 0.03))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+
+                            Text(pointGroupPositionText)
+                                .font(.system(size: metrics.bannerPositionFont, weight: .heavy, design: .rounded))
+                                .foregroundStyle(Color(red: 0.76, green: 0.35, blue: 0.02))
+                                .lineLimit(1)
+                        }
+
+                        if let chipText = pointGroupBannerChangeText {
+                            Text(chipText)
+                                .font(.system(size: metrics.bannerChipFont, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, metrics.bannerChipHorizontalPadding)
+                                .padding(.vertical, metrics.bannerChipVerticalPadding)
+                                .background(
+                                    Capsule()
+                                        .fill(pointGroupBannerChangeBackground)
+                                )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Rectangle()
+                        .fill(Color(red: 0.92, green: 0.80, blue: 0.55))
+                        .frame(width: 1, height: dividerHeight)
+                        .padding(.horizontal, metrics.bannerInnerGap)
+                }
+
+                HStack(spacing: metrics.bannerInnerGap * 0.7) {
+                    if !isEnabled {
+                        Spacer(minLength: 0)
+                    }
+
+                    Text("View Leaderboard")
+                        .font(.system(size: metrics.bannerLinkFont, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            isEnabled
+                            ? Color(red: 0.60, green: 0.29, blue: 0.04)
+                            : Color(red: 0.46, green: 0.48, blue: 0.53)
+                        )
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: metrics.bannerChevronFont + 1, weight: .bold))
+                        .foregroundStyle(
+                            isEnabled
+                            ? Color(red: 0.93, green: 0.56, blue: 0.08)
+                            : Color(red: 0.58, green: 0.60, blue: 0.65)
+                        )
+
+                    if !isEnabled {
+                        Spacer(minLength: 0)
+                    }
+                }
+                .frame(maxWidth: isEnabled ? nil : .infinity)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: metrics.bannerHeight)
+            .padding(.horizontal, metrics.bannerHorizontalPadding)
+            .padding(.vertical, contentVerticalPadding)
+            .background(
+                LinearGradient(
+                    colors: isEnabled
+                    ? [
+                        Color(red: 0.98, green: 0.93, blue: 0.77),
+                        Color(red: 0.95, green: 0.87, blue: 0.60)
+                    ]
+                    : [
+                        Color(red: 0.94, green: 0.94, blue: 0.95),
+                        Color(red: 0.89, green: 0.90, blue: 0.92)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: metrics.bannerCornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: metrics.bannerCornerRadius, style: .continuous)
+                    .stroke(
+                        isEnabled
+                        ? Color(red: 0.93, green: 0.69, blue: 0.12)
+                        : Color(red: 0.82, green: 0.83, blue: 0.86),
+                        lineWidth: 1.4
+                    )
+            )
+            .shadow(
+                color: (
+                    isEnabled
+                    ? Color(red: 0.80, green: 0.58, blue: 0.09).opacity(0.16)
+                    : Color.black.opacity(0.04)
+                ),
+                radius: metrics.bannerShadowRadius,
+                y: metrics.bannerShadowY
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
     }
 
     private func reviewCard(metrics: HomeMetrics) -> some View {
         VStack(alignment: .leading, spacing: metrics.reviewContentGap) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: metrics.reviewTitleGap) {
-                    Text("Words Due")
+                    Text("Total Words")
                         .font(.system(size: metrics.reviewLabelFont, weight: .semibold, design: .rounded))
                         .foregroundStyle(Color.white)
 
-                    Text("47")
+                    Text(formatNumber(resolvedFlashcardStatistics.totalCards))
                         .font(.system(size: metrics.reviewCountFont, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color.white)
                         .lineLimit(1)
@@ -246,9 +391,8 @@ struct HomeView: View {
             }
 
             VStack(spacing: metrics.reviewRowsGap) {
-                ReviewStatusRow(label: "Overdue", value: "8", icon: "exclamationmark.triangle.fill", metrics: metrics)
-                ReviewStatusRow(label: "Due Now", value: "24", icon: nil, metrics: metrics)
-                ReviewStatusRow(label: "Due Later Today", value: "15", icon: nil, metrics: metrics)
+                ReviewStatusRow(label: "Due", value: formatNumber(resolvedFlashcardStatistics.dueForReview), icon: nil, metrics: metrics)
+                ReviewStatusRow(label: "Remembered", value: formatNumber(resolvedFlashcardStatistics.remembered), icon: nil, metrics: metrics)
             }
             .padding(.horizontal, metrics.reviewPanelHorizontalPadding)
             .padding(.vertical, metrics.reviewPanelVerticalPadding)
@@ -446,6 +590,147 @@ struct HomeView: View {
             cameraAccessMessage = "Camera access is unavailable right now."
         }
     }
+
+    private var resolvedUserPoints: MyUserPointsAttributes {
+        userPoints ?? .empty
+    }
+
+    private var resolvedFlashcardStatistics: StrapiStatistics {
+        flashcardStatistics ?? StrapiStatistics(
+            totalCards: 0,
+            remembered: 0,
+            dueForReview: 0,
+            reviewed: 0,
+            hardToRemember: 0,
+            byTier: [],
+            nextFetchAt: nil,
+            batchWindowMinutes: nil
+        )
+    }
+
+    private var resolvedPointGroupLeaderboard: PointGroupLeaderboardData {
+        pointGroupLeaderboard ?? PointGroupLeaderboardData(
+            pointGroup: myPointGroup?.pointGroup,
+            currentUserPosition: myPointGroup?.myMembership.positionInGroup,
+            groupMemberCount: myPointGroup?.myMembership.groupMemberCount ?? 0,
+            leaderboard: myPointGroup?.leaderboard ?? []
+        )
+    }
+
+    private var pointGroupBannerTitle: String {
+        if let groupRankName = myPointGroup?.pointGroup?.groupRank?.title, !groupRankName.isEmpty {
+            return groupRankName
+        }
+        return "No Group Yet"
+    }
+
+    private var pointGroupPositionText: String {
+        if let position = myPointGroup?.myMembership.positionInGroup {
+            return "#\(position)"
+        }
+        return "#—"
+    }
+
+    private var pointGroupBannerSubtitle: String {
+        let membership = myPointGroup?.myMembership
+        guard let position = membership?.positionInGroup, let total = membership?.groupMemberCount, total > 0 else {
+            return "Tap to open leaderboard"
+        }
+        return "\(total) learners in your group"
+    }
+
+    private var pointGroupBannerChangeText: String? {
+        let change = resolvedUserPoints.group_rank_change
+        if change > 0 {
+            return "↑ \(change)"
+        }
+        if change < 0 {
+            return "↓ \(abs(change))"
+        }
+        return "—"
+    }
+
+    private var pointGroupBannerChangeBackground: Color {
+        let change = resolvedUserPoints.group_rank_change
+        if change > 0 {
+            return Color(red: 0.22, green: 0.79, blue: 0.37)
+        }
+        if change < 0 {
+            return Color(red: 0.91, green: 0.32, blue: 0.25)
+        }
+        return Color(red: 0.66, green: 0.67, blue: 0.72)
+    }
+
+    private var isLeaderboardBannerEnabled: Bool {
+        myPointGroup?.pointGroup?.id != nil
+    }
+
+    private var baseLanguageLocale: String {
+        UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
+    }
+
+    private func loadUserPointsIfNeeded() async {
+        guard !hasLoadedUserPoints else { return }
+        hasLoadedUserPoints = true
+
+        do {
+            userPoints = try await DataServices.shared.authService.fetchMyUserPoints(locale: baseLanguageLocale)
+        } catch {
+            logger.error("Failed to fetch user points: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func loadFlashcardStatisticsIfNeeded() async {
+        guard !hasLoadedFlashcardStatistics else { return }
+        hasLoadedFlashcardStatistics = true
+
+        await refreshFlashcardStatistics()
+    }
+
+    private func refreshFlashcardStatistics() async {
+        do {
+            let statistics = try await DataServices.shared.flashcardService.fetchFlashcardStatistics()
+            flashcardStatistics = statistics
+            nextFlashcardStatisticsFetchAt = nextFlashcardStatisticsFetchDate(from: statistics)
+        } catch {
+            logger.error("Failed to fetch flashcard statistics: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func nextFlashcardStatisticsFetchDate(from statistics: StrapiStatistics) -> Date? {
+        guard statistics.dueForReview == 0 else {
+            return nil
+        }
+
+        guard let nextFetchAt = statistics.nextFetchAt else {
+            return nil
+        }
+
+        return ISO8601DateFormatter().date(from: nextFetchAt)
+    }
+
+    private func loadPointGroupIfNeeded() async {
+        guard !hasLoadedPointGroup else { return }
+        hasLoadedPointGroup = true
+
+        do {
+            myPointGroup = try await DataServices.shared.authService.fetchMyPointGroup(locale: baseLanguageLocale)
+        } catch {
+            logger.error("Failed to fetch point group: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func openLeaderboard() async {
+        if let pointGroupId = myPointGroup?.pointGroup?.id {
+            do {
+                pointGroupLeaderboard = try await DataServices.shared.authService.fetchPointGroupLeaderboard(pointGroupId: pointGroupId, locale: baseLanguageLocale)
+            } catch {
+                logger.error("Failed to fetch group leaderboard: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        isShowingLeaderboard = true
+    }
 }
 
 private struct HomeMetrics {
@@ -479,19 +764,25 @@ private struct HomeMetrics {
     let summarySubtitleFont: CGFloat
     let summaryTopGap: CGFloat
     let summaryValueGap: CGFloat
+    let articleSummaryWidth: CGFloat
 
     let bannerHeight: CGFloat
     let bannerCornerRadius: CGFloat
     let bannerHorizontalPadding: CGFloat
     let bannerInnerGap: CGFloat
+    let bannerIconCircle: CGFloat
     let bannerLeadingIconFont: CGFloat
     let bannerTextFont: CGFloat
     let bannerLinkFont: CGFloat
+    let bannerPositionFont: CGFloat
+    let bannerTitleGap: CGFloat
     let bannerChipFont: CGFloat
     let bannerChipHorizontalPadding: CGFloat
     let bannerChipVerticalPadding: CGFloat
     let bannerChevronFont: CGFloat
     let bannerMiddleSpacer: CGFloat
+    let bannerTextGap: CGFloat
+    let bannerStatusGap: CGFloat
     let bannerShadowRadius: CGFloat
     let bannerShadowY: CGFloat
 
@@ -567,8 +858,8 @@ private struct HomeMetrics {
         screenTopPadding = sy(18)
         screenBottomPadding = sy(22)
 
-        greetingFont = min(sx(28), sy(28)) + 2
-        sectionLabelFont = min(sx(13), sy(13)) + 3
+        greetingFont = min(sx(28), sy(28))
+        sectionLabelFont = min(sx(13), sy(13))
 
         afterGreetingSpacing = sy(18)
         afterSummarySpacing = sy(18)
@@ -582,27 +873,33 @@ private struct HomeMetrics {
         summaryCardCornerRadius = sx(12)
         summaryCardHorizontalPadding = sx(10)
         summaryCardVerticalPadding = sy(11)
-        summaryTitleFont = min(sx(10), sy(10.5)) + 6
+        summaryTitleFont = min(sx(10), sy(10.5)) + 3
         summaryIconFont = min(sx(10), sy(10.5)) + 2
         summaryValueFont = min(sx(28), sy(29))
         summaryDeltaFont = summaryTitleFont
         summarySubtitleFont = summaryTitleFont
         summaryTopGap = sy(7)
         summaryValueGap = sx(2)
+        articleSummaryWidth = sx(118)
 
-        bannerHeight = sy(31)
-        bannerCornerRadius = sx(11)
-        bannerHorizontalPadding = sx(10)
-        bannerInnerGap = sx(6)
-        bannerLeadingIconFont = min(sx(12), sy(12)) + 2
-        bannerTextFont = min(sx(13), sy(13)) + 2
-        bannerLinkFont = min(sx(11), sy(11.5)) + 2
-        bannerChipFont = min(sx(10), sy(10)) + 2
-        bannerChipHorizontalPadding = sx(8)
-        bannerChipVerticalPadding = sy(2)
-        bannerChevronFont = min(sx(10), sy(10)) + 2
-        bannerMiddleSpacer = sx(2)
-        bannerShadowRadius = sx(6)
+        bannerHeight = sy(50)
+        bannerCornerRadius = sx(17)
+        bannerHorizontalPadding = sx(16)
+        bannerInnerGap = sx(9)
+        bannerIconCircle = sx(0)
+        bannerLeadingIconFont = min(sx(15), sy(15)) + 2
+        bannerTextFont = min(sx(14), sy(14)) + 2
+        bannerLinkFont = min(sx(13), sy(13)) + 1
+        bannerPositionFont = min(sx(15), sy(15)) + 1
+        bannerTitleGap = sx(8)
+        bannerChipFont = min(sx(11), sy(11)) + 1
+        bannerChipHorizontalPadding = sx(10)
+        bannerChipVerticalPadding = sy(4)
+        bannerChevronFont = min(sx(11), sy(11)) + 1
+        bannerMiddleSpacer = sx(10)
+        bannerTextGap = sy(0)
+        bannerStatusGap = sy(0)
+        bannerShadowRadius = sx(5)
         bannerShadowY = sy(2)
 
         reviewCardCornerRadius = sx(13)
@@ -610,8 +907,8 @@ private struct HomeMetrics {
         reviewCardVerticalPadding = sy(16)
         reviewContentGap = sy(16)
         reviewTitleGap = sy(2)
-        reviewLabelFont = min(sx(14), sy(14)) + 2
-        reviewCountFont = min(sx(48), sy(50)) + 2
+        reviewLabelFont = min(sx(14), sy(14))
+        reviewCountFont = min(sx(28), sy(30))
         reviewIconCircle = sx(38)
         reviewIconFont = min(sx(18), sy(18)) + 2
         reviewPanelHorizontalPadding = sx(14)
@@ -658,17 +955,6 @@ private struct HomeMetrics {
     }
 }
 
-private struct HomeSummaryCard: Identifiable {
-    let id = UUID()
-    let title: String
-    let value: String
-    let delta: String
-    let subtitle: String
-    let icon: String
-    let background: Color
-    let accent: Color
-}
-
 private struct HomeActionItem: Identifiable {
     let id = UUID()
     let title: String
@@ -686,29 +972,31 @@ private struct BookModeConfig {
     let selectedPageId: Int
 }
 
-private struct SummaryCardView: View {
-    let card: HomeSummaryCard
+private struct HomeRankPointsCard: View {
     let metrics: HomeMetrics
+    let userPoints: MyUserPointsAttributes
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 4) {
-                Image(systemName: card.icon)
-                    .font(.system(size: metrics.summaryIconFont, weight: .bold))
-                Text(card.title)
-                    .font(.system(size: metrics.summaryTitleFont, weight: .semibold, design: .rounded))
+            HStack(spacing: 6) {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: metrics.summaryIconFont + 1, weight: .bold))
+                    .foregroundStyle(Color(red: 0.95, green: 0.57, blue: 0.11))
+
+                Text(rankText)
+                    .font(.system(size: metrics.summaryTitleFont, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.95, green: 0.57, blue: 0.11))
             }
-            .foregroundStyle(card.accent)
 
             Spacer()
                 .frame(height: metrics.summaryTopGap)
 
             HStack(alignment: .lastTextBaseline, spacing: metrics.summaryValueGap) {
-                Text(card.value)
+                Text(pointsText)
                     .font(.system(size: metrics.summaryValueFont, weight: .heavy, design: .rounded))
                     .foregroundStyle(Color(red: 0.22, green: 0.24, blue: 0.32))
 
-                Text(card.delta)
+                Text(pointsDeltaText)
                     .font(.system(size: metrics.summaryDeltaFont, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(red: 0.15, green: 0.69, blue: 0.31))
             }
@@ -716,18 +1004,100 @@ private struct SummaryCardView: View {
             Spacer()
                 .frame(height: 3)
 
-            Text(card.subtitle)
-                .font(.system(size: metrics.summarySubtitleFont, weight: .semibold, design: .rounded))
-                .foregroundStyle(card.accent)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "character.book.closed.fill")
+                    .font(.system(size: metrics.summaryIconFont, weight: .bold))
+                    .foregroundStyle(Color(red: 0.21, green: 0.42, blue: 0.94))
+
+                Text(wordsText)
+                    .font(.system(size: metrics.summarySubtitleFont, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.21, green: 0.42, blue: 0.94))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                Text(wordsDeltaText)
+                    .font(.system(size: metrics.summarySubtitleFont, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.15, green: 0.69, blue: 0.31))
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, metrics.summaryCardHorizontalPadding)
+        .padding(.vertical, metrics.summaryCardVerticalPadding)
+        .background(Color(red: 1.00, green: 0.95, blue: 0.84))
+        .clipShape(RoundedRectangle(cornerRadius: metrics.summaryCardCornerRadius, style: .continuous))
+    }
+
+    private var rankText: String {
+        if let rankText = userPoints.rankText?.trimmingCharacters(in: .whitespacesAndNewlines), !rankText.isEmpty {
+            return rankText
+        }
+        return userPoints.rank > 0 ? "#\(userPoints.rank)" : "Unranked"
+    }
+
+    private var pointsText: String {
+        formatNumber(userPoints.points)
+    }
+
+    private var pointsDeltaText: String {
+        formatDelta(userPoints.points_add)
+    }
+
+    private var wordsText: String {
+        formatNumber(userPoints.word_count)
+    }
+
+    private var wordsDeltaText: String {
+        formatDelta(userPoints.word_add)
+    }
+}
+
+private struct HomeArticlesCard: View {
+    let metrics: HomeMetrics
+    let userPoints: MyUserPointsAttributes
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: metrics.summaryIconFont + 1, weight: .bold))
+                Text("Articles")
+                    .font(.system(size: metrics.summaryTitleFont, weight: .semibold, design: .rounded))
+            }
+            .foregroundStyle(Color(red: 0.66, green: 0.34, blue: 0.95))
+
+            Spacer()
+                .frame(height: metrics.summaryTopGap)
+
+            Text(formatNumber(userPoints.article_count))
+                .font(.system(size: metrics.summaryValueFont, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 0.22, green: 0.24, blue: 0.32))
+
+            Spacer()
+                .frame(height: 3)
+
+            Text(formatDelta(userPoints.article_add))
+                .font(.system(size: metrics.summarySubtitleFont, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.15, green: 0.69, blue: 0.31))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, metrics.summaryCardHorizontalPadding)
         .padding(.vertical, metrics.summaryCardVerticalPadding)
-        .background(card.background)
+        .background(Color(red: 0.96, green: 0.92, blue: 1.00))
         .clipShape(RoundedRectangle(cornerRadius: metrics.summaryCardCornerRadius, style: .continuous))
     }
+}
+
+private func formatNumber(_ value: Int) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+}
+
+private func formatDelta(_ value: Int) -> String {
+    value >= 0 ? "+\(value)" : "\(value)"
 }
 
 private struct ReviewStatusRow: View {
@@ -810,19 +1180,10 @@ private struct ArticleTag: View {
     }
 }
 
-private struct LeaderboardEntry: Identifiable {
-    let rank: Int
-    let name: String
-    let score: String
-    let medal: String?
-    let isCurrentUser: Bool
-
-    var id: Int { rank }
-}
-
 private struct LeaderboardSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let entries: [LeaderboardEntry]
+    let leaderboard: PointGroupLeaderboardData
+    let userPoints: MyUserPointsAttributes
 
     var body: some View {
         NavigationStack {
@@ -832,7 +1193,7 @@ private struct LeaderboardSheet: View {
                         Text("Leaderboard")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
-                        Text("1,243 learners")
+                        Text(groupSubtitle)
                             .font(.system(size: 18, weight: .medium, design: .rounded))
                             .foregroundStyle(Color(red: 0.47, green: 0.49, blue: 0.57))
                     }
@@ -858,15 +1219,15 @@ private struct LeaderboardSheet: View {
                 VStack(spacing: 0) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Your Score")
+                            Text(leaderboard.pointGroup?.groupRank?.title ?? "Your Group")
                                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                                 .foregroundStyle(Color(red: 0.53, green: 0.48, blue: 0.33))
 
                             HStack(alignment: .lastTextBaseline, spacing: 8) {
-                                Text("2,847")
+                                Text(formatNumber(userPoints.points))
                                     .font(.system(size: 44, weight: .heavy, design: .rounded))
                                     .foregroundStyle(Color(red: 0.15, green: 0.17, blue: 0.22))
-                                Text("+124")
+                                Text(formatDelta(userPoints.points_add))
                                     .font(.system(size: 18, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
                             }
@@ -879,17 +1240,17 @@ private struct LeaderboardSheet: View {
                                 Image(systemName: "medal.star.fill")
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundStyle(Color.orange)
-                                Text("#8")
+                                Text(positionText)
                                     .font(.system(size: 30, weight: .heavy, design: .rounded))
                                     .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
                             }
 
-                            Text("Up 4 spots")
+                            Text(movementText)
                                 .font(.system(size: 16, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
+                                .foregroundStyle(movementColor)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
-                                .background(Capsule().fill(Color(red: 0.89, green: 1.00, blue: 0.90)))
+                                .background(Capsule().fill(movementBackground))
                         }
                     }
                     .padding(20)
@@ -909,8 +1270,8 @@ private struct LeaderboardSheet: View {
 
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(entries) { entry in
-                                LeaderboardRow(entry: entry)
+                            ForEach(leaderboard.leaderboard) { member in
+                                LeaderboardRow(member: member)
                             }
                         }
                     }
@@ -919,19 +1280,64 @@ private struct LeaderboardSheet: View {
             .background(Color.white)
         }
     }
+
+    private var groupSubtitle: String {
+        let memberCount = leaderboard.groupMemberCount
+        if let groupNo = leaderboard.pointGroup?.groupNo {
+            return "Group \(groupNo) • \(memberCount) learners"
+        }
+        return "\(memberCount) learners"
+    }
+
+    private var positionText: String {
+        if let position = leaderboard.currentUserPosition {
+            return "#\(position)"
+        }
+        return "—"
+    }
+
+    private var movementText: String {
+        if userPoints.group_rank_change > 0 {
+            return "Up \(userPoints.group_rank_change) spots"
+        }
+        if userPoints.group_rank_change < 0 {
+            return "Down \(abs(userPoints.group_rank_change)) spots"
+        }
+        return "No change"
+    }
+
+    private var movementColor: Color {
+        if userPoints.group_rank_change > 0 {
+            return Color(red: 0.10, green: 0.67, blue: 0.30)
+        }
+        if userPoints.group_rank_change < 0 {
+            return Color(red: 0.82, green: 0.28, blue: 0.24)
+        }
+        return Color(red: 0.58, green: 0.50, blue: 0.24)
+    }
+
+    private var movementBackground: Color {
+        if userPoints.group_rank_change > 0 {
+            return Color(red: 0.89, green: 1.00, blue: 0.90)
+        }
+        if userPoints.group_rank_change < 0 {
+            return Color(red: 1.00, green: 0.92, blue: 0.92)
+        }
+        return Color(red: 0.99, green: 0.94, blue: 0.81)
+    }
 }
 
 private struct LeaderboardRow: View {
-    let entry: LeaderboardEntry
+    let member: PointGroupLeaderboardMember
 
     var body: some View {
         HStack(spacing: 12) {
-            if let medal = entry.medal {
+            if let medal = medalText {
                 Text(medal)
                     .font(.system(size: 24))
                     .frame(width: 30)
             } else {
-                Text("\(entry.rank)")
+                Text("\(member.position)")
                     .font(.system(size: 17, weight: .heavy, design: .rounded))
                     .foregroundStyle(Color(red: 0.42, green: 0.45, blue: 0.53))
                     .frame(width: 30, height: 30)
@@ -939,7 +1345,7 @@ private struct LeaderboardRow: View {
                     .clipShape(Circle())
             }
 
-            Text(entry.name)
+            Text(displayName)
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(Color(red: 0.27, green: 0.29, blue: 0.36))
 
@@ -948,19 +1354,32 @@ private struct LeaderboardRow: View {
             HStack(spacing: 6) {
                 Image(systemName: "waveform.path.ecg")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(entry.isCurrentUser ? Color.orange : Color(red: 0.63, green: 0.65, blue: 0.72))
-                Text(entry.score)
+                    .foregroundStyle(member.isCurrentUser ? Color.orange : Color(red: 0.63, green: 0.65, blue: 0.72))
+                Text(formatNumber(member.periodPoints))
                     .font(.system(size: 20, weight: .heavy, design: .rounded))
-                    .foregroundStyle(entry.isCurrentUser ? Color(red: 0.84, green: 0.45, blue: 0.12) : Color(red: 0.33, green: 0.36, blue: 0.44))
+                    .foregroundStyle(member.isCurrentUser ? Color(red: 0.84, green: 0.45, blue: 0.12) : Color(red: 0.33, green: 0.36, blue: 0.44))
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
-        .background(entry.isCurrentUser ? Color(red: 1.00, green: 0.98, blue: 0.90) : Color.white)
+        .background(member.isCurrentUser ? Color(red: 1.00, green: 0.98, blue: 0.90) : Color.white)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(entry.isCurrentUser ? Color(red: 0.95, green: 0.83, blue: 0.48) : Color.black.opacity(0.06))
+                .fill(member.isCurrentUser ? Color(red: 0.95, green: 0.83, blue: 0.48) : Color.black.opacity(0.06))
                 .frame(height: 1)
+        }
+    }
+
+    private var displayName: String {
+        member.user.username ?? member.user.email ?? "Unknown"
+    }
+
+    private var medalText: String? {
+        switch member.position {
+        case 1: return "🥇"
+        case 2: return "🥈"
+        case 3: return "🥉"
+        default: return nil
         }
     }
 }

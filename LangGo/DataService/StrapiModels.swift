@@ -297,9 +297,15 @@ struct StrapiStatistics: Codable {
     let totalCards: Int
     let remembered: Int
     let dueForReview: Int
-    let reviewed: Int
-    let hardToRemember: Int
+    let reviewed: Int?
+    let hardToRemember: Int?
     let byTier: [StrapiTierStat]
+    let nextFetchAt: String?
+    let batchWindowMinutes: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case totalCards, remembered, dueForReview, reviewed, hardToRemember, byTier, nextFetchAt, batchWindowMinutes
+    }
 }
 struct StrapiTierStat: Codable, Identifiable {
     let id: Int
@@ -310,13 +316,183 @@ struct StrapiTierStat: Codable, Identifiable {
     let cooldown_hours: Int
     let count: Int
     let dueCount: Int
-    let hardToRememberCount: Int
+    let hardToRememberCount: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, tier
         case displayName = "display_name"
         case min_streak, max_streak, cooldown_hours, count, dueCount, hardToRememberCount
     }
+}
+
+struct MyUserPointsResponse: Codable {
+    let data: MyUserPointsData?
+    let meta: StrapiMeta?
+}
+
+struct MyUserPointsData: Codable {
+    let id: Int?
+    let attributes: MyUserPointsAttributes
+}
+
+struct MyUserPointsAttributes: Codable {
+    let record_date: String?
+    let points: Int
+    let points_add: Int
+    let word_count: Int
+    let word_add: Int
+    let article_count: Int
+    let article_add: Int
+    let group_rank_change: Int
+    let rank: Int
+    let rank_change: Int
+    let rank_text: String?
+
+    var rankText: String? { rank_text }
+}
+
+extension MyUserPointsAttributes {
+    static let empty = MyUserPointsAttributes(
+        record_date: nil,
+        points: 0,
+        points_add: 0,
+        word_count: 0,
+        word_add: 0,
+        article_count: 0,
+        article_add: 0,
+        group_rank_change: 0,
+        rank: 0,
+        rank_change: 0,
+        rank_text: nil
+    )
+}
+
+struct MyPointGroupResponse: Codable {
+    let data: MyPointGroupData
+    let meta: StrapiMeta?
+}
+
+struct MyPointGroupData: Codable {
+    let pointGroup: PointGroupSummary?
+    let myMembership: MyPointGroupMembership
+    let leaderboard: [PointGroupLeaderboardMember]
+
+    enum CodingKeys: String, CodingKey {
+        case pointGroup = "point_group"
+        case myMembership = "my_membership"
+        case leaderboard
+    }
+}
+
+struct PointGroupLeaderboardResponse: Codable {
+    let data: PointGroupLeaderboardData
+    let meta: StrapiMeta?
+}
+
+struct PointGroupLeaderboardData: Codable {
+    let pointGroup: PointGroupSummary?
+    let currentUserPosition: Int?
+    let groupMemberCount: Int
+    let leaderboard: [PointGroupLeaderboardMember]
+
+    enum CodingKeys: String, CodingKey {
+        case pointGroup = "point_group"
+        case currentUserPosition = "current_user_position"
+        case groupMemberCount = "group_member_count"
+        case leaderboard
+    }
+}
+
+struct PointGroupSummary: Codable {
+    let id: Int
+    let groupNo: Int?
+    let groupRank: PointGroupRank?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case groupNo = "group_no"
+        case groupRank = "group_rank"
+    }
+}
+
+struct PointGroupRank: Codable {
+    let id: Int
+    let title: String?
+    let minPeriodPoints: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title
+        case minPeriodPoints = "min_period_points"
+    }
+}
+
+struct MyPointGroupMembership: Codable {
+    let userPointGroupId: Int?
+    let periodPoints: Int
+    let positionInGroup: Int?
+    let groupMemberCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case userPointGroupId = "user_point_group_id"
+        case periodPoints = "period_points"
+        case positionInGroup = "position_in_group"
+        case groupMemberCount = "group_member_count"
+    }
+}
+
+struct PointGroupLeaderboardMember: Codable, Identifiable {
+    let position: Int
+    let periodPoints: Int
+    let isCurrentUser: Bool
+    let userPointGroupId: Int?
+    let user: PointGroupLeaderboardUser
+
+    var id: Int {
+        userPointGroupId ?? position
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case position
+        case periodPoints = "period_points"
+        case isCurrentUser = "is_current_user"
+        case userPointGroupId = "user_point_group_id"
+        case user
+    }
+}
+
+struct PointGroupLeaderboardUser: Codable {
+    let id: Int?
+    let username: String?
+    let email: String?
+    let honorTitle: PointGroupHonorTitle?
+    let userProfile: PointGroupUserProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case id, username, email
+        case honorTitle = "honor_title"
+        case userProfile = "user_profile"
+    }
+}
+
+struct PointGroupHonorTitle: Codable {
+    let id: Int
+    let title: String?
+}
+
+struct PointGroupUserProfile: Codable {
+    let id: Int
+    let baseLanguage: String?
+    let avatarImage: PointGroupAvatarImage?
+
+    enum CodingKeys: String, CodingKey {
+        case id, baseLanguage
+        case avatarImage = "avatar_img"
+    }
+}
+
+struct PointGroupAvatarImage: Codable {
+    let id: Int
+    let url: String?
 }
 
 // MARK: - Review Models

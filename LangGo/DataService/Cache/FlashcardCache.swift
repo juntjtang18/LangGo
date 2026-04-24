@@ -2,7 +2,7 @@ import Foundation
 
 enum FlashcardCache {
     private enum Policy {
-        static let statisticsTTL: CacheService.CacheTTL = .seconds(60)
+        static let statisticsTTL: CacheService.CacheTTL = .seconds(1)
         static let reviewFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
         static let allMyFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
     }

@@ -178,6 +178,39 @@ class StrapiService {
         UserProfileCache.invalidate(using: cacheService)
     }
 
+    func fetchMyUserPoints(locale: String? = nil) async throws -> MyUserPointsAttributes? {
+        logger.debug("StrapiService: Fetching current user points.")
+        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/my-user-points")
+        if let locale, !locale.isEmpty {
+            components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
+        }
+        guard let url = components?.url else { throw URLError(.badURL) }
+        let response: MyUserPointsResponse = try await NetworkManager.shared.fetchDirect(from: url)
+        return response.data?.attributes
+    }
+
+    func fetchMyPointGroup(locale: String? = nil) async throws -> MyPointGroupData {
+        logger.debug("StrapiService: Fetching current user's point group.")
+        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/my-point-group")
+        if let locale, !locale.isEmpty {
+            components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
+        }
+        guard let url = components?.url else { throw URLError(.badURL) }
+        let response: MyPointGroupResponse = try await NetworkManager.shared.fetchDirect(from: url)
+        return response.data
+    }
+
+    func fetchPointGroupLeaderboard(pointGroupId: Int, locale: String? = nil) async throws -> PointGroupLeaderboardData {
+        logger.debug("StrapiService: Fetching point group leaderboard for group ID \(pointGroupId).")
+        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/point-groups/\(pointGroupId)/leaderboard")
+        if let locale, !locale.isEmpty {
+            components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
+        }
+        guard let url = components?.url else { throw URLError(.badURL) }
+        let response: PointGroupLeaderboardResponse = try await NetworkManager.shared.fetchDirect(from: url)
+        return response.data
+    }
+
     // MARK: - Flashcard & Review
 
     func fetchFlashcardStatistics() async throws -> StrapiStatistics {
