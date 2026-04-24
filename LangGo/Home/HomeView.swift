@@ -102,6 +102,9 @@ struct HomeView: View {
                 .padding(.bottom, metrics.screenBottomPadding)
             }
             .background(Color.white)
+            .refreshable {
+                await refreshFlashcardStatistics()
+            }
         }
         .background(Color.white.ignoresSafeArea())
         .fullScreenCover(isPresented: $isShowingReview) {
@@ -173,7 +176,7 @@ struct HomeView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .flashcardsDidChange)) { _ in
             Task {
-                await refreshFlashcardStatistics()
+                await refreshFlashcardStatistics(forceRefresh: true)
             }
         }
         .task(id: nextFlashcardStatisticsFetchAt) {
@@ -187,10 +190,16 @@ struct HomeView: View {
             guard !Task.isCancelled else { return }
             guard scenePhase == .active else { return }
 
-            await refreshFlashcardStatistics()
+            await refreshFlashcardStatistics(forceRefresh: true)
         }
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
+            Task {
+                await refreshFlashcardStatistics()
+            }
+        }
+        .onChange(of: selectedTab) { newTab in
+            guard newTab == 0 else { return }
             Task {
                 await refreshFlashcardStatistics()
             }
@@ -687,9 +696,9 @@ struct HomeView: View {
         await refreshFlashcardStatistics()
     }
 
-    private func refreshFlashcardStatistics() async {
+    private func refreshFlashcardStatistics(forceRefresh: Bool = false) async {
         do {
-            let statistics = try await DataServices.shared.flashcardService.fetchFlashcardStatistics()
+            let statistics = try await DataServices.shared.flashcardService.fetchFlashcardStatistics(forceRefresh: forceRefresh)
             flashcardStatistics = statistics
             nextFlashcardStatisticsFetchAt = nextFlashcardStatisticsFetchDate(from: statistics)
         } catch {

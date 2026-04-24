@@ -21,15 +21,20 @@ class FlashcardService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardService")
     private let cacheService = CacheService.shared
     private let networkManager = NetworkManager.shared
+    private let flashcardStatisticsMinimumFetchInterval: TimeInterval = 2
+    private var lastFlashcardStatisticsNetworkFetchAt: Date?
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
     }
     
-    func fetchFlashcardStatistics() async throws -> StrapiStatistics {
-        if !isRefreshModeEnabled,
+    func fetchFlashcardStatistics(forceRefresh: Bool = false) async throws -> StrapiStatistics {
+        if !forceRefresh,
+           !isRefreshModeEnabled,
+           let lastFetch = lastFlashcardStatisticsNetworkFetchAt,
+           Date().timeIntervalSince(lastFetch) < flashcardStatisticsMinimumFetchInterval,
            let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
-            logger.debug("✅ Returning flashcard statistics from cache.")
+            logger.debug("✅ Returning flashcard statistics from cache due to short repeat-fetch guard.")
             return cachedStats
         }
 
@@ -38,6 +43,7 @@ class FlashcardService {
 
         let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
         let stats = resp.data
+        lastFlashcardStatisticsNetworkFetchAt = Date()
 
         FlashcardCache.storeStatistics(stats, using: cacheService)
         logger.debug("💾 Saved fetched statistics to cache.")
