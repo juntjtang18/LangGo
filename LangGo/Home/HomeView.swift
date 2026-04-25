@@ -18,7 +18,7 @@ struct HomeView: View {
     @State private var isPreparingBookMode = false
     @State private var placeholderMessage: String?
     @State private var cameraAccessMessage: String?
-    @State private var userPoints: MyUserPointsAttributes?
+    @State private var userPointsCacheVersion = 0
     @State private var hasLoadedUserPoints = false
     @State private var flashcardStatistics: StrapiStatistics?
     @State private var hasLoadedFlashcardStatistics = false
@@ -179,6 +179,9 @@ struct HomeView: View {
                 await refreshFlashcardStatistics(forceRefresh: true)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .myUserPointsDidChange)) { _ in
+            userPointsCacheVersion &+= 1
+        }
         .task(id: nextFlashcardStatisticsFetchAt) {
             guard let nextFetchAt = nextFlashcardStatisticsFetchAt else { return }
 
@@ -196,12 +199,14 @@ struct HomeView: View {
             guard newPhase == .active else { return }
             Task {
                 await refreshFlashcardStatistics()
+                await refreshUserPoints()
             }
         }
         .onChange(of: selectedTab) { newTab in
             guard newTab == 0 else { return }
             Task {
                 await refreshFlashcardStatistics()
+                await refreshUserPoints()
             }
         }
     }
@@ -601,7 +606,8 @@ struct HomeView: View {
     }
 
     private var resolvedUserPoints: MyUserPointsAttributes {
-        userPoints ?? .empty
+        _ = userPointsCacheVersion
+        return MyUserPointsCache.load(locale: baseLanguageLocale) ?? .empty
     }
 
     private var resolvedFlashcardStatistics: StrapiStatistics {
@@ -682,8 +688,12 @@ struct HomeView: View {
         guard !hasLoadedUserPoints else { return }
         hasLoadedUserPoints = true
 
+        await refreshUserPoints()
+    }
+
+    private func refreshUserPoints() async {
         do {
-            userPoints = try await DataServices.shared.authService.fetchMyUserPoints(locale: baseLanguageLocale)
+            _ = try await DataServices.shared.authService.fetchMyUserPoints(locale: baseLanguageLocale)
         } catch {
             logger.error("Failed to fetch user points: \(error.localizedDescription, privacy: .public)")
         }

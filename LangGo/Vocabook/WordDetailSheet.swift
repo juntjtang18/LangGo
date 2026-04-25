@@ -231,10 +231,17 @@ struct WordDetailSheet: View {
     
     // MARK: - Read / Repeat
     private func readTapped() {
-        if repeatReadingEnabled {
-            if isRepeating { stopRepeating() } else { startRepeating() }
-        } else {
-            speakOnce()
+        Task {
+            guard let vb = await loadVBSettingsIfNeeded() else { return }
+            if repeatReadingEnabled {
+                if isRepeating {
+                    stopRepeating()
+                } else {
+                    startRepeating(with: vb)
+                }
+            } else {
+                speakOnce(with: vb)
+            }
         }
     }
     
@@ -245,24 +252,21 @@ struct WordDetailSheet: View {
         vbSettings = try? await DataServices.shared.settingsService.fetchVBSetting().attributes
     }
     
-    private func speakOnce() {
-        guard let vb = vbSettings else { return }
+    private func speakOnce(with vb: VBSettingAttributes) {
         speechManager.stop()
         speechManager.speak(card: card, showBaseText: showBaseText, settings: vb, onComplete: {})
     }
     
-    private func startRepeating() {
+    private func startRepeating(with vb: VBSettingAttributes) {
         guard !isRepeating else { return }
         isRepeating = true
         
         func loop() {
             guard isRepeating else { return }
-            if let vb = vbSettings {
-                speechManager.speak(card: card, showBaseText: showBaseText, settings: vb) {
-                    DispatchQueue.main.async { if self.isRepeating { loop() } }
+            speechManager.speak(card: card, showBaseText: showBaseText, settings: vb) {
+                DispatchQueue.main.async {
+                    if self.isRepeating { loop() }
                 }
-            } else {
-                isRepeating = false
             }
         }
         loop()
@@ -271,6 +275,14 @@ struct WordDetailSheet: View {
     private func toggleRepeat() {
         repeatReadingEnabled.toggle()
         if !repeatReadingEnabled { stopRepeating() }
+    }
+
+    private func loadVBSettingsIfNeeded() async -> VBSettingAttributes? {
+        if let vbSettings {
+            return vbSettings
+        }
+        await ensureVBSettings()
+        return vbSettings
     }
     
     // MARK: - Delete

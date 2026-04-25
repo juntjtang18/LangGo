@@ -175,14 +175,15 @@ class FlashcardService {
 
     func invalidateAllFlashcardCaches() {
         FlashcardCache.invalidateAfterFlashcardWrite(using: cacheService)
+        notifyFlashcardsDidChange()
         
-        // MODIFIED: After invalidating the cache, post the notification on the main
-        // thread. This tells any listening part of the app to re-fetch its data.
+        logger.debug("✏️ SUCCESS: All flashcard caches invalidated.")
+    }
+
+    func notifyFlashcardsDidChange() {
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .flashcardsDidChange, object: nil)
         }
-        
-        logger.debug("✏️ SUCCESS: All flashcard caches invalidated.")
     }
     
     private func getOrFetchAllMyFlashcards() async throws -> [Flashcard] {

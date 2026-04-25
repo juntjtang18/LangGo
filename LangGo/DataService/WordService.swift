@@ -30,8 +30,18 @@ class WordService {
             remoteWrite: {
                 try await self.networkManager.post(to: url, body: requestBody) as WordDefinitionResponse
             },
-            applyLocalSuccess: { _ in
-                self.flashcardService.invalidateAllFlashcardCaches()
+            applyLocalSuccess: { response in
+                guard response.meta?.flashcardCreated == true,
+                      let flashcard = self.makeFlashcard(from: response) else {
+                    return
+                }
+
+                let reviewTier = response.meta?.reviewTier ?? "new"
+                FlashcardCache.patchAfterWordAdded(
+                    flashcard: flashcard,
+                    reviewTier: reviewTier,
+                    using: self.cacheService
+                )
 
                 let selectedLanguage = UserDefaults.standard.string(forKey: "selectedLanguage")
                 let baseLanguage = await MainActor.run {
@@ -42,7 +52,22 @@ class WordService {
                     locales: [nil, selectedLanguage, baseLanguage],
                     using: self.cacheService
                 )
+
+                self.flashcardService.notifyFlashcardsDidChange()
             }
+        )
+    }
+
+    private func makeFlashcard(from response: WordDefinitionResponse) -> Flashcard? {
+        guard let flashcardId = response.meta?.flashcardId else { return nil }
+        return Flashcard(
+            id: flashcardId,
+            wordDefinition: response.data,
+            lastReviewedAt: nil,
+            correctStreak: 0,
+            wrongStreak: 0,
+            isRemembered: false,
+            reviewTire: response.meta?.reviewTier ?? "new"
         )
     }
 

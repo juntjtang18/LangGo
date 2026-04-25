@@ -132,7 +132,21 @@ final class ArticleReadingViewModel: NSObject, ObservableObject, AVSpeechSynthes
 
     private func startReading() {
         let content = bodyParagraphs.joined(separator: "\n\n")
-        guard !content.isEmpty else { return }
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !content.isEmpty else {
+            errorMessage = "No article content is available to read."
+            return
+        }
+
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try audioSession.setActive(true, options: [])
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
 
         speechSynthesizer.stopSpeaking(at: .immediate)
 
@@ -224,7 +238,7 @@ struct ArticleReadingView: View {
                                 metaRow(metrics: metrics)
 
                                 Text(viewModel.article.title)
-                                    .font(.system(size: metrics.titleFont, weight: .bold, design: .rounded))
+                                    .font(.system(size: fontSize * 1.2, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color(red: 0.14, green: 0.17, blue: 0.23))
 
                                 if viewModel.bodyParagraphs.isEmpty {
@@ -310,10 +324,14 @@ struct ArticleReadingView: View {
             Button {
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: metrics.headerIconFont, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.35, green: 0.38, blue: 0.46))
-                    .frame(width: 36, height: 36)
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                    Text("Back")
+                }
+                .font(.system(size: metrics.headerIconFont, weight: .semibold))
+                .foregroundStyle(Color(red: 0.35, green: 0.38, blue: 0.46))
+                .frame(height: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -337,8 +355,9 @@ struct ArticleReadingView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, metrics.horizontalPadding)
-        .padding(.top, metrics.topPadding * 0.8)
-        .padding(.bottom, metrics.compactSpacing)
+        .padding(.top, metrics.topPadding * 1.4)
+        .padding(.bottom, metrics.compactSpacing * 1.6)
+        .frame(minHeight: 60)
     }
 
     private func metaRow(metrics: ArticleReadingMetrics) -> some View {
@@ -440,10 +459,10 @@ struct ArticleReadingView: View {
             } label: {
                 Text("Back to Library")
                     .font(.system(size: metrics.bottomButtonFont, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(red: 0.41, green: 0.44, blue: 0.52))
+                    .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: metrics.bottomButtonHeight)
-                    .background(Color.white)
+                    .background(Color.blue)
                     .overlay(
                         RoundedRectangle(cornerRadius: metrics.bottomButtonHeight / 3, style: .continuous)
                             .stroke(Color(red: 0.86, green: 0.88, blue: 0.92), lineWidth: 1)
@@ -534,13 +553,13 @@ private struct ArticleReadingMetrics {
         metaFont = scaled(12)
         titleFont = scaled(22)
         paragraphSpacing = scaled(18)
-        headerIconFont = scaled(16)
+        headerIconFont = scaled(22)
         bottomCardPadding = scaled(16)
         bottomCardCornerRadius = scaled(14)
         bottomEmojiSize = scaled(28)
         bottomTitleFont = scaled(18)
         bottomSubtitleFont = scaled(12)
-        bottomButtonFont = scaled(12.5)
-        bottomButtonHeight = scaled(34)
+        bottomButtonFont = scaled(22)
+        bottomButtonHeight = scaled(55)
     }
 }

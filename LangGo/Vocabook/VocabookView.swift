@@ -70,7 +70,6 @@ struct VocabookView: View {
     @State private var isShowingBookMode = false
     @State private var isPreparingBookMode = false
     @State private var infoMessage: String?
-    @State private var userPoints: MyUserPointsAttributes?
     @State private var recentFlashcards: [Flashcard] = []
     @State private var selectedRecentCard: Flashcard?
     @State private var presentedBookModeConfig: BookModeConfig?
@@ -112,6 +111,12 @@ struct VocabookView: View {
         .navigationBarBackButtonHidden(true)
         .task {
             await loadDashboardData()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flashcardsDidChange)) { _ in
+            Task {
+                await vocabookViewModel.loadStatistics()
+                await refreshRecentlyAddedCards()
+            }
         }
         .refreshable {
             await loadDashboardData()
@@ -375,20 +380,12 @@ struct VocabookView: View {
             .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.56))
     }
 
-    private var allFlashcards: [Flashcard] {
-        vocabookViewModel.vocabook?.vocapages?.flatMap { $0.flashcards ?? [] } ?? []
-    }
-
     private var totalVocabularyCount: Int {
         vocabookViewModel.totalCards
     }
 
-    private var resolvedUserPoints: MyUserPointsAttributes {
-        userPoints ?? .empty
-    }
-
     private var newAddedWordsText: String {
-        formatDelta(resolvedUserPoints.word_add)
+        formatDelta(countForTier(.new))
     }
 
     private var recentlyAddedCards: [Flashcard] {
@@ -409,15 +406,10 @@ struct VocabookView: View {
     }
 
     private var tierCountMap: [String: Int] {
-        if !vocabookViewModel.tierStats.isEmpty {
-            return vocabookViewModel.tierStats.reduce(into: [:]) { partialResult, stat in
-                let key = MemoryTier.canonicalKey(for: stat.tier)
-                partialResult[key, default: 0] += stat.count
-            }
+        vocabookViewModel.tierStats.reduce(into: [:]) { partialResult, stat in
+            let key = MemoryTier.canonicalKey(for: stat.tier)
+            partialResult[key, default: 0] += stat.count
         }
-
-        let grouped = Dictionary(grouping: allFlashcards) { MemoryTier.canonicalKey(for: $0.reviewTire) }
-        return grouped.mapValues(\.count)
     }
 
     private func countForTier(_ tier: MemoryTier) -> Int {
@@ -448,13 +440,11 @@ struct VocabookView: View {
             await flashcardViewModel.prepareReviewSession()
         }
 
-        do {
-            userPoints = try await DataServices.shared.authService.fetchMyUserPoints(locale: baseLanguageLocale)
-        } catch {
-            logger.error("Failed to fetch user points for vocabook: \(error.localizedDescription, privacy: .public)")
-        }
+        await refreshRecentlyAddedCards()
+    }
 
-        let recentCount = max(0, resolvedUserPoints.word_add)
+    private func refreshRecentlyAddedCards() async {
+        let recentCount = countForTier(.new)
         guard recentCount > 0 else {
             recentFlashcards = []
             return
@@ -466,12 +456,6 @@ struct VocabookView: View {
             logger.error("Failed to fetch recent flashcards for vocabook: \(error.localizedDescription, privacy: .public)")
             recentFlashcards = []
         }
-    }
-
-    private var baseLanguageLocale: String {
-        UserSessionManager.shared.currentUser?.user_profile?.baseLanguage
-            ?? UserDefaults.standard.string(forKey: "selectedLanguage")
-            ?? "en"
     }
 
     private func formatDelta(_ value: Int) -> String {

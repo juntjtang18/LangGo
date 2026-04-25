@@ -537,7 +537,19 @@ typealias WordDefinitionRelation = Relation<StrapiData<WordDefinitionAttributes>
 typealias WordRelation = Relation<StrapiData<WordAttributes>>
 typealias MediaRelation = Relation<StrapiData<MediaAttributes>>
 typealias ReviewTireRelation = Relation<StrapiData<ReviewTireAttributes>>
-typealias WordDefinitionResponse = StrapiSingleResponse<WordDefinitionAttributes>
+
+struct CreateWordDefinitionResponse: Codable {
+    let data: StrapiData<WordDefinitionAttributes>
+    let meta: CreateWordDefinitionMeta?
+}
+
+struct CreateWordDefinitionMeta: Codable {
+    let flashcardCreated: Bool
+    let flashcardId: Int?
+    let reviewTier: String?
+}
+
+typealias WordDefinitionResponse = CreateWordDefinitionResponse
 
 
 // MARK: - Component Schemas & Attributes

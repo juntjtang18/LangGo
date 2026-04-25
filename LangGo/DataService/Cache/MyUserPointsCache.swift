@@ -1,8 +1,13 @@
 import Foundation
 
+extension Notification.Name {
+    static let myUserPointsDidChange = Notification.Name("com.langGo.swift.myUserPointsDidChange")
+}
+
 enum MyUserPointsCache {
     private enum Policy {
         static let userPointsTTL: CacheService.CacheTTL = .seconds(60)
+        static let pointsPerWordAdded = 1
     }
 
     static let userPointsTag = CacheService.CacheTag(rawValue: "my-user-points")
@@ -23,6 +28,7 @@ enum MyUserPointsCache {
             ttl: Policy.userPointsTTL,
             tags: [userPointsTag]
         )
+        NotificationCenter.default.post(name: .myUserPointsDidChange, object: normalized(locale))
     }
 
     static func invalidate(using cacheService: CacheService = .shared) {
@@ -44,8 +50,8 @@ enum MyUserPointsCache {
             patch(locale: locale, using: cacheService) { existing in
                 MyUserPointsAttributes(
                     record_date: existing.record_date,
-                    points: existing.points,
-                    points_add: existing.points_add,
+                    points: existing.points + Policy.pointsPerWordAdded,
+                    points_add: existing.points_add + Policy.pointsPerWordAdded,
                     word_count: existing.word_count + 1,
                     word_add: existing.word_add + 1,
                     article_count: existing.article_count,

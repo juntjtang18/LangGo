@@ -103,4 +103,94 @@ enum FlashcardCache {
     static func invalidateAfterFlashcardWrite(using cacheService: CacheService = .shared) {
         cacheService.invalidate(tags: [statisticsTag, reviewFlashcardsTag, allMyFlashcardsTag, tierFlashcardsTag, recentFlashcardsTag])
     }
+
+    static func patchAfterWordAdded(
+        flashcard: Flashcard,
+        reviewTier: String,
+        using cacheService: CacheService = .shared
+    ) {
+        patchStatisticsAfterWordAdded(reviewTier: reviewTier, using: cacheService)
+        patchAllMyFlashcardsAfterWordAdded(flashcard: flashcard, using: cacheService)
+        patchReviewFlashcardsAfterWordAdded(flashcard: flashcard, using: cacheService)
+        patchTierFlashcardsAfterWordAdded(flashcard: flashcard, reviewTier: reviewTier, using: cacheService)
+        patchRecentFlashcardsAfterWordAdded(flashcard: flashcard, using: cacheService)
+    }
+
+    private static func patchStatisticsAfterWordAdded(reviewTier: String, using cacheService: CacheService) {
+        guard var statistics = loadStatistics(using: cacheService) else { return }
+
+        let normalizedTier = reviewTier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let updatedByTier = statistics.byTier.map { tierStat in
+            guard tierStat.tier == normalizedTier else { return tierStat }
+            return StrapiTierStat(
+                id: tierStat.id,
+                tier: tierStat.tier,
+                displayName: tierStat.displayName,
+                min_streak: tierStat.min_streak,
+                max_streak: tierStat.max_streak,
+                cooldown_hours: tierStat.cooldown_hours,
+                count: tierStat.count + 1,
+                dueCount: tierStat.dueCount + 1,
+                hardToRememberCount: tierStat.hardToRememberCount
+            )
+        }
+
+        statistics = StrapiStatistics(
+            totalCards: statistics.totalCards + 1,
+            remembered: statistics.remembered,
+            dueForReview: statistics.dueForReview + 1,
+            reviewed: statistics.reviewed,
+            hardToRemember: statistics.hardToRemember,
+            byTier: updatedByTier,
+            nextFetchAt: nil,
+            batchWindowMinutes: statistics.batchWindowMinutes
+        )
+
+        storeStatistics(statistics, using: cacheService)
+    }
+
+    private static func patchAllMyFlashcardsAfterWordAdded(flashcard: Flashcard, using cacheService: CacheService) {
+        guard var cards = loadAllMyFlashcards(using: cacheService) else { return }
+        guard !cards.contains(where: { $0.id == flashcard.id }) else { return }
+        cards.append(flashcard)
+        storeAllMyFlashcards(cards, using: cacheService)
+    }
+
+    private static func patchReviewFlashcardsAfterWordAdded(flashcard: Flashcard, using cacheService: CacheService) {
+        guard var cards = loadReviewFlashcards(using: cacheService) else { return }
+        guard !cards.contains(where: { $0.id == flashcard.id }) else { return }
+        cards.append(flashcard)
+        storeReviewFlashcards(cards, using: cacheService)
+    }
+
+    private static func patchTierFlashcardsAfterWordAdded(flashcard: Flashcard, reviewTier: String, using cacheService: CacheService) {
+        guard var cards = loadTierFlashcards(reviewTier: reviewTier, using: cacheService) else { return }
+        guard !cards.contains(where: { $0.id == flashcard.id }) else { return }
+        cards.append(flashcard)
+        storeTierFlashcards(cards, reviewTier: reviewTier, using: cacheService)
+    }
+
+    private static func patchRecentFlashcardsAfterWordAdded(flashcard: Flashcard, using cacheService: CacheService) {
+        let prefix = "recentFlashcards.limit."
+        let keys = cacheService.keys(for: recentFlashcardsTag)
+
+        for key in keys where key.hasPrefix(prefix) {
+            guard let limit = Int(key.replacingOccurrences(of: prefix, with: "")),
+                  limit > 0,
+                  var cards = cacheService.loadIfValid(type: [Flashcard].self, from: key) else { continue }
+
+            cards.removeAll { $0.id == flashcard.id }
+            cards.insert(flashcard, at: 0)
+            if cards.count > limit {
+                cards = Array(cards.prefix(limit))
+            }
+
+            cacheService.saveWithPolicy(
+                cards,
+                key: key,
+                ttl: Policy.recentFlashcardsTTL,
+                tags: [recentFlashcardsTag]
+            )
+        }
+    }
 }

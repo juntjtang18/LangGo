@@ -14,12 +14,17 @@ final class ReviewSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelega
     }
 
     func speakOnce(card: Flashcard, completion: @escaping () -> Void) {
+        stop()
         self.completion = completion
-        // Speak TARGET ONLY (consistent for all locales)
-        let word = card.wordDefinition?.attributes.word?.data?.attributes.targetText
-            ?? card.frontContent
+        let word = card.speechTargetText
+        guard !word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            completion()
+            self.completion = nil
+            return
+        }
         let u = AVSpeechUtterance(string: word)
-        u.voice = AVSpeechSynthesisVoice(language: "en-US")
+        let languageCode = Config.learningTargetLanguageCode.normalizedSpeechLanguageCode
+        u.voice = AVSpeechSynthesisVoice(language: languageCode) ?? AVSpeechSynthesisVoice(language: "en-US")
         u.rate  = AVSpeechUtteranceDefaultSpeechRate
         tts.speak(u)
     }
