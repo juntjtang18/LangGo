@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 private enum MemoryTier: String, CaseIterable {
     case remembered
@@ -57,6 +58,8 @@ private enum MemoryTier: String, CaseIterable {
 }
 
 struct VocabookView: View {
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookView")
+
     @ObservedObject var flashcardViewModel: FlashcardViewModel
     @ObservedObject var vocabookViewModel: VocabookViewModel
 
@@ -67,6 +70,7 @@ struct VocabookView: View {
     @State private var isShowingBookMode = false
     @State private var isPreparingBookMode = false
     @State private var infoMessage: String?
+    @State private var userPoints: MyUserPointsAttributes?
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
 
@@ -196,10 +200,18 @@ struct VocabookView: View {
                 .font(.system(size: metrics.smallLabelFont, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.9))
 
-            Text("\(totalVocabularyCount) words")
-                .font(.system(size: metrics.heroNumberFont, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-                .minimumScaleFactor(0.7)
+            HStack(alignment: .lastTextBaseline, spacing: metrics.compactSpacing) {
+                Text("\(totalVocabularyCount) words")
+                    .font(.system(size: metrics.heroNumberFont, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                    .minimumScaleFactor(0.7)
+
+                Text(newAddedWordsText)
+                    .font(.system(size: metrics.heroSubtitleFont, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.71, green: 1.00, blue: 0.77))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
 
             Text("Your complete vocabulary library")
                 .font(.system(size: metrics.heroSubtitleFont, weight: .semibold, design: .rounded))
@@ -348,6 +360,14 @@ struct VocabookView: View {
         vocabookViewModel.totalCards
     }
 
+    private var resolvedUserPoints: MyUserPointsAttributes {
+        userPoints ?? .empty
+    }
+
+    private var newAddedWordsText: String {
+        formatDelta(resolvedUserPoints.word_add)
+    }
+
     private var recentlyAddedCards: [Flashcard] {
         Array(allFlashcards.sorted { $0.id > $1.id }.prefix(4))
     }
@@ -407,6 +427,22 @@ struct VocabookView: View {
         if flashcardViewModel.reviewCards.isEmpty {
             await flashcardViewModel.prepareReviewSession()
         }
+
+        do {
+            userPoints = try await DataServices.shared.authService.fetchMyUserPoints(locale: baseLanguageLocale)
+        } catch {
+            logger.error("Failed to fetch user points for vocabook: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private var baseLanguageLocale: String {
+        UserSessionManager.shared.currentUser?.user_profile?.baseLanguage
+            ?? UserDefaults.standard.string(forKey: "selectedLanguage")
+            ?? "en"
+    }
+
+    private func formatDelta(_ value: Int) -> String {
+        value >= 0 ? "+\(value)" : "\(value)"
     }
 
     private func openBookMode() {
@@ -497,46 +533,46 @@ private struct VocabookMetrics {
         scale = resolvedScale
         compactHeightScale = compactScale
 
-        horizontalPadding = scaled(16)
-        topPadding = scaled(14)
-        bottomPadding = scaled(22)
-        sectionSpacing = scaled(18)
-        compactSectionSpacing = scaled(10)
-        compactSpacing = scaled(8)
-        headerSpacing = scaled(3)
-        cardTextSpacing = scaled(4)
+        horizontalPadding = scaled(20)
+        topPadding = scaled(20)
+        bottomPadding = scaled(26)
+        sectionSpacing = scaled(20)
+        compactSectionSpacing = scaled(15)
+        compactSpacing = scaled(12)
+        headerSpacing = scaled(6)
+        cardTextSpacing = scaled(8)
 
         titleFont = scaled(30)
-        subtitleFont = scaled(14.5)
-        sectionLabelFont = scaled(13.5)
-        bodyFont = scaled(16.5)
-        linkFont = scaled(13.5)
-        smallLabelFont = scaled(13)
-        heroNumberFont = scaled(31)
-        heroSubtitleFont = scaled(13.5)
+        subtitleFont = scaled(20)
+        sectionLabelFont = scaled(22)
+        bodyFont = scaled(26)
+        linkFont = scaled(26)
+        smallLabelFont = scaled(22)
+        heroNumberFont = scaled(36)
+        heroSubtitleFont = scaled(22)
 
-        searchHeight = scaled(34)
-        searchHorizontalPadding = scaled(12)
-        searchFont = scaled(14.5)
-        searchIconFont = scaled(14)
+        searchHeight = scaled(38)
+        searchHorizontalPadding = scaled(15)
+        searchFont = scaled(22)
+        searchIconFont = scaled(22)
 
-        cardPadding = scaled(12)
-        cardCornerRadius = scaled(12)
-        largeCardCornerRadius = scaled(14)
+        cardPadding = scaled(14)
+        cardCornerRadius = scaled(14)
+        largeCardCornerRadius = scaled(16)
 
-        actionIconCircle = scaled(22)
-        actionIconFont = scaled(10)
-        actionTitleFont = scaled(14.5)
-        actionSubtitleFont = scaled(12)
-        actionHeight = scaled(58)
+        actionIconCircle = scaled(45)
+        actionIconFont = scaled(12)
+        actionTitleFont = scaled(16)
+        actionSubtitleFont = scaled(15)
+        actionHeight = scaled(60)
 
         memoryRowLeadingBarWidth = max(2, scaled(3))
-        memoryRowCountFont = scaled(14.5)
-        memoryRowTitleFont = scaled(15.5)
-        memoryRowSubtitleFont = scaled(12)
-        recentWordTitleFont = scaled(15.5)
-        recentWordSubtitleFont = scaled(12)
-        recentBadgeFont = scaled(10)
+        memoryRowCountFont = scaled(16)
+        memoryRowTitleFont = scaled(18)
+        memoryRowSubtitleFont = scaled(14)
+        recentWordTitleFont = scaled(20)
+        recentWordSubtitleFont = scaled(18)
+        recentBadgeFont = scaled(12)
     }
 }
 
@@ -555,31 +591,33 @@ private struct VocabookActionCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: metrics.cardTextSpacing) {
-                HStack(spacing: metrics.compactSpacing) {
-                    ZStack {
-                        Circle()
-                            .fill(isFilled ? Color.white.opacity(0.18) : Color(red: 0.95, green: 0.96, blue: 1.00))
-                            .frame(width: metrics.actionIconCircle, height: metrics.actionIconCircle)
-                        Image(systemName: icon)
-                            .font(.system(size: metrics.actionIconFont, weight: .bold))
-                            .foregroundStyle(iconColor)
-                    }
+            HStack(alignment: .center, spacing: metrics.compactSpacing) {
+                
+                ZStack {
+                    Circle()
+                        .fill(isFilled ? Color.white.opacity(0.18) : Color(red: 0.95, green: 0.96, blue: 1.00))
+                        .frame(width: metrics.actionIconCircle, height: metrics.actionIconCircle)
 
-                    Spacer()
+                    Image(systemName: icon)
+                        .font(.system(size: metrics.actionIconFont * 3.5, weight: .bold))
+                        .foregroundStyle(iconColor)
                 }
 
-                Text(title)
-                    .font(.system(size: metrics.actionTitleFont, weight: .bold, design: .rounded))
-                    .foregroundStyle(textColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                VStack(alignment: .leading, spacing: 2) { // tight spacing
+                    Text(title)
+                        .font(.system(size: metrics.actionTitleFont, weight: .bold, design: .rounded))
+                        .foregroundStyle(textColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
 
-                Text(subtitle)
-                    .font(.system(size: metrics.actionSubtitleFont, weight: .semibold, design: .rounded))
-                    .foregroundStyle(subtitleColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    Text(subtitle)
+                        .font(.system(size: metrics.actionSubtitleFont, weight: .semibold, design: .rounded))
+                        .foregroundStyle(subtitleColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, minHeight: metrics.actionHeight, alignment: .leading)
             .padding(metrics.cardPadding)

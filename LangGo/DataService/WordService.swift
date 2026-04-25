@@ -15,6 +15,7 @@ class WordService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "WordService")
     private let networkManager = NetworkManager.shared
     private let flashcardService: FlashcardService
+    private let cacheService = CacheService.shared
     
     init(flashcardService: FlashcardService) {
         self.flashcardService = flashcardService
@@ -25,10 +26,24 @@ class WordService {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/word-definitions") else { throw URLError(.badURL) }
         let payload = WordDefinitionCreationPayload(targetText: targetText, baseText: baseText, partOfSpeech: partOfSpeech, locale: locale)
         let requestBody = CreateWordDefinitionRequest(data: payload)
-        let response: WordDefinitionResponse = try await networkManager.post(to: url, body: requestBody)
-        
-        flashcardService.invalidateAllFlashcardCaches()
-        return response
+        return try await CacheMutation.perform(
+            remoteWrite: {
+                try await self.networkManager.post(to: url, body: requestBody) as WordDefinitionResponse
+            },
+            applyLocalSuccess: { _ in
+                self.flashcardService.invalidateAllFlashcardCaches()
+
+                let selectedLanguage = UserDefaults.standard.string(forKey: "selectedLanguage")
+                let baseLanguage = await MainActor.run {
+                    UserSessionManager.shared.currentUser?.user_profile?.baseLanguage
+                }
+
+                MyUserPointsCache.patchAfterWordAdded(
+                    locales: [nil, selectedLanguage, baseLanguage],
+                    using: self.cacheService
+                )
+            }
+        )
     }
 
     func searchWords(term: String) async throws -> [StrapiWord] {

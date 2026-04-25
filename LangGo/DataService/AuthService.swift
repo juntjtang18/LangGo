@@ -22,6 +22,7 @@ class AuthService {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local") else { throw URLError(.badURL) }
         let response: AuthResponse = try await networkManager.post(to: url, body: credentials)
         flashcardService.invalidateAllFlashcardCaches()
+        MyUserPointsCache.invalidate(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
         return response
     }
@@ -31,6 +32,7 @@ class AuthService {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register") else { throw URLError(.badURL) }
         let response: AuthResponse = try await networkManager.post(to: url, body: payload)
         flashcardService.invalidateAllFlashcardCaches()
+        MyUserPointsCache.invalidate(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
         return response
     }
@@ -153,10 +155,15 @@ class AuthService {
             headers: ["X-Account-Delete-Password": currentPassword]
         )
         flashcardService.invalidateAllFlashcardCaches()
+        MyUserPointsCache.invalidate(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
     }
 
     func fetchMyUserPoints(locale: String? = nil) async throws -> MyUserPointsAttributes? {
+        if let cachedPoints = MyUserPointsCache.load(locale: locale, using: cacheService) {
+            return cachedPoints
+        }
+
         logger.debug("AuthService: Fetching current user points.")
         var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/my-user-points")
         if let locale, !locale.isEmpty {
@@ -164,7 +171,11 @@ class AuthService {
         }
         guard let url = components?.url else { throw URLError(.badURL) }
         let response: MyUserPointsResponse = try await networkManager.fetchDirect(from: url)
-        return response.data?.attributes
+        let attributes = response.data?.attributes
+        if let attributes {
+            MyUserPointsCache.store(attributes, locale: locale, using: cacheService)
+        }
+        return attributes
     }
 
     func fetchMyPointGroup(locale: String? = nil) async throws -> MyPointGroupData {
