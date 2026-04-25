@@ -71,6 +71,10 @@ struct VocabookView: View {
     @State private var isPreparingBookMode = false
     @State private var infoMessage: String?
     @State private var userPoints: MyUserPointsAttributes?
+    @State private var recentFlashcards: [Flashcard] = []
+    @State private var selectedRecentCard: Flashcard?
+    @State private var presentedBookModeConfig: BookModeConfig?
+    @State private var presentedBookModeTier: String?
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
 
@@ -130,7 +134,10 @@ struct VocabookView: View {
         }) {
             ExamView()
         }
-        .fullScreenCover(isPresented: $isShowingBookMode) {
+        .fullScreenCover(isPresented: $isShowingBookMode, onDismiss: {
+            presentedBookModeConfig = nil
+            presentedBookModeTier = nil
+        }) {
             NavigationStack {
                 if let config = bookModeConfig {
                     VocapageHostView(
@@ -138,6 +145,8 @@ struct VocabookView: View {
                         selectedVocapageId: config.selectedPageId,
                         flashcardViewModel: flashcardViewModel,
                         isShowingDueWordsOnly: $isShowingDueWordsOnly,
+                        reviewTier: presentedBookModeTier,
+                        allowsDueFilter: presentedBookModeTier == nil,
                         onFilterChange: {
                             Task {
                                 await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
@@ -156,6 +165,16 @@ struct VocabookView: View {
             Button("OK", role: .cancel) { infoMessage = nil }
         } message: {
             Text(infoMessage ?? "")
+        }
+        .sheet(item: $selectedRecentCard) { card in
+            WordDetailSheet(
+                cards: recentFlashcards,
+                initialIndex: recentFlashcards.firstIndex(where: { $0.id == card.id }) ?? 0,
+                showBaseText: true,
+                showNavRow: false
+            )
+            .presentationDetents([.fraction(0.67)])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -207,14 +226,14 @@ struct VocabookView: View {
                     .minimumScaleFactor(0.7)
 
                 Text(newAddedWordsText)
-                    .font(.system(size: metrics.heroSubtitleFont, weight: .bold, design: .rounded))
+                    .font(.system(size: metrics.heroSubNumberFont, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(red: 0.71, green: 1.00, blue: 0.77))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
 
             Text("Your complete vocabulary library")
-                .font(.system(size: metrics.heroSubtitleFont, weight: .semibold, design: .rounded))
+                .font(.system(size: metrics.heroSubtitleFont, weight: .light, design: .rounded))
                 .foregroundStyle(.white.opacity(0.92))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -307,7 +326,9 @@ struct VocabookView: View {
 
             VStack(spacing: metrics.compactSpacing) {
                 ForEach(memoryLevelRows) { item in
-                    MemoryLevelRow(item: item, metrics: metrics)
+                    MemoryLevelRow(item: item, metrics: metrics) {
+                        openBookMode(for: item.tier)
+                    }
                 }
             }
         }
@@ -339,7 +360,9 @@ struct VocabookView: View {
                         .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
                 } else {
                     ForEach(recentlyAddedCards, id: \.id) { card in
-                        RecentWordCard(card: card, metrics: metrics)
+                        RecentWordCard(card: card, metrics: metrics) {
+                            selectedRecentCard = card
+                        }
                     }
                 }
             }
@@ -348,7 +371,7 @@ struct VocabookView: View {
 
     private func sectionTitle(_ text: String, metrics: VocabookMetrics) -> some View {
         Text(text)
-            .font(.system(size: metrics.sectionLabelFont, weight: .heavy, design: .rounded))
+            .font(.system(size: metrics.sectionLabelFont, weight: .bold, design: .rounded))
             .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.56))
     }
 
@@ -369,13 +392,14 @@ struct VocabookView: View {
     }
 
     private var recentlyAddedCards: [Flashcard] {
-        Array(allFlashcards.sorted { $0.id > $1.id }.prefix(4))
+        recentFlashcards
     }
 
     private var memoryLevelRows: [MemoryLevelItem] {
         MemoryTier.allCases.map { tier in
             let count = countForTier(tier)
             return MemoryLevelItem(
+                tier: tier,
                 title: tier.title,
                 subtitle: "\(count) words",
                 count: count,
@@ -405,11 +429,7 @@ struct VocabookView: View {
     }
 
     private var bookModeConfig: BookModeConfig? {
-        let allPageIds = (vocabookViewModel.vocabook?.vocapages ?? []).map(\.id).sorted()
-        guard !allPageIds.isEmpty else { return nil }
-        let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-        let selectedPageId = (lastViewedID != 0 && allPageIds.contains(lastViewedID)) ? lastViewedID : (allPageIds.first ?? 1)
-        return BookModeConfig(allPageIds: allPageIds, selectedPageId: selectedPageId)
+        presentedBookModeConfig
     }
 
     private var infoAlertBinding: Binding<Bool> {
@@ -433,6 +453,19 @@ struct VocabookView: View {
         } catch {
             logger.error("Failed to fetch user points for vocabook: \(error.localizedDescription, privacy: .public)")
         }
+
+        let recentCount = max(0, resolvedUserPoints.word_add)
+        guard recentCount > 0 else {
+            recentFlashcards = []
+            return
+        }
+
+        do {
+            recentFlashcards = try await DataServices.shared.flashcardService.fetchRecentlyAddedFlashcards(limit: recentCount)
+        } catch {
+            logger.error("Failed to fetch recent flashcards for vocabook: \(error.localizedDescription, privacy: .public)")
+            recentFlashcards = []
+        }
     }
 
     private var baseLanguageLocale: String {
@@ -453,12 +486,57 @@ struct VocabookView: View {
             await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
             isPreparingBookMode = false
 
-            if bookModeConfig != nil {
+            if let config = defaultBookModeConfig() {
+                presentedBookModeTier = nil
+                presentedBookModeConfig = config
                 isShowingBookMode = true
             } else {
                 infoMessage = "No words are available in book mode yet."
             }
         }
+    }
+
+    private func openBookMode(for tier: MemoryTier) {
+        guard !isPreparingBookMode else { return }
+        guard countForTier(tier) > 0 else {
+            infoMessage = "No words are available for \(tier.title) yet."
+            return
+        }
+
+        isPreparingBookMode = true
+
+        Task {
+            do {
+                let vbSetting = try await DataServices.shared.settingsService.fetchVBSetting()
+                let pageSize = vbSetting.attributes.wordsPerPage
+                let tierCards = try await DataServices.shared.flashcardService.fetchAllMyFlashcards(reviewTier: tier.rawValue)
+                let pageCount = tierCards.isEmpty ? 0 : Int(ceil(Double(tierCards.count) / Double(pageSize)))
+
+                if pageCount > 0 {
+                    presentedBookModeTier = tier.rawValue
+                    presentedBookModeConfig = BookModeConfig(
+                        allPageIds: Array(1...pageCount),
+                        selectedPageId: 1
+                    )
+                    isShowingBookMode = true
+                } else {
+                    infoMessage = "No words are available for \(tier.title) yet."
+                }
+            } catch {
+                logger.error("Failed to open tier book mode: \(error.localizedDescription, privacy: .public)")
+                infoMessage = "Failed to open \(tier.title)."
+            }
+
+            isPreparingBookMode = false
+        }
+    }
+
+    private func defaultBookModeConfig() -> BookModeConfig? {
+        let allPageIds = (vocabookViewModel.vocabook?.vocapages ?? []).map(\.id).sorted()
+        guard !allPageIds.isEmpty else { return nil }
+        let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
+        let selectedPageId = (lastViewedID != 0 && allPageIds.contains(lastViewedID)) ? lastViewedID : (allPageIds.first ?? 1)
+        return BookModeConfig(allPageIds: allPageIds, selectedPageId: selectedPageId)
     }
 }
 
@@ -469,6 +547,7 @@ private struct BookModeConfig {
 
 private struct MemoryLevelItem: Identifiable {
     let id = UUID()
+    let tier: MemoryTier
     let title: String
     let subtitle: String
     let count: Int
@@ -495,6 +574,7 @@ private struct VocabookMetrics {
     let linkFont: CGFloat
     let smallLabelFont: CGFloat
     let heroNumberFont: CGFloat
+    let heroSubNumberFont: CGFloat
     let heroSubtitleFont: CGFloat
 
     let searchHeight: CGFloat
@@ -544,12 +624,13 @@ private struct VocabookMetrics {
 
         titleFont = scaled(30)
         subtitleFont = scaled(20)
-        sectionLabelFont = scaled(22)
+        sectionLabelFont = scaled(20)
         bodyFont = scaled(26)
         linkFont = scaled(26)
         smallLabelFont = scaled(22)
         heroNumberFont = scaled(36)
-        heroSubtitleFont = scaled(22)
+        heroSubNumberFont = scaled(26)
+        heroSubtitleFont = scaled(20)
 
         searchHeight = scaled(38)
         searchHorizontalPadding = scaled(15)
@@ -560,19 +641,19 @@ private struct VocabookMetrics {
         cardCornerRadius = scaled(14)
         largeCardCornerRadius = scaled(16)
 
-        actionIconCircle = scaled(45)
-        actionIconFont = scaled(12)
-        actionTitleFont = scaled(16)
-        actionSubtitleFont = scaled(15)
+        actionIconCircle = scaled(28)
+        actionIconFont = scaled(28)
+        actionTitleFont = scaled(22)
+        actionSubtitleFont = scaled(18)
         actionHeight = scaled(60)
 
         memoryRowLeadingBarWidth = max(2, scaled(3))
         memoryRowCountFont = scaled(16)
-        memoryRowTitleFont = scaled(18)
-        memoryRowSubtitleFont = scaled(14)
-        recentWordTitleFont = scaled(20)
-        recentWordSubtitleFont = scaled(18)
-        recentBadgeFont = scaled(12)
+        memoryRowTitleFont = scaled(22)
+        memoryRowSubtitleFont = scaled(20)
+        recentWordTitleFont = scaled(22)
+        recentWordSubtitleFont = scaled(20)
+        recentBadgeFont = scaled(15)
     }
 }
 
@@ -599,7 +680,7 @@ private struct VocabookActionCard: View {
                         .frame(width: metrics.actionIconCircle, height: metrics.actionIconCircle)
 
                     Image(systemName: icon)
-                        .font(.system(size: metrics.actionIconFont * 3.5, weight: .bold))
+                        .font(.system(size: metrics.actionIconFont, weight: .bold))
                         .foregroundStyle(iconColor)
                 }
 
@@ -643,49 +724,50 @@ private struct VocabookActionCard: View {
 private struct MemoryLevelRow: View {
     let item: MemoryLevelItem
     let metrics: VocabookMetrics
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: metrics.compactSpacing) {
-            RoundedRectangle(cornerRadius: metrics.memoryRowLeadingBarWidth, style: .continuous)
-                .fill(item.accent)
-                .frame(width: metrics.memoryRowLeadingBarWidth)
+        Button(action: action) {
+            HStack(spacing: metrics.compactSpacing) {
+                RoundedRectangle(cornerRadius: metrics.memoryRowLeadingBarWidth, style: .continuous)
+                    .fill(item.accent)
+                    .frame(width: metrics.memoryRowLeadingBarWidth)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.system(size: metrics.memoryRowTitleFont, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.24))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(.system(size: metrics.memoryRowTitleFont, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.24))
+                }
 
-                Text(item.subtitle)
-                    .font(.system(size: metrics.memoryRowSubtitleFont, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color(red: 0.48, green: 0.51, blue: 0.58))
+                Spacer()
+
+                Text("\(item.count)")
+                    .font(.system(size: metrics.memoryRowCountFont, weight: .heavy, design: .rounded))
+                    .foregroundStyle(item.accent)
+                    .padding(.horizontal, metrics.cardPadding * 0.7)
+                    .padding(.vertical, metrics.cardPadding * 0.35)
+                    .background(Capsule().fill(item.accent.opacity(0.10)))
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: metrics.recentBadgeFont, weight: .bold))
+                    .foregroundStyle(Color(red: 0.74, green: 0.75, blue: 0.80))
             }
-
-            Spacer()
-
-            Text("\(item.count)")
-                .font(.system(size: metrics.memoryRowCountFont, weight: .heavy, design: .rounded))
-                .foregroundStyle(item.accent)
-                .padding(.horizontal, metrics.cardPadding * 0.7)
-                .padding(.vertical, metrics.cardPadding * 0.35)
-                .background(Capsule().fill(item.accent.opacity(0.10)))
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: metrics.recentBadgeFont, weight: .bold))
-                .foregroundStyle(Color(red: 0.74, green: 0.75, blue: 0.80))
+            .padding(metrics.cardPadding)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            }
         }
-        .padding(metrics.cardPadding)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        }
+        .buttonStyle(.plain)
     }
 }
 
 private struct RecentWordCard: View {
     let card: Flashcard
     let metrics: VocabookMetrics
+    let action: () -> Void
 
     private var titleText: String {
         card.wordDefinition?.attributes.word?.data?.attributes.targetText ?? card.backContent
@@ -693,7 +775,7 @@ private struct RecentWordCard: View {
 
     private var subtitleText: String {
         if let base = card.wordDefinition?.attributes.baseText, !base.isEmpty {
-            return "Meaning: \(base)"
+            return "\(base)"
         }
         return "Saved in your vocabook"
     }
@@ -707,40 +789,43 @@ private struct RecentWordCard: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: metrics.compactSpacing) {
-            Image(systemName: "doc.text")
-                .font(.system(size: metrics.actionIconFont, weight: .bold))
-                .foregroundStyle(Color(red: 0.34, green: 0.40, blue: 0.98))
-                .padding(.top, 2)
+        Button(action: action) {
+            HStack(alignment: .top, spacing: metrics.compactSpacing) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: metrics.actionIconFont, weight: .bold))
+                    .foregroundStyle(Color(red: 0.34, green: 0.40, blue: 0.98))
+                    .padding(.top, 2)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .top, spacing: metrics.compactSpacing) {
-                    Text(titleText)
-                        .font(.system(size: metrics.recentWordTitleFont, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.24))
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .top, spacing: metrics.compactSpacing) {
+                        Text(titleText)
+                            .font(.system(size: metrics.recentWordTitleFont, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.24))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+
+                        Spacer(minLength: metrics.compactSpacing)
+
+                        Text(tierTitle)
+                            .font(.system(size: metrics.recentBadgeFont, weight: .bold, design: .rounded))
+                            .foregroundStyle(tierColor)
+                            .padding(.horizontal, metrics.cardPadding * 0.55)
+                            .padding(.vertical, metrics.cardPadding * 0.25)
+                            .background(Capsule().fill(tierColor.opacity(0.12)))
+                    }
+
+                    Text(subtitleText)
+                        .font(.system(size: metrics.recentWordSubtitleFont, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color(red: 0.47, green: 0.49, blue: 0.57))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-
-                    Spacer(minLength: metrics.compactSpacing)
-
-                    Text(tierTitle)
-                        .font(.system(size: metrics.recentBadgeFont, weight: .bold, design: .rounded))
-                        .foregroundStyle(tierColor)
-                        .padding(.horizontal, metrics.cardPadding * 0.55)
-                        .padding(.vertical, metrics.cardPadding * 0.25)
-                        .background(Capsule().fill(tierColor.opacity(0.12)))
                 }
-
-                Text(subtitleText)
-                    .font(.system(size: metrics.recentWordSubtitleFont, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color(red: 0.47, green: 0.49, blue: 0.57))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(metrics.cardPadding)
+            .background(Color(red: 0.92, green: 0.95, blue: 1.00))
+            .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(metrics.cardPadding)
-        .background(Color(red: 0.92, green: 0.95, blue: 1.00))
-        .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
+        .buttonStyle(.plain)
     }
 }

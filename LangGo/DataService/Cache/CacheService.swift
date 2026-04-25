@@ -79,6 +79,10 @@ final class CacheService {
         Set(tags).forEach { invalidate(tag: $0) }
     }
 
+    func keys(for tag: CacheTag) -> [String] {
+        indexStore.keys(for: tag)
+    }
+
     private func load<T: Codable>(type: T.Type, from key: String, enforceTTL: Bool) -> T? {
         if let memoryData = memoryStore.data(for: key),
            let value: T = decodeEntry(from: memoryData, for: key, enforceTTL: enforceTTL) {

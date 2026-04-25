@@ -39,6 +39,9 @@
     "%lld" : {
 
     },
+    "%lld min read" : {
+
+    },
     "%lld of %lld" : {
       "comment" : "Progress count format (e.g., 1 of 10)",
       "localizations" : {
@@ -165,10 +168,13 @@
     "Are you sure?" : {
 
     },
-    "Article Completed!" : {
+    "Article" : {
 
     },
     "Article Error" : {
+
+    },
+    "Article Reader" : {
 
     },
     "Article Title" : {
@@ -672,6 +678,9 @@
     "LangGo to Pro, Ready to GO!" : {
 
     },
+    "Larger" : {
+
+    },
     "Leaderboard" : {
 
     },
@@ -734,6 +743,9 @@
           }
         }
       }
+    },
+    "Loading article..." : {
+
     },
     "Loading Book..." : {
 
@@ -895,6 +907,9 @@
       }
     },
     "Nice work! You’ve finished today’s due words." : {
+
+    },
+    "No article content is available yet." : {
 
     },
     "No cards available for an exam at this time." : {
@@ -1193,6 +1208,9 @@
     "Reading Session" : {
 
     },
+    "Reading Settings" : {
+
+    },
     "Recording Error" : {
 
     },
@@ -1289,9 +1307,6 @@
         }
       }
     },
-    "Review Words" : {
-
-    },
     "Save" : {
 
     },
@@ -1354,6 +1369,9 @@
 
     },
     "SELECTED (%lld)" : {
+
+    },
+    "Selected words can be translated and added to your vocabook." : {
 
     },
     "Session Complete!" : {
@@ -1455,6 +1473,9 @@
     "Skip onboarding" : {
 
     },
+    "Smaller" : {
+
+    },
     "Standard Voices" : {
 
     },
@@ -1514,13 +1535,13 @@
     "TAGS" : {
 
     },
+    "Tap Any Word to Translate" : {
+
+    },
     "Target (%@)" : {
 
     },
     "Target word" : {
-
-    },
-    "Tech Insights • 8 min read" : {
 
     },
     "Terms of Service" : {
@@ -1891,9 +1912,6 @@
 
     },
     "You'll still see the leaderboard, but others won't see your rank or username." : {
-
-    },
-    "You've finished reading this article" : {
 
     },
     "Your complete vocabulary library" : {

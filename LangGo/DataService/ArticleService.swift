@@ -215,6 +215,41 @@ class ArticleService {
         return response
     }
 
+    func fetchUserArticle(articleId: Int) async throws -> StrapiUserArticle {
+        let currentUserID = try await currentUserID()
+
+        if !isRefreshModeEnabled,
+           let cachedArticle = ArticleCache.loadUserArticleDetail(
+            userID: currentUserID,
+            articleID: articleId,
+            using: cacheService
+           ) {
+            logger.debug("✅ Returning user article detail from cache for article \(articleId).")
+            return cachedArticle
+        }
+
+        guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/user-articles/\(articleId)") else {
+            throw URLError(.badURL)
+        }
+
+        urlComponents.queryItems = [
+            URLQueryItem(name: "fields[0]", value: "title"),
+            URLQueryItem(name: "fields[1]", value: "content"),
+            URLQueryItem(name: "fields[2]", value: "language_code"),
+            URLQueryItem(name: "fields[3]", value: "word_count"),
+            URLQueryItem(name: "fields[4]", value: "progress"),
+            URLQueryItem(name: "fields[5]", value: "last_read_at"),
+            URLQueryItem(name: "populate[article_tags][fields][0]", value: "tag")
+        ]
+
+        guard let url = urlComponents.url else { throw URLError(.badURL) }
+
+        logger.debug("ArticleService: Fetching detail for article \(articleId) and user \(currentUserID).")
+        let response: StrapiSingleResponse<StrapiUserArticle> = try await networkManager.fetchDirect(from: url)
+        ArticleCache.storeUserArticleDetail(response.data, userID: currentUserID, using: cacheService)
+        return response.data
+    }
+
     func createUserArticle(
         title: String,
         content: String,
@@ -244,9 +279,24 @@ class ArticleService {
         )
 
         logger.debug("ArticleService: Creating user article titled '\(title, privacy: .public)' for user \(currentUserID).")
-        let response: StrapiSingleResponse<StrapiUserArticle> = try await networkManager.post(to: url, body: request)
-        ArticleCache.invalidateAfterArticleWrite(tagsChanged: !articleTagIds.isEmpty, using: cacheService)
-        return response.data
+        return try await CacheMutation.perform(
+            remoteWrite: {
+                let response: StrapiSingleResponse<StrapiUserArticle> = try await self.networkManager.post(to: url, body: request)
+                return response.data
+            },
+            applyLocalSuccess: { createdArticle in
+                ArticleCache.patchUserArticle(
+                    createdArticle,
+                    userID: currentUserID,
+                    prependToFirstPage: true,
+                    using: self.cacheService
+                )
+
+                if !articleTagIds.isEmpty {
+                    self.cacheService.invalidate(tags: [ArticleCache.articleTagsTag, ArticleCache.usedArticleTagsTag])
+                }
+            }
+        )
     }
 
     func updateUserArticle(
@@ -279,8 +329,21 @@ class ArticleService {
         )
 
         logger.debug("ArticleService: Updating user article \(articleId) for user \(currentUserID).")
-        let response: StrapiSingleResponse<StrapiUserArticle> = try await networkManager.put(to: url, body: request)
-        ArticleCache.invalidateAfterArticleWrite(tagsChanged: true, using: cacheService)
-        return response.data
+        return try await CacheMutation.perform(
+            remoteWrite: {
+                let response: StrapiSingleResponse<StrapiUserArticle> = try await self.networkManager.put(to: url, body: request)
+                return response.data
+            },
+            applyLocalSuccess: { updatedArticle in
+                ArticleCache.patchUserArticle(
+                    updatedArticle,
+                    userID: currentUserID,
+                    prependToFirstPage: false,
+                    using: self.cacheService
+                )
+
+                self.cacheService.invalidate(tags: [ArticleCache.articleTagsTag, ArticleCache.usedArticleTagsTag])
+            }
+        )
     }
 }

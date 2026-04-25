@@ -120,12 +120,44 @@ class FlashcardService {
     func fetchAllMyFlashcards() async throws -> [Flashcard] {
         return try await getOrFetchAllMyFlashcards()
     }
+
+    func fetchAllMyFlashcards(reviewTier: String) async throws -> [Flashcard] {
+        return try await getOrFetchAllMyFlashcards(reviewTier: reviewTier)
+    }
+
+    func fetchRecentlyAddedFlashcards(limit: Int) async throws -> [Flashcard] {
+        guard limit > 0 else { return [] }
+
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadRecentFlashcards(limit: limit, using: cacheService) {
+            logger.debug("✅ Returning recent flashcards from cache for limit \(limit).")
+            return cached
+        }
+
+        if !isRefreshModeEnabled,
+           let cachedAll = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
+            let recent = Array(cachedAll.sorted { $0.id > $1.id }.prefix(limit))
+            FlashcardCache.storeRecentFlashcards(recent, limit: limit, using: cacheService)
+            logger.debug("✅ Derived recent flashcards from all-cards cache.")
+            return recent
+        }
+
+        logger.debug("Fetching recent flashcards from network with limit \(limit).")
+        let (cards, _) = try await fetchFlashcardsPageFromNetwork(page: 1, pageSize: limit, sortDescending: true)
+        FlashcardCache.storeRecentFlashcards(cards, limit: limit, using: cacheService)
+        return cards
+    }
     
-    func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false) async throws -> ([Flashcard], StrapiPagination?) {
+    func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false, reviewTier: String? = nil) async throws -> ([Flashcard], StrapiPagination?) {
         if dueOnly {
             return try await fetchReviewFlashcardsPage(page: page, pageSize: pageSize)
         }
-        let allFlashcards = try await getOrFetchAllMyFlashcards()
+        let allFlashcards: [Flashcard]
+        if let reviewTier, !reviewTier.isEmpty {
+            allFlashcards = try await getOrFetchAllMyFlashcards(reviewTier: reviewTier)
+        } else {
+            allFlashcards = try await getOrFetchAllMyFlashcards()
+        }
         
         let totalItems = allFlashcards.count
         let totalPages = (totalItems + pageSize - 1) / pageSize
@@ -177,6 +209,38 @@ class FlashcardService {
         return allCards
     }
 
+    private func getOrFetchAllMyFlashcards(reviewTier: String) async throws -> [Flashcard] {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadTierFlashcards(reviewTier: reviewTier, using: cacheService) {
+            logger.debug("✅ Returning tier flashcards from cache for tier '\(reviewTier, privacy: .public)'.")
+            return cached
+        }
+
+        if !isRefreshModeEnabled,
+           let cachedAll = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
+            let filtered = cachedAll.filter { $0.reviewTire == reviewTier }
+            FlashcardCache.storeTierFlashcards(filtered, reviewTier: reviewTier, using: cacheService)
+            logger.debug("✅ Derived tier flashcards for '\(reviewTier, privacy: .public)' from all-cards cache.")
+            return filtered
+        }
+
+        logger.debug("Cache for tier flashcards '\(reviewTier, privacy: .public)' is stale. Fetching all pages from network.")
+        var allCards: [Flashcard] = []
+        var currentPage = 1
+        var hasMorePages = true
+
+        while hasMorePages {
+            let (cards, pagination) = try await fetchFlashcardsPageFromNetwork(page: currentPage, pageSize: 100, reviewTier: reviewTier)
+            if !cards.isEmpty { allCards.append(contentsOf: cards) }
+            hasMorePages = (pagination?.page ?? 1) < (pagination?.pageCount ?? 1)
+            currentPage += 1
+        }
+
+        FlashcardCache.storeTierFlashcards(allCards, reviewTier: reviewTier, using: cacheService)
+        logger.debug("💾 Saved tier flashcards to cache for tier '\(reviewTier, privacy: .public)'.")
+        return allCards
+    }
+
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else { throw URLError(.badURL) }
         urlComponents.queryItems = [
@@ -190,14 +254,26 @@ class FlashcardService {
         return ((response.data ?? []).map(transformStrapiCard), response.meta?.pagination)
     }
     
-    private func fetchFlashcardsPageFromNetwork(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+    private func fetchFlashcardsPageFromNetwork(
+        page: Int,
+        pageSize: Int,
+        reviewTier: String? = nil,
+        sortDescending: Bool = false
+    ) async throws -> ([Flashcard], StrapiPagination?) {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/flashcards/mine") else { throw URLError(.badURL) }
-        urlComponents.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "pagination[page]", value: "\(page)"),
             URLQueryItem(name: "pagination[pageSize]", value: "\(pageSize)"),
             URLQueryItem(name: "populate[word_definition][populate]", value: "word,partOfSpeech"),
             URLQueryItem(name: "locale", value: "all")
         ]
+        if let reviewTier, !reviewTier.isEmpty {
+            queryItems.append(URLQueryItem(name: "tier", value: reviewTier))
+        }
+        if sortDescending {
+            queryItems.append(URLQueryItem(name: "sort", value: "desc"))
+        }
+        urlComponents.queryItems = queryItems
         guard let url = urlComponents.url else { throw URLError(.badURL) }
         let response: StrapiListResponse<StrapiFlashcard> = try await networkManager.fetchDirect(from: url)
         return ((response.data ?? []).map(transformStrapiCard), response.meta?.pagination)

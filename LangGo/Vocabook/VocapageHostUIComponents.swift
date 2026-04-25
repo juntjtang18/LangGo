@@ -252,18 +252,19 @@ struct VocapagePagingView: View {
     @Binding var showBaseText: Bool
     let highlightIndex: Int
     let isShowingDueWordsOnly: Bool
+    let reviewTier: String?
     let onSelectCard: (Flashcard) -> Void
 
     var body: some View {
         TabView(selection: $currentPageIndex) {
             ForEach(allVocapageIds.indices, id: \.self) { index in
                 VocapageView(
-                    vocapage: loader.page(id: allVocapageIds[index], dueOnly: isShowingDueWordsOnly),
+                    vocapage: loader.page(id: allVocapageIds[index], dueOnly: isShowingDueWordsOnly, reviewTier: reviewTier),
                     showBaseText: $showBaseText,
                     highlightIndex: highlightIndex,
                     onLoad: {
                         Task {
-                            await loader.loadPage(withId: allVocapageIds[index], dueWordsOnly: isShowingDueWordsOnly)
+                            await loader.loadPage(withId: allVocapageIds[index], dueWordsOnly: isShowingDueWordsOnly, reviewTier: reviewTier)
                         }
                     },
                     onSelectCard: onSelectCard
