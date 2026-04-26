@@ -149,6 +149,7 @@ struct WordSearchView: View {
         let a = rel.attributes
         return Flashcard(
             id: rel.id,                                        // ✅ real server id
+            createdAt: a.createdAt,
             wordDefinition: def,
             lastReviewedAt: a.lastReviewedAt,
             correctStreak: a.correctStreak ?? 0,

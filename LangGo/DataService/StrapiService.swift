@@ -569,6 +569,7 @@ class StrapiService {
 
         return Flashcard(
             id: strapiCard.id,
+            createdAt: attributes.createdAt,
             wordDefinition: wordDefinitionData,
             lastReviewedAt: attributes.lastReviewedAt,
             correctStreak: attributes.correctStreak ?? 0,

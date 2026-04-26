@@ -62,6 +62,7 @@ class WordService {
         guard let flashcardId = response.meta?.flashcardId else { return nil }
         return Flashcard(
             id: flashcardId,
+            createdAt: Date(),
             wordDefinition: response.data,
             lastReviewedAt: nil,
             correctStreak: 0,

@@ -136,16 +136,17 @@ class FlashcardService {
 
         if !isRefreshModeEnabled,
            let cachedAll = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
-            let recent = Array(cachedAll.sorted { $0.id > $1.id }.prefix(limit))
+            let recent = Array(sortByMostRecentCreation(cachedAll).prefix(limit))
             FlashcardCache.storeRecentFlashcards(recent, limit: limit, using: cacheService)
             logger.debug("✅ Derived recent flashcards from all-cards cache.")
             return recent
         }
 
         logger.debug("Fetching recent flashcards from network with limit \(limit).")
-        let (cards, _) = try await fetchFlashcardsPageFromNetwork(page: 1, pageSize: limit, sortDescending: true)
-        FlashcardCache.storeRecentFlashcards(cards, limit: limit, using: cacheService)
-        return cards
+        let (cards, _) = try await fetchFlashcardsPageFromNetwork(page: 1, pageSize: limit, sortByMostRecentCreation: true)
+        let recent = Array(sortByMostRecentCreation(cards).prefix(limit))
+        FlashcardCache.storeRecentFlashcards(recent, limit: limit, using: cacheService)
+        return recent
     }
     
     func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false, reviewTier: String? = nil) async throws -> ([Flashcard], StrapiPagination?) {
@@ -259,7 +260,7 @@ class FlashcardService {
         page: Int,
         pageSize: Int,
         reviewTier: String? = nil,
-        sortDescending: Bool = false
+        sortByMostRecentCreation: Bool = false
     ) async throws -> ([Flashcard], StrapiPagination?) {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/flashcards/mine") else { throw URLError(.badURL) }
         var queryItems = [
@@ -271,8 +272,8 @@ class FlashcardService {
         if let reviewTier, !reviewTier.isEmpty {
             queryItems.append(URLQueryItem(name: "tier", value: reviewTier))
         }
-        if sortDescending {
-            queryItems.append(URLQueryItem(name: "sort", value: "desc"))
+        if sortByMostRecentCreation {
+            queryItems.append(URLQueryItem(name: "sort[0]", value: "createdAt:desc"))
         }
         urlComponents.queryItems = queryItems
         guard let url = urlComponents.url else { throw URLError(.badURL) }
@@ -284,6 +285,7 @@ class FlashcardService {
         let attributes = strapiCard.attributes
         return Flashcard(
             id: strapiCard.id,
+            createdAt: attributes.createdAt,
             wordDefinition: attributes.wordDefinition?.data,
             lastReviewedAt: attributes.lastReviewedAt,
             correctStreak: attributes.correctStreak ?? 0,
@@ -291,5 +293,16 @@ class FlashcardService {
             isRemembered: attributes.isRemembered,
             reviewTire: attributes.reviewTire?.data?.attributes.tier
         )
+    }
+
+    private func sortByMostRecentCreation(_ cards: [Flashcard]) -> [Flashcard] {
+        cards.sorted { lhs, rhs in
+            switch (lhs.createdAt, rhs.createdAt) {
+            case let (leftDate?, rightDate?) where leftDate != rightDate:
+                return leftDate > rightDate
+            default:
+                return lhs.id > rhs.id
+            }
+        }
     }
 }

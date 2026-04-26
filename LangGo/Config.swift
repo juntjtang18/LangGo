@@ -18,7 +18,7 @@ struct Config {
             #if targetEnvironment(simulator)
                 return "http://localhost:1338"
             #elseif USE_LOCAL_IP
-                return "http://192.168.1.70:1338" // Use your actual LAN IP on a physical device.
+                return "http://192.168.1.72:1338" // Use your actual LAN IP on a physical device.
             #else
                 return "http://localhost:1338"
             #endif

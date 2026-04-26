@@ -70,6 +70,7 @@ struct VocabookView: View {
     @State private var isShowingBookMode = false
     @State private var isPreparingBookMode = false
     @State private var infoMessage: String?
+    @State private var recentAddedCount: Int = 0
     @State private var recentFlashcards: [Flashcard] = []
     @State private var selectedRecentCard: Flashcard?
     @State private var presentedBookModeConfig: BookModeConfig?
@@ -115,6 +116,13 @@ struct VocabookView: View {
         .onReceive(NotificationCenter.default.publisher(for: .flashcardsDidChange)) { _ in
             Task {
                 await vocabookViewModel.loadStatistics()
+                await refreshRecentAddedCount()
+                await refreshRecentlyAddedCards()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .myUserPointsDidChange)) { _ in
+            Task {
+                await refreshRecentAddedCount()
                 await refreshRecentlyAddedCards()
             }
         }
@@ -385,7 +393,7 @@ struct VocabookView: View {
     }
 
     private var newAddedWordsText: String {
-        formatDelta(countForTier(.new))
+        formatDelta(recentAddedCount)
     }
 
     private var recentlyAddedCards: [Flashcard] {
@@ -440,11 +448,26 @@ struct VocabookView: View {
             await flashcardViewModel.prepareReviewSession()
         }
 
+        await refreshRecentAddedCount()
         await refreshRecentlyAddedCards()
     }
 
+    private var baseLanguageLocale: String {
+        UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
+    }
+
+    private func refreshRecentAddedCount() async {
+        do {
+            let points = try await DataServices.shared.authService.fetchMyUserPoints(locale: baseLanguageLocale)
+            recentAddedCount = points?.word_add ?? 0
+        } catch {
+            logger.error("Failed to fetch recent added count for vocabook: \(error.localizedDescription, privacy: .public)")
+            recentAddedCount = MyUserPointsCache.load(locale: baseLanguageLocale)?.word_add ?? 0
+        }
+    }
+
     private func refreshRecentlyAddedCards() async {
-        let recentCount = countForTier(.new)
+        let recentCount = recentAddedCount
         guard recentCount > 0 else {
             recentFlashcards = []
             return

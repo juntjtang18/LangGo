@@ -8,6 +8,7 @@ class NetworkManager {
     static let shared = NetworkManager()
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private let session: URLSession
     private let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "NetworkManager")
     private let timingLogEnabledKey = "isNetworkTimingLogEnabled"
@@ -24,6 +25,10 @@ class NetworkManager {
         
         decoder.dateDecodingStrategy = .formatted(formatter)
         encoder.dateEncodingStrategy = .formatted(formatter)
+
+        let configuration = URLSessionConfiguration.default
+        configuration.waitsForConnectivity = true
+        session = URLSession(configuration: configuration)
     }
 
     private var isTimingLogEnabled: Bool {
@@ -160,7 +165,7 @@ class NetworkManager {
         logger.debug("➡️ \(method) \(url.absoluteString)")
 
         let start = Date()
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
         guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         
@@ -238,7 +243,7 @@ class NetworkManager {
         logger.debug("➡️ \(method) \(url.absoluteString)")
 
         let start = Date()
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
         guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
 

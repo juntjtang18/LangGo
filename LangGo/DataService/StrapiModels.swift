@@ -12,8 +12,8 @@ struct StrapiFlashcard: Codable {
 }
 
 struct FlashcardAttributes: Codable {
-    let createdAt: String?
-    let updatedAt: String?
+    let createdAt: Date?
+    let updatedAt: Date?
     let locale: String?
     let lastReviewedAt: Date?
     let wordDefinition: WordDefinitionRelation?
@@ -757,6 +757,7 @@ struct SaveUserArticlePayload: Encodable {
 
 struct Flashcard: Codable, Identifiable, Equatable {
     let id: Int
+    let createdAt: Date?
     
     // This now holds the complete related WordDefinition object, including its ID and attributes.
     let wordDefinition: StrapiWordDefinition?
@@ -778,8 +779,9 @@ struct Flashcard: Codable, Identifiable, Equatable {
     var isRemembered: Bool
     var reviewTire: String?
 
-    init(id: Int, wordDefinition: StrapiWordDefinition?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, reviewTire: String?) {
+    init(id: Int, createdAt: Date?, wordDefinition: StrapiWordDefinition?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, reviewTire: String?) {
         self.id = id
+        self.createdAt = createdAt
         self.wordDefinition = wordDefinition
         self.lastReviewedAt = lastReviewedAt
         self.correctStreak = correctStreak
