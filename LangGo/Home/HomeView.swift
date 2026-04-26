@@ -1,6 +1,5 @@
 import SwiftUI
 import AVFoundation
-import os
 
 struct HomeView: View {
     @Binding var selectedTab: Int
@@ -8,8 +7,7 @@ struct HomeView: View {
 
     @StateObject private var flashcardViewModel = FlashcardViewModel()
     @StateObject private var vocabookViewModel = VocabookViewModel()
-    @ObservedObject private var userPointsService = DataServices.shared.userPointsService
-    @ObservedObject private var pointGroupService = DataServices.shared.pointGroupService
+    @StateObject private var viewModel: HomeViewModel
 
     @State private var isShowingLeaderboard = false
     @State private var isShowingReview = false
@@ -20,15 +18,17 @@ struct HomeView: View {
     @State private var isPreparingBookMode = false
     @State private var placeholderMessage: String?
     @State private var cameraAccessMessage: String?
-    @State private var isLoadingUserPoints = false
-    @State private var hasLoadedUserPoints = false
-    @State private var flashcardStatistics: StrapiStatistics?
-    @State private var hasLoadedFlashcardStatistics = false
-    @State private var nextFlashcardStatisticsFetchAt: Date?
-    @State private var hasLoadedPointGroup = false
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
-    private let logger = Logger(subsystem: "com.langGo.swift", category: "HomeView")
+
+    @MainActor
+    init(
+        selectedTab: Binding<Int>,
+        viewModel: HomeViewModel? = nil
+    ) {
+        self._selectedTab = selectedTab
+        self._viewModel = StateObject(wrappedValue: viewModel ?? HomeViewModel())
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -101,7 +101,7 @@ struct HomeView: View {
             }
             .background(Color.white)
             .refreshable {
-                await refreshFlashcardStatistics()
+                await viewModel.handlePullToRefresh()
             }
         }
         .background(Color.white.ignoresSafeArea())
@@ -148,10 +148,7 @@ struct HomeView: View {
             )
         }
         .fullScreenCover(isPresented: $isShowingLeaderboard) {
-            LeaderboardSheet(
-                leaderboard: resolvedPointGroupLeaderboard,
-                userPoints: resolvedUserPoints ?? .empty
-            )
+            LeaderboardSheet(state: viewModel.leaderboardSheetState)
         }
         .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
             Button("OK", role: .cancel) {
@@ -168,18 +165,15 @@ struct HomeView: View {
             Text(placeholderMessage ?? "")
         }
         .task {
-            await loadUserPointsIfNeeded()
-            await loadFlashcardStatisticsIfNeeded()
-            await loadPointGroupIfNeeded()
+            await viewModel.loadIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .flashcardsDidChange)) { _ in
             Task {
-                await refreshFlashcardStatistics(forceRefresh: true)
-                await refreshPointGroup()
+                await viewModel.handleFlashcardsDidChange()
             }
         }
-        .task(id: nextFlashcardStatisticsFetchAt) {
-            guard let nextFetchAt = nextFlashcardStatisticsFetchAt else { return }
+        .task(id: viewModel.nextFlashcardStatisticsFetchAt) {
+            guard let nextFetchAt = viewModel.nextFlashcardStatisticsFetchAt else { return }
 
             let delay = nextFetchAt.timeIntervalSinceNow
             if delay > 0 {
@@ -189,22 +183,18 @@ struct HomeView: View {
             guard !Task.isCancelled else { return }
             guard scenePhase == .active else { return }
 
-            await refreshFlashcardStatistics(forceRefresh: true)
+            await viewModel.handleScheduledFlashcardStatisticsRefresh()
         }
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
             Task {
-                await refreshFlashcardStatistics()
-                await refreshUserPoints()
-                await refreshPointGroup()
+                await viewModel.handleSceneDidBecomeActive()
             }
         }
         .onChange(of: selectedTab) { newTab in
             guard newTab == 0 else { return }
             Task {
-                await refreshFlashcardStatistics()
-                await refreshUserPoints()
-                await refreshPointGroup()
+                await viewModel.handleHomeTabSelected()
             }
         }
     }
@@ -232,23 +222,14 @@ struct HomeView: View {
         HStack(spacing: metrics.summaryCardGap) {
             HomeRankPointsCard(
                 metrics: metrics,
-                userPoints: resolvedUserPoints,
-                isLoading: isLoadingUserPoints
+                state: viewModel.rankPointsState
             )
                 .frame(maxWidth: .infinity)
 
             HomeLeaderboardCard(
                 metrics: metrics,
-                title: pointGroupBannerTitle,
-                positionText: pointGroupPositionText,
-                changeText: pointGroupBannerChangeText,
-                changeBackground: pointGroupBannerChangeBackground,
-                isEnabled: isLeaderboardBannerEnabled && !isLoadingUserPoints,
-                action: {
-                    Task {
-                        await openLeaderboard()
-                    }
-                }
+                state: viewModel.leaderboardBannerState,
+                action: openLeaderboard
             )
             .frame(maxWidth: .infinity)
         }
@@ -262,7 +243,7 @@ struct HomeView: View {
                         .font(.system(size: metrics.reviewLabelFont, weight: .semibold, design: .rounded))
                         .foregroundStyle(Color.white)
 
-                    Text(formatNumber(resolvedFlashcardStatistics.totalCards))
+                    Text(formatNumber(viewModel.reviewCardState.totalCards))
                         .font(.system(size: metrics.reviewCountFont, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color.white)
                         .lineLimit(1)
@@ -282,8 +263,8 @@ struct HomeView: View {
             }
 
             VStack(spacing: metrics.reviewRowsGap) {
-                ReviewStatusRow(label: "Due", value: formatNumber(resolvedFlashcardStatistics.dueForReview), icon: nil, metrics: metrics)
-                ReviewStatusRow(label: "Remembered", value: formatNumber(resolvedFlashcardStatistics.remembered), icon: nil, metrics: metrics)
+                ReviewStatusRow(label: "Due", value: formatNumber(viewModel.reviewCardState.dueForReview), icon: nil, metrics: metrics)
+                ReviewStatusRow(label: "Remembered", value: formatNumber(viewModel.reviewCardState.remembered), icon: nil, metrics: metrics)
             }
             .padding(.horizontal, metrics.reviewPanelHorizontalPadding)
             .padding(.vertical, metrics.reviewPanelVerticalPadding)
@@ -408,6 +389,14 @@ struct HomeView: View {
         }
     }
 
+    private func openLeaderboard() {
+        isShowingLeaderboard = true
+
+        Task {
+            await viewModel.loadLeaderboard()
+        }
+    }
+
     private var placeholderAlertBinding: Binding<Bool> {
         Binding(
             get: { placeholderMessage != nil },
@@ -482,166 +471,6 @@ struct HomeView: View {
         }
     }
 
-    private var resolvedUserPoints: MyUserPointsAttributes? {
-        userPointsService.currentMyUserPoints(locale: baseLanguageLocale)
-    }
-
-    private var resolvedMyPointGroup: MyPointGroupData? {
-        pointGroupService.currentMyPointGroup(locale: baseLanguageLocale)
-    }
-
-    private var resolvedFlashcardStatistics: StrapiStatistics {
-        flashcardStatistics ?? StrapiStatistics(
-            totalCards: 0,
-            remembered: 0,
-            dueForReview: 0,
-            reviewed: 0,
-            hardToRemember: 0,
-            byTier: [],
-            nextFetchAt: nil,
-            batchWindowMinutes: nil
-        )
-    }
-
-    private var resolvedPointGroupLeaderboard: PointGroupLeaderboardData {
-        if let pointGroupId = resolvedMyPointGroup?.pointGroup?.id,
-           let cachedLeaderboard = pointGroupService.currentPointGroupLeaderboard(
-            pointGroupId: pointGroupId,
-            locale: baseLanguageLocale
-           ) {
-            return cachedLeaderboard
-        }
-
-        if let resolvedMyPointGroup {
-            return PointGroupCache.leaderboard(from: resolvedMyPointGroup)
-        }
-
-        return PointGroupLeaderboardData(
-            pointGroup: nil,
-            currentUserPosition: nil,
-            groupMemberCount: 0,
-            leaderboard: []
-        )
-    }
-
-    private var pointGroupBannerTitle: String {
-        if let groupRankName = resolvedPointGroupLeaderboard.pointGroup?.groupRank?.title, !groupRankName.isEmpty {
-            return groupRankName
-        }
-        return "No Group Yet"
-    }
-
-    private var pointGroupPositionText: String {
-        if let position = resolvedPointGroupLeaderboard.currentUserPosition {
-            return "#\(position)"
-        }
-        return "#—"
-    }
-
-    private var pointGroupBannerChangeText: String? {
-        guard let resolvedUserPoints else { return nil }
-        let change = resolvedUserPoints.group_rank_change
-        if change > 0 {
-            return "↑ \(change)"
-        }
-        if change < 0 {
-            return "↓ \(abs(change))"
-        }
-        return nil
-    }
-
-    private var pointGroupBannerChangeBackground: Color {
-        guard let resolvedUserPoints else {
-            return Color(red: 0.66, green: 0.67, blue: 0.72)
-        }
-        let change = resolvedUserPoints.group_rank_change
-        if change > 0 {
-            return Color(red: 0.22, green: 0.79, blue: 0.37)
-        }
-        if change < 0 {
-            return Color(red: 0.91, green: 0.32, blue: 0.25)
-        }
-        return Color(red: 0.66, green: 0.67, blue: 0.72)
-    }
-
-    private var isLeaderboardBannerEnabled: Bool {
-        resolvedPointGroupLeaderboard.pointGroup?.id != nil
-    }
-
-    private var baseLanguageLocale: String {
-        UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
-    }
-
-    private func loadUserPointsIfNeeded() async {
-        guard !hasLoadedUserPoints else { return }
-        hasLoadedUserPoints = true
-
-        isLoadingUserPoints = true
-        defer { isLoadingUserPoints = false }
-        await userPointsService.loadMyUserPoints(locale: baseLanguageLocale)
-    }
-
-    private func refreshUserPoints() async {
-        isLoadingUserPoints = true
-        defer { isLoadingUserPoints = false }
-        do {
-            _ = try await userPointsService.refreshMyUserPoints(locale: baseLanguageLocale)
-        } catch {
-            logger.error("Failed to fetch user points: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func loadFlashcardStatisticsIfNeeded() async {
-        guard !hasLoadedFlashcardStatistics else { return }
-        hasLoadedFlashcardStatistics = true
-
-        await refreshFlashcardStatistics()
-    }
-
-    private func refreshFlashcardStatistics(forceRefresh: Bool = false) async {
-        do {
-            let statistics = try await DataServices.shared.flashcardService.fetchFlashcardStatistics(forceRefresh: forceRefresh)
-            flashcardStatistics = statistics
-            nextFlashcardStatisticsFetchAt = nextFlashcardStatisticsFetchDate(from: statistics)
-        } catch {
-            logger.error("Failed to fetch flashcard statistics: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func nextFlashcardStatisticsFetchDate(from statistics: StrapiStatistics) -> Date? {
-        guard statistics.dueForReview == 0 else {
-            return nil
-        }
-
-        guard let nextFetchAt = statistics.nextFetchAt else {
-            return nil
-        }
-
-        return ISO8601DateFormatter().date(from: nextFetchAt)
-    }
-
-    private func loadPointGroupIfNeeded() async {
-        guard !hasLoadedPointGroup else { return }
-        hasLoadedPointGroup = true
-
-        await pointGroupService.loadMyPointGroup(locale: baseLanguageLocale)
-    }
-
-    private func refreshPointGroup() async {
-        do {
-            _ = try await pointGroupService.refreshMyPointGroup(locale: baseLanguageLocale)
-        } catch {
-            logger.error("Failed to fetch point group: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func openLeaderboard() async {
-        isShowingLeaderboard = true
-
-        if let pointGroupId = resolvedPointGroupLeaderboard.pointGroup?.id {
-            await pointGroupService.loadPointGroupLeaderboard(pointGroupId: pointGroupId, locale: baseLanguageLocale)
-        }
-    }
 }
 
 private struct HomeMetrics {
@@ -885,8 +714,7 @@ private struct BookModeConfig {
 
 private struct HomeRankPointsCard: View {
     let metrics: HomeMetrics
-    let userPoints: MyUserPointsAttributes?
-    let isLoading: Bool
+    let state: HomeViewModel.RankPointsCardState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -895,7 +723,7 @@ private struct HomeRankPointsCard: View {
                     .font(.system(size: metrics.summaryIconFont, weight: .bold))
                     .foregroundStyle(Color(red: 0.95, green: 0.57, blue: 0.11))
 
-                Text(rankText)
+                Text(state.rankText)
                     .font(.system(size: metrics.summaryTitleFont, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(red: 0.95, green: 0.57, blue: 0.11))
             }
@@ -903,19 +731,21 @@ private struct HomeRankPointsCard: View {
             Spacer()
                 .frame(height: metrics.summaryTopGap)
 
-            if isLoading && userPoints == nil {
+            if state.isLoading && state.points == nil {
                 ProgressView()
                     .tint(Color(red: 0.95, green: 0.57, blue: 0.11))
                     .frame(maxWidth: .infinity, alignment: .leading)
-            } else if let userPoints {
+            } else if let points = state.points {
                 HStack(alignment: .lastTextBaseline, spacing: metrics.summaryValueGap) {
-                    Text(pointsText(userPoints))
+                    Text(formatNumber(points))
                         .font(.system(size: metrics.summaryValueFont, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color(red: 0.22, green: 0.24, blue: 0.32))
 
-                    Text(pointsDeltaText(userPoints))
-                        .font(.system(size: metrics.summaryDeltaFont, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color(red: 0.15, green: 0.69, blue: 0.31))
+                    if let pointsDelta = state.pointsDelta {
+                        Text(formatDelta(pointsDelta))
+                            .font(.system(size: metrics.summaryDeltaFont, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.15, green: 0.69, blue: 0.31))
+                    }
                 }
             } else {
                 Text("Unavailable")
@@ -950,31 +780,11 @@ private struct HomeRankPointsCard: View {
         .background(Color(red: 1.00, green: 0.95, blue: 0.84))
         .clipShape(RoundedRectangle(cornerRadius: metrics.summaryCardCornerRadius, style: .continuous))
     }
-
-    private var rankText: String {
-        guard let userPoints else { return isLoading ? "Loading..." : "Unranked" }
-        if let rankText = userPoints.rankText?.trimmingCharacters(in: .whitespacesAndNewlines), !rankText.isEmpty {
-            return rankText
-        }
-        return userPoints.rank > 0 ? "#\(userPoints.rank)" : "Unranked"
-    }
-
-    private func pointsText(_ userPoints: MyUserPointsAttributes) -> String {
-        formatNumber(userPoints.points)
-    }
-
-    private func pointsDeltaText(_ userPoints: MyUserPointsAttributes) -> String {
-        formatDelta(userPoints.points_add)
-    }
 }
 
 private struct HomeLeaderboardCard: View {
     let metrics: HomeMetrics
-    let title: String
-    let positionText: String
-    let changeText: String?
-    let changeBackground: Color
-    let isEnabled: Bool
+    let state: HomeViewModel.LeaderboardBannerState
     let action: () -> Void
 
     var body: some View {
@@ -985,7 +795,7 @@ private struct HomeLeaderboardCard: View {
                         Image(systemName: "medal.fill")
                             .font(.system(size: metrics.summaryIconFont, weight: .bold))
                             .foregroundStyle(Color.orange)
-                        Text(title)
+                        Text(state.title)
                             .font(.system(size: metrics.summaryTitleFont, weight: .bold, design: .rounded))
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
@@ -997,7 +807,7 @@ private struct HomeLeaderboardCard: View {
                         .font(.system(size: metrics.summaryIconFont - 1, weight: .bold))
                 }
                 .foregroundStyle(
-                    isEnabled
+                    state.isEnabled
                     ? Color(red: 0.26, green: 0.24, blue: 0.88)
                     : Color(red: 0.54, green: 0.56, blue: 0.64)
                 )
@@ -1035,7 +845,7 @@ private struct HomeLeaderboardCard: View {
             .padding(.horizontal, metrics.summaryCardHorizontalPadding)
             .padding(.vertical, metrics.summaryCardVerticalPadding)
             .background(
-                isEnabled
+                state.isEnabled
                 ? Color(red: 0.94, green: 0.94, blue: 1.00)
                 : Color(red: 0.95, green: 0.95, blue: 0.97)
             )
@@ -1043,7 +853,7 @@ private struct HomeLeaderboardCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: metrics.summaryCardCornerRadius, style: .continuous)
                     .stroke(
-                        isEnabled
+                        state.isEnabled
                         ? Color(red: 0.76, green: 0.79, blue: 1.00)
                         : Color(red: 0.86, green: 0.87, blue: 0.91),
                         lineWidth: 1
@@ -1051,7 +861,38 @@ private struct HomeLeaderboardCard: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(!isEnabled)
+        .disabled(!state.isEnabled)
+    }
+
+    private var positionText: String {
+        if let position = state.currentUserPosition {
+            return "#\(position)"
+        }
+        return "#—"
+    }
+
+    private var changeText: String? {
+        guard let change = state.groupRankChange else { return nil }
+        if change > 0 {
+            return "↑ \(change)"
+        }
+        if change < 0 {
+            return "↓ \(abs(change))"
+        }
+        return nil
+    }
+
+    private var changeBackground: Color {
+        guard let change = state.groupRankChange else {
+            return Color(red: 0.66, green: 0.67, blue: 0.72)
+        }
+        if change > 0 {
+            return Color(red: 0.22, green: 0.79, blue: 0.37)
+        }
+        if change < 0 {
+            return Color(red: 0.91, green: 0.32, blue: 0.25)
+        }
+        return Color(red: 0.66, green: 0.67, blue: 0.72)
     }
 }
 
@@ -1147,8 +988,7 @@ private struct ArticleTag: View {
 
 private struct LeaderboardSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let leaderboard: PointGroupLeaderboardData
-    let userPoints: MyUserPointsAttributes
+    let state: HomeViewModel.LeaderboardSheetState
 
     var body: some View {
         NavigationStack {
@@ -1184,15 +1024,15 @@ private struct LeaderboardSheet: View {
                 VStack(spacing: 0) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(leaderboard.pointGroup?.groupRank?.title ?? "Your Group")
+                            Text(state.groupTitle)
                                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                                 .foregroundStyle(Color(red: 0.53, green: 0.48, blue: 0.33))
 
                             HStack(alignment: .lastTextBaseline, spacing: 8) {
-                                Text(formatNumber(userPoints.points))
+                                Text(formatNumber(state.currentUserPoints))
                                     .font(.system(size: 44, weight: .heavy, design: .rounded))
                                     .foregroundStyle(Color(red: 0.15, green: 0.17, blue: 0.22))
-                                Text(formatDelta(userPoints.points_add))
+                                Text(formatDelta(state.currentUserPointsDelta))
                                     .font(.system(size: 18, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
                             }
@@ -1235,7 +1075,7 @@ private struct LeaderboardSheet: View {
 
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
-                            ForEach(leaderboard.leaderboard) { member in
+                            ForEach(state.members) { member in
                                 LeaderboardRow(member: member)
                             }
                         }
@@ -1247,45 +1087,45 @@ private struct LeaderboardSheet: View {
     }
 
     private var groupSubtitle: String {
-        let memberCount = leaderboard.groupMemberCount
-        if let groupNo = leaderboard.pointGroup?.groupNo {
+        let memberCount = state.groupMemberCount
+        if let groupNo = state.groupNo {
             return "Group \(groupNo) • \(memberCount) learners"
         }
         return "\(memberCount) learners"
     }
 
     private var positionText: String {
-        if let position = leaderboard.currentUserPosition {
+        if let position = state.currentUserPosition {
             return "#\(position)"
         }
         return "—"
     }
 
     private var movementText: String {
-        if userPoints.group_rank_change > 0 {
-            return "Up \(userPoints.group_rank_change) spots"
+        if state.currentUserGroupRankChange > 0 {
+            return "Up \(state.currentUserGroupRankChange) spots"
         }
-        if userPoints.group_rank_change < 0 {
-            return "Down \(abs(userPoints.group_rank_change)) spots"
+        if state.currentUserGroupRankChange < 0 {
+            return "Down \(abs(state.currentUserGroupRankChange)) spots"
         }
         return "No change"
     }
 
     private var movementColor: Color {
-        if userPoints.group_rank_change > 0 {
+        if state.currentUserGroupRankChange > 0 {
             return Color(red: 0.10, green: 0.67, blue: 0.30)
         }
-        if userPoints.group_rank_change < 0 {
+        if state.currentUserGroupRankChange < 0 {
             return Color(red: 0.82, green: 0.28, blue: 0.24)
         }
         return Color(red: 0.58, green: 0.50, blue: 0.24)
     }
 
     private var movementBackground: Color {
-        if userPoints.group_rank_change > 0 {
+        if state.currentUserGroupRankChange > 0 {
             return Color(red: 0.89, green: 1.00, blue: 0.90)
         }
-        if userPoints.group_rank_change < 0 {
+        if state.currentUserGroupRankChange < 0 {
             return Color(red: 1.00, green: 0.92, blue: 0.92)
         }
         return Color(red: 0.99, green: 0.94, blue: 0.81)
@@ -1293,7 +1133,7 @@ private struct LeaderboardSheet: View {
 }
 
 private struct LeaderboardRow: View {
-    let member: PointGroupLeaderboardMember
+    let member: HomeViewModel.LeaderboardMemberState
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1336,7 +1176,7 @@ private struct LeaderboardRow: View {
     }
 
     private var displayName: String {
-        member.user.username ?? member.user.email ?? "Unknown"
+        member.displayName
     }
 
     private var medalText: String? {
