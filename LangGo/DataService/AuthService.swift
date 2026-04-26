@@ -23,6 +23,7 @@ class AuthService {
         let response: AuthResponse = try await networkManager.post(to: url, body: credentials)
         flashcardService.invalidateAllFlashcardCaches()
         MyUserPointsCache.invalidate(using: cacheService)
+        PointGroupCache.invalidateAll(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
         return response
     }
@@ -33,6 +34,7 @@ class AuthService {
         let response: AuthResponse = try await networkManager.post(to: url, body: payload)
         flashcardService.invalidateAllFlashcardCaches()
         MyUserPointsCache.invalidate(using: cacheService)
+        PointGroupCache.invalidateAll(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
         return response
     }
@@ -156,6 +158,7 @@ class AuthService {
         )
         flashcardService.invalidateAllFlashcardCaches()
         MyUserPointsCache.invalidate(using: cacheService)
+        PointGroupCache.invalidateAll(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
     }
 
@@ -176,6 +179,10 @@ class AuthService {
             MyUserPointsCache.store(attributes, locale: locale, using: cacheService)
         }
         return attributes
+    }
+
+    func cachedMyUserPoints(locale: String? = nil) -> MyUserPointsAttributes? {
+        MyUserPointsCache.load(locale: locale, using: cacheService)
     }
 
     func fetchMyPointGroup(locale: String? = nil) async throws -> MyPointGroupData {

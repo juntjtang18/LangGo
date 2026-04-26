@@ -26,6 +26,10 @@ final class CacheService {
         saveWithPolicy(object, key: key, ttl: nil, tags: [])
     }
 
+    func save<T: Codable>(_ object: T, key: String, ttl: CacheTTL?, tags: [CacheTag]) {
+        saveWithPolicy(object, key: key, ttl: ttl, tags: tags)
+    }
+
     func saveWithPolicy<T: Codable>(_ object: T, key: String, ttl: CacheTTL?, tags: [CacheTag]) {
         do {
             let entry = CacheEntry(
@@ -50,6 +54,12 @@ final class CacheService {
 
     func loadIfValid<T: Codable>(type: T.Type, from key: String) -> T? {
         load(type: type, from: key, enforceTTL: true)
+    }
+
+    func isExpired(for key: String) -> Bool {
+        guard let metadata = loadMetadata(from: key) else { return true }
+        guard let expiresAt = metadata.expiresAt else { return false }
+        return expiresAt <= Date()
     }
 
     func delete(key: String) {
@@ -106,6 +116,27 @@ final class CacheService {
         }
     }
 
+    private func loadMetadata(from key: String) -> CacheEntryMetadata? {
+        if let memoryData = memoryStore.data(for: key),
+           let metadata = decodeMetadata(from: memoryData, for: key) {
+            return metadata
+        }
+
+        do {
+            guard let diskData = try diskStore.data(for: key),
+                  let metadata = decodeMetadata(from: diskData, for: key) else {
+                return nil
+            }
+
+            memoryStore.setData(diskData, for: key)
+            return metadata
+        } catch {
+            logger.error("🚨 CacheService Error: Failed to load metadata for key '\(key)': \(error.localizedDescription)")
+            delete(key: key)
+            return nil
+        }
+    }
+
     private func decodeEntry<T: Codable>(from data: Data, for key: String, enforceTTL: Bool) -> T? {
         let decoder = JSONDecoder()
 
@@ -127,4 +158,23 @@ final class CacheService {
             }
         }
     }
+
+    private func decodeMetadata(from data: Data, for key: String) -> CacheEntryMetadata? {
+        let decoder = JSONDecoder()
+
+        do {
+            let entry = try decoder.decode(CacheEntryMetadata.self, from: data)
+            return entry
+        } catch {
+            logger.error("🚨 CacheService Error: Failed to decode metadata for key '\(key)': \(error.localizedDescription)")
+            delete(key: key)
+            return nil
+        }
+    }
+}
+
+private struct CacheEntryMetadata: Codable {
+    let key: String
+    let createdAt: Date
+    let expiresAt: Date?
 }

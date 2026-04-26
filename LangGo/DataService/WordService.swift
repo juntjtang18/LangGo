@@ -53,6 +53,7 @@ class WordService {
                     using: self.cacheService
                 )
 
+                PointGroupCache.invalidateAll(using: self.cacheService)
                 self.flashcardService.notifyFlashcardsDidChange()
             }
         )

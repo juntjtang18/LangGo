@@ -85,6 +85,7 @@ class FlashcardService {
         }
 
         invalidateAllFlashcardCaches()
+        PointGroupCache.invalidateAll(using: cacheService)
         return transformStrapiCard(updatedStrapiCard)
     }
     

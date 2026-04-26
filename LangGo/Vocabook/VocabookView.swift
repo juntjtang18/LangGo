@@ -458,11 +458,11 @@ struct VocabookView: View {
 
     private func refreshRecentAddedCount() async {
         do {
-            let points = try await DataServices.shared.authService.fetchMyUserPoints(locale: baseLanguageLocale)
+            let points = try await DataServices.shared.userPointsService.refreshMyUserPoints(locale: baseLanguageLocale)
             recentAddedCount = points?.word_add ?? 0
         } catch {
             logger.error("Failed to fetch recent added count for vocabook: \(error.localizedDescription, privacy: .public)")
-            recentAddedCount = MyUserPointsCache.load(locale: baseLanguageLocale)?.word_add ?? 0
+            recentAddedCount = 0
         }
     }
 
@@ -655,12 +655,12 @@ private struct VocabookMetrics {
         actionHeight = scaled(60)
 
         memoryRowLeadingBarWidth = max(2, scaled(3))
-        memoryRowCountFont = scaled(16)
-        memoryRowTitleFont = scaled(22)
+        memoryRowCountFont = scaled(24)
+        memoryRowTitleFont = scaled(24)
         memoryRowSubtitleFont = scaled(20)
         recentWordTitleFont = scaled(22)
         recentWordSubtitleFont = scaled(20)
-        recentBadgeFont = scaled(15)
+        recentBadgeFont = scaled(20)
     }
 }
 
@@ -742,7 +742,7 @@ private struct MemoryLevelRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title)
-                        .font(.system(size: metrics.memoryRowTitleFont, weight: .medium, design: .rounded))
+                        .font(.system(size: metrics.memoryRowTitleFont, weight: .bold, design: .rounded))
                         .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.24))
                 }
 

@@ -19,6 +19,7 @@ Collection-specific cache policy wrappers currently include:
 - `SettingsCache.swift`
 - `UserProfileCache.swift`
 - `MyUserPointsCache.swift`
+- `PointGroupCache.swift`
 
 ## My User Points Cache
 
@@ -51,6 +52,25 @@ Display:
 - delta: `+<word_add>` from `/api/my-user-points`
 
 This keeps the card aligned with the Home points/words behavior while still using the Vocabook statistics source for the total word count.
+
+## Point Group Cache
+
+`/api/my-point-group` and `/api/point-groups/:id/leaderboard` are now cached through `PointGroupCache` and owned by `PointGroupService`.
+
+Implementation files:
+
+- `LangGo/DataService/Cache/PointGroupCache.swift`
+- `LangGo/DataService/PointGroupService.swift`
+- `LangGo/Home/HomeView.swift`
+
+Behavior:
+
+- cache keys are user-aware and locale-aware
+- `/api/my-point-group` seeds both:
+  - the home banner summary
+  - the leaderboard sheet cache for the current group
+- stale cached values can render immediately while the service refreshes in the background
+- login, signup, account deletion, word creation, and flashcard review invalidate point-group cache
 
 ## Patch-On-Write For New Words
 

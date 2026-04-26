@@ -532,7 +532,7 @@ private struct AscentLeaderboardSheet: View {
 
                         VStack(alignment: .trailing, spacing: 10) {
                             HStack(spacing: 6) {
-                                Image(systemName: "medal.star.fill")
+                                Image(systemName: "medal.fill")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundStyle(Color.orange)
                                 Text("#8")

@@ -21,6 +21,14 @@ enum MyUserPointsCache {
         cacheService.loadIfValid(type: MyUserPointsAttributes.self, from: userPointsKey(locale: locale))
     }
 
+    static func loadStale(locale: String?, using cacheService: CacheService = .shared) -> MyUserPointsAttributes? {
+        cacheService.load(type: MyUserPointsAttributes.self, from: userPointsKey(locale: locale))
+    }
+
+    static func isExpired(locale: String?, using cacheService: CacheService = .shared) -> Bool {
+        cacheService.isExpired(for: userPointsKey(locale: locale))
+    }
+
     static func store(_ points: MyUserPointsAttributes, locale: String?, using cacheService: CacheService = .shared) {
         cacheService.saveWithPolicy(
             points,
