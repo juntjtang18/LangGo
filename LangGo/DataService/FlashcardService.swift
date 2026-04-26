@@ -8,6 +8,7 @@
 
 // LangGo/DataService/FlashcardService.swift
 
+import Combine
 import Foundation
 import os
 
@@ -17,37 +18,94 @@ extension Notification.Name {
     static let flashcardsDidChange = Notification.Name("com.langGo.swift.flashcardsDidChange")
 }
 
-class FlashcardService {
+final class FlashcardService: ObservableObject {
+    @Published private(set) var flashcards: [Flashcard] = []
+    @Published private(set) var flashcardStatistics: StrapiStatistics?
+    @Published private(set) var nextFlashcardStatisticsFetchAt: Date?
+    @Published private(set) var isLoadingFlashcards = false
+    @Published private(set) var flashcardsErrorMessage: String?
+    @Published private(set) var isLoadingStatistics = false
+    @Published private(set) var statisticsErrorMessage: String?
+
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardService")
     private let cacheService = CacheService.shared
     private let networkManager = NetworkManager.shared
+    private let dateFormatter = ISO8601DateFormatter()
     private let flashcardStatisticsMinimumFetchInterval: TimeInterval = 2
     private var lastFlashcardStatisticsNetworkFetchAt: Date?
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
     }
-    
-    func fetchFlashcardStatistics(forceRefresh: Bool = false) async throws -> StrapiStatistics {
-        if !forceRefresh,
-           !isRefreshModeEnabled,
-           let lastFetch = lastFlashcardStatisticsNetworkFetchAt,
-           Date().timeIntervalSince(lastFetch) < flashcardStatisticsMinimumFetchInterval,
-           let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
-            logger.debug("✅ Returning flashcard statistics from cache due to short repeat-fetch guard.")
-            return cachedStats
+
+    func loadStatisticsIfNeeded() async {
+        await setStatisticsErrorMessage(nil)
+
+        if let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
+            logger.debug("✅ Returning flashcard statistics from cache.")
+            await publishStatistics(cachedStats)
+            return
         }
 
-        logger.debug("Fetching flashcard statistics from network.")
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else { throw URLError(.badURL) }
+        await refreshStatistics(forceRefresh: false)
+    }
 
-        let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
-        let stats = resp.data
-        lastFlashcardStatisticsNetworkFetchAt = Date()
+    func refreshStatistics(forceRefresh: Bool = false) async {
+        _ = try? await fetchFlashcardStatistics(forceRefresh: forceRefresh)
+    }
 
-        FlashcardCache.storeStatistics(stats, using: cacheService)
-        logger.debug("💾 Saved fetched statistics to cache.")
-        return stats
+    func loadFlashcardsIfNeeded() async {
+        await setFlashcardsErrorMessage(nil)
+
+        if let cachedCards = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
+            logger.debug("✅ Returning all 'my flashcards' from cache.")
+            await publishFlashcards(cachedCards)
+            return
+        }
+
+        await refreshFlashcards()
+    }
+
+    func refreshFlashcards() async {
+        _ = try? await fetchAllMyFlashcards()
+    }
+
+    func fetchFlashcardStatistics(forceRefresh: Bool = false) async throws -> StrapiStatistics {
+        await setStatisticsLoading(true)
+        await setStatisticsErrorMessage(nil)
+
+        do {
+            if !forceRefresh,
+               !isRefreshModeEnabled,
+               let lastFetch = lastFlashcardStatisticsNetworkFetchAt,
+               Date().timeIntervalSince(lastFetch) < flashcardStatisticsMinimumFetchInterval,
+               let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
+                logger.debug("✅ Returning flashcard statistics from cache due to short repeat-fetch guard.")
+                await publishStatistics(cachedStats)
+                await setStatisticsLoading(false)
+                return cachedStats
+            }
+
+            logger.debug("Fetching flashcard statistics from network.")
+            guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else {
+                throw URLError(.badURL)
+            }
+
+            let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
+            let stats = resp.data
+            lastFlashcardStatisticsNetworkFetchAt = Date()
+
+            FlashcardCache.storeStatistics(stats, using: cacheService)
+            logger.debug("💾 Saved fetched statistics to cache.")
+            await publishStatistics(stats)
+            await setStatisticsLoading(false)
+            return stats
+        } catch {
+            logger.error("Failed to fetch flashcard statistics: \(error.localizedDescription, privacy: .public)")
+            await setStatisticsErrorMessage(error.localizedDescription)
+            await setStatisticsLoading(false)
+            throw error
+        }
     }
 
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
@@ -119,7 +177,20 @@ class FlashcardService {
     }
 
     func fetchAllMyFlashcards() async throws -> [Flashcard] {
-        return try await getOrFetchAllMyFlashcards()
+        await setFlashcardsLoading(true)
+        await setFlashcardsErrorMessage(nil)
+
+        do {
+            let cards = try await getOrFetchAllMyFlashcards()
+            await publishFlashcards(cards)
+            await setFlashcardsLoading(false)
+            return cards
+        } catch {
+            logger.error("Failed to fetch all user flashcards: \(error.localizedDescription, privacy: .public)")
+            await setFlashcardsErrorMessage(error.localizedDescription)
+            await setFlashcardsLoading(false)
+            throw error
+        }
     }
 
     func fetchAllMyFlashcards(reviewTier: String) async throws -> [Flashcard] {
@@ -305,5 +376,59 @@ class FlashcardService {
                 return lhs.id > rhs.id
             }
         }
+    }
+
+    private func publishFlashcards(_ cards: [Flashcard]) async {
+        await MainActor.run {
+            self.flashcards = cards
+        }
+    }
+
+    private func publishStatistics(_ statistics: StrapiStatistics?) async {
+        let nextFetchAt = nextFlashcardStatisticsFetchDate(from: statistics)
+        await MainActor.run {
+            self.flashcardStatistics = statistics
+            self.nextFlashcardStatisticsFetchAt = nextFetchAt
+        }
+    }
+
+    private func setFlashcardsLoading(_ isLoading: Bool) async {
+        await MainActor.run {
+            self.isLoadingFlashcards = isLoading
+        }
+    }
+
+    private func setFlashcardsErrorMessage(_ message: String?) async {
+        await MainActor.run {
+            self.flashcardsErrorMessage = message
+        }
+    }
+
+    private func setStatisticsLoading(_ isLoading: Bool) async {
+        await MainActor.run {
+            self.isLoadingStatistics = isLoading
+        }
+    }
+
+    private func setStatisticsErrorMessage(_ message: String?) async {
+        await MainActor.run {
+            self.statisticsErrorMessage = message
+        }
+    }
+
+    private func nextFlashcardStatisticsFetchDate(from statistics: StrapiStatistics?) -> Date? {
+        guard let statistics else {
+            return nil
+        }
+
+        guard statistics.dueForReview == 0 else {
+            return nil
+        }
+
+        guard let nextFetchAt = statistics.nextFetchAt else {
+            return nil
+        }
+
+        return dateFormatter.date(from: nextFetchAt)
     }
 }

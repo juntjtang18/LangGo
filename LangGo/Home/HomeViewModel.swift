@@ -87,10 +87,8 @@ final class HomeViewModel: ObservableObject {
     private let pointGroupService: PointGroupService
     private let flashcardService: FlashcardService
     private let localeProvider: () -> String
-    private let dateFormatter = ISO8601DateFormatter()
 
     private var cancellables = Set<AnyCancellable>()
-    private var flashcardStatistics: StrapiStatistics?
     private var hasLoadedUserPoints = false
     private var hasLoadedFlashcardStatistics = false
     private var hasLoadedPointGroup = false
@@ -172,6 +170,22 @@ final class HomeViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        flashcardService.$flashcardStatistics
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.syncPublishedState()
+                }
+            }
+            .store(in: &cancellables)
+
+        flashcardService.$nextFlashcardStatisticsFetchAt
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.syncPublishedState()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func refreshVisibleContent() async {
@@ -212,18 +226,11 @@ final class HomeViewModel: ObservableObject {
     private func loadFlashcardStatisticsIfNeeded() async {
         guard !hasLoadedFlashcardStatistics else { return }
         hasLoadedFlashcardStatistics = true
-        await refreshFlashcardStatistics()
+        await flashcardService.loadStatisticsIfNeeded()
     }
 
     private func refreshFlashcardStatistics(forceRefresh: Bool = false) async {
-        do {
-            let statistics = try await flashcardService.fetchFlashcardStatistics(forceRefresh: forceRefresh)
-            flashcardStatistics = statistics
-            reviewCardState = makeReviewCardState(statistics: statistics)
-            nextFlashcardStatisticsFetchAt = nextFlashcardStatisticsFetchDate(from: statistics)
-        } catch {
-            logger.error("Failed to fetch flashcard statistics: \(error.localizedDescription, privacy: .public)")
-        }
+        await flashcardService.refreshStatistics(forceRefresh: forceRefresh)
     }
 
     private func loadPointGroupIfNeeded() async {
@@ -247,7 +254,8 @@ final class HomeViewModel: ObservableObject {
         let leaderboard = resolvedLeaderboard(locale: locale, pointGroup: pointGroup)
 
         rankPointsState = makeRankPointsCardState(userPoints: userPoints)
-        reviewCardState = makeReviewCardState(statistics: flashcardStatistics)
+        reviewCardState = makeReviewCardState(statistics: flashcardService.flashcardStatistics)
+        nextFlashcardStatisticsFetchAt = flashcardService.nextFlashcardStatisticsFetchAt
         leaderboardBannerState = makeLeaderboardBannerState(
             userPoints: userPoints,
             leaderboard: leaderboard
@@ -373,18 +381,6 @@ final class HomeViewModel: ObservableObject {
     private func currentLocale() -> String {
         let locale = localeProvider().trimmingCharacters(in: .whitespacesAndNewlines)
         return locale.isEmpty ? "en" : locale
-    }
-
-    private func nextFlashcardStatisticsFetchDate(from statistics: StrapiStatistics) -> Date? {
-        guard statistics.dueForReview == 0 else {
-            return nil
-        }
-
-        guard let nextFetchAt = statistics.nextFetchAt else {
-            return nil
-        }
-
-        return dateFormatter.date(from: nextFetchAt)
     }
 
     private func trimmed(_ value: String?) -> String? {
