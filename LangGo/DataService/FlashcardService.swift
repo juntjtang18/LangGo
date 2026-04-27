@@ -221,12 +221,14 @@ final class FlashcardService: ObservableObject {
         return recent
     }
     
-    func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false, reviewTier: String? = nil) async throws -> ([Flashcard], StrapiPagination?) {
+    func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false, reviewTier: String? = nil, recentlyAddedLimit: Int = 0) async throws -> ([Flashcard], StrapiPagination?) {
         if dueOnly {
             return try await fetchReviewFlashcardsPage(page: page, pageSize: pageSize)
         }
         let allFlashcards: [Flashcard]
-        if let reviewTier, !reviewTier.isEmpty {
+        if recentlyAddedLimit > 0 {
+            allFlashcards = try await fetchRecentlyAddedFlashcards(limit: recentlyAddedLimit)
+        } else if let reviewTier, !reviewTier.isEmpty {
             allFlashcards = try await getOrFetchAllMyFlashcards(reviewTier: reviewTier)
         } else {
             allFlashcards = try await getOrFetchAllMyFlashcards()

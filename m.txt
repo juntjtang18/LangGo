@@ -1,17 +1,27 @@
-On branch big-refactoring
-Your branch is up to date with 'origin/big-refactoring'.
-
-Changes to be committed:
-  (use "git restore --staged <file>..." to unstage)
-	new file:   LangGo/DataService/ArticleService.swift
-	modified:   LangGo/DataService/DataServices.swift
-	modified:   LangGo/DataService/StrapiModels.swift
-	modified:   LangGo/Home/HomeView.swift
-	modified:   LangGo/Library/LibraryView.swift
-	modified:   LangGo/Localizable.xcstrings
-
-Changes not staged for commit:
-  (use "git add <file>..." to update what will be committed)
-  (use "git restore <file>..." to discard changes in working directory)
-	modified:   m.txt
-
+  Feature: Tapping "View All" in the VocabookView → Recently Added section now opens a full-screen book mode showing all words sorted by most recently added (newest first).                                                        
+                                                                                                                                                                                                                                    
+  4 files changed, following the UI → ViewModel → DataService → Cache/Strapi architecture:                                                                                                                                          
+                                                                                                                                                                                                                                    
+  FlashcardService.swift                                                                                                                                                                                                            
+                                                            
+  - Added fetchAllMyFlashcardsRecentlyAdded() — fetches all cards from cache/network and sorts them by createdAt:desc                                                                                                               
+  - Added sortRecentlyAdded: Bool = false parameter to fetchFlashcards() — routes to the new sorted fetch when true
+                                                                                                                                                                                                                                    
+  VocapageLoader.swift                                      
+                                                                                                                                                                                                                                    
+  - Added sortRecentlyAdded: Bool = false to loadPage(), forceReloadPage(), and page() accessors                                                                                                                                    
+  - Updated cacheKey() to produce "recentlyAdded.page.N" keys when in recently-added mode, keeping it isolated from the default and tier-filtered page caches
+                                                                                                                                                                                                                                    
+  VocapageHostView.swift                                                                                                                                                                                                            
+                                                                                                                                                                                                                                    
+  - Added sortRecentlyAdded: Bool = false to the initializer and stored as a property                                                                                                                                               
+  - Threaded sortRecentlyAdded through all loader calls: .task, handleFilterChange, rebuildAllPageIds, deleteCardAndRefresh, refreshAfterExternalDeletion, and advanceToNextPageAndContinue
+  - Due-words filter is disabled (allowsDueFilter: false) when in recently-added mode                                                                                                                                               
+                                                                                                                                                                                                                                    
+  VocabookView.swift                                                                                                                                                                                                                
+                                                                                                                                                                                                                                    
+  - Added @State private var isRecentlyAddedBookMode = false
+  - Added openRecentlyAddedBookMode() — calculates page count from fetchAllMyFlashcardsRecentlyAdded(), sets isRecentlyAddedBookMode = true, opens the full-screen cover
+  - Wired the "View All" button to openRecentlyAddedBookMode() instead of the generic openBookMode()                                                                                                                                
+  - Passes sortRecentlyAdded: isRecentlyAddedBookMode and allowsDueFilter: !isRecentlyAddedBookMode to VocapageHostView                                                                                                             
+  - Resets isRecentlyAddedBookMode = false on dismiss 

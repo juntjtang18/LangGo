@@ -23,6 +23,7 @@ struct VocapageHostView: View {
     @State private var currentPageIndex: Int
     private let reviewTier: String?
     private let allowsDueFilter: Bool
+    private let recentlyAddedLimit: Int
 
     let flashcardViewModel: FlashcardViewModel
     let onFilterChange: () -> Void
@@ -42,6 +43,7 @@ struct VocapageHostView: View {
         isShowingDueWordsOnly: Binding<Bool>,
         reviewTier: String? = nil,
         allowsDueFilter: Bool = true,
+        recentlyAddedLimit: Int = 0,
         onFilterChange: @escaping () -> Void
     ) {
         self._vocapageIds = State(initialValue: allVocapageIds)
@@ -50,6 +52,7 @@ struct VocapageHostView: View {
         self._isShowingDueWordsOnly = isShowingDueWordsOnly
         self.reviewTier = reviewTier
         self.allowsDueFilter = allowsDueFilter
+        self.recentlyAddedLimit = recentlyAddedLimit
         self.onFilterChange = onFilterChange
         self.allIdsSeed = allVocapageIds
     }
@@ -60,7 +63,7 @@ struct VocapageHostView: View {
 
     private var currentVocapage: Vocapage? {
         guard !vocapageIds.isEmpty, currentPageIndex < vocapageIds.count else { return nil }
-        return loader.page(id: vocapageIds[currentPageIndex], dueOnly: effectiveDueWordsOnly, reviewTier: reviewTier)
+        return loader.page(id: vocapageIds[currentPageIndex], dueOnly: effectiveDueWordsOnly, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)
     }
     
     private var sortedFlashcardsForCurrentPage: [Flashcard] {
@@ -80,6 +83,7 @@ struct VocapageHostView: View {
                     highlightIndex: speechManager.currentIndex,
                     isShowingDueWordsOnly: effectiveDueWordsOnly,
                     reviewTier: reviewTier,
+                    recentlyAddedLimit: recentlyAddedLimit,
                     onSelectCard: { card in
                         stopAutoplay()
                         selectedCard = card
@@ -121,7 +125,7 @@ struct VocapageHostView: View {
         .task {
             guard !vocapageIds.isEmpty else { return }
             let initialPageId = vocapageIds[currentPageIndex]
-            await loader.loadPage(withId: initialPageId, dueWordsOnly: effectiveDueWordsOnly, reviewTier: reviewTier)
+            await loader.loadPage(withId: initialPageId, dueWordsOnly: effectiveDueWordsOnly, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)
         }
         .onChange(of: currentPageIndex, perform: handlePageChange)
         .onChange(of: sortedFlashcardsForCurrentPage, perform: handleCardsLoadedForAutoplay)
@@ -209,7 +213,7 @@ struct VocapageHostView: View {
 
         if !newIds.isEmpty {
             let pageToReload = newIds[currentPageIndex]
-            await loader.forceReloadPage(withId: pageToReload, dueWordsOnly: effectiveDueWordsOnly, reviewTier: reviewTier)
+            await loader.forceReloadPage(withId: pageToReload, dueWordsOnly: effectiveDueWordsOnly, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)
         } else {
             // No pages left; autoplay and selection are already handled elsewhere.
         }
@@ -239,7 +243,7 @@ struct VocapageHostView: View {
             if !newIds.isEmpty {
                 let pageToReload = newIds[currentPageIndex]
                 logger.debug("⚡️ Forcing reload of page ID: \(pageToReload)...")
-                await loader.forceReloadPage(withId: newIds[currentPageIndex], dueWordsOnly: effectiveDueWordsOnly, reviewTier: reviewTier)
+                await loader.forceReloadPage(withId: newIds[currentPageIndex], dueWordsOnly: effectiveDueWordsOnly, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)
                 logger.debug("✅ Page reload complete.")
             } else {
                 logger.debug("No pages left, skipping reload.")
@@ -283,15 +287,15 @@ struct VocapageHostView: View {
         guard allowsDueFilter else { return }
         Task {
             if !vocapageIds.isEmpty, currentPageIndex < vocapageIds.count {
-                await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: newValue, reviewTier: reviewTier)
+                await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: newValue, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)
             }
-    
+
             if newValue {
                 await withTaskGroup(of: Void.self) { group in
-                    for id in allIdsSeed { group.addTask { await loader.loadPage(withId: id, dueWordsOnly: true, reviewTier: reviewTier) } }
+                    for id in allIdsSeed { group.addTask { await loader.loadPage(withId: id, dueWordsOnly: true, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit) } }
                 }
-                let filtered = allIdsSeed.filter { !(loader.page(id: $0, dueOnly: true, reviewTier: reviewTier)?.flashcards?.isEmpty ?? true) }
-    
+                let filtered = allIdsSeed.filter { !(loader.page(id: $0, dueOnly: true, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)?.flashcards?.isEmpty ?? true) }
+
                 if filtered.isEmpty {
                     vocapageIds = []
                     currentPageIndex = 0
@@ -306,7 +310,7 @@ struct VocapageHostView: View {
                 vocapageIds = freshIds
                 currentPageIndex = min(currentPageIndex, max(0, freshIds.count - 1))
                 if !vocapageIds.isEmpty {
-                    await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: false, reviewTier: reviewTier)
+                    await loader.loadPage(withId: vocapageIds[currentPageIndex], dueWordsOnly: false, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)
                 }
             }
         }
@@ -318,7 +322,9 @@ struct VocapageHostView: View {
             let vb = try await DataServices.shared.settingsService.fetchVBSetting()
             let pageSize = vb.attributes.wordsPerPage
             let all: [Flashcard]
-            if let reviewTier, !reviewTier.isEmpty {
+            if recentlyAddedLimit > 0 {
+                all = try await DataServices.shared.flashcardService.fetchRecentlyAddedFlashcards(limit: recentlyAddedLimit)
+            } else if let reviewTier, !reviewTier.isEmpty {
                 all = try await DataServices.shared.flashcardService.fetchAllMyFlashcards(reviewTier: reviewTier)
             } else {
                 all = try await DataServices.shared.flashcardService.fetchAllMyFlashcards()
@@ -329,13 +335,11 @@ struct VocapageHostView: View {
                 logger.debug("Page count is 0. Returning empty ID list.")
                 return []
             }
-            let ids = Array(1...pageCount)
-            logger.debug("Calculated \(ids.count) pages.")
-
+            logger.debug("Calculated \(pageCount) pages.")
             return Array(1...pageCount)
         } catch {
             logger.error("❌ Failed to rebuild page IDs: \(error.localizedDescription)")
-           return []
+            return []
         }
     }
     
@@ -487,7 +491,7 @@ struct VocapageHostView: View {
 
         currentPageIndex = nextPage
         Task {
-            await loader.loadPage(withId: vocapageIds[nextPage], dueWordsOnly: effectiveDueWordsOnly, reviewTier: reviewTier)
+            await loader.loadPage(withId: vocapageIds[nextPage], dueWordsOnly: effectiveDueWordsOnly, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)
         }
     }
 }

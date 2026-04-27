@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -scheme LangGo -destination 'platform=iOS Simulator,name=iPhone 16' -quiet build)",
+      "Bash(xcodebuild -scheme LangGo -destination 'platform=iOS Simulator,name=iPhone 16' build)",
+      "Bash(xcodebuild test *)"
+    ]
+  }
+}

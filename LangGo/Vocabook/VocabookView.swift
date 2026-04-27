@@ -75,6 +75,7 @@ struct VocabookView: View {
     @State private var selectedRecentCard: Flashcard?
     @State private var presentedBookModeConfig: BookModeConfig?
     @State private var presentedBookModeTier: String?
+    @State private var recentlyAddedBookModeLimit = 0
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
 
@@ -150,6 +151,7 @@ struct VocabookView: View {
         .fullScreenCover(isPresented: $isShowingBookMode, onDismiss: {
             presentedBookModeConfig = nil
             presentedBookModeTier = nil
+            recentlyAddedBookModeLimit = 0
         }) {
             NavigationStack {
                 if let config = bookModeConfig {
@@ -159,7 +161,8 @@ struct VocabookView: View {
                         flashcardViewModel: flashcardViewModel,
                         isShowingDueWordsOnly: $isShowingDueWordsOnly,
                         reviewTier: presentedBookModeTier,
-                        allowsDueFilter: presentedBookModeTier == nil,
+                        allowsDueFilter: presentedBookModeTier == nil && recentlyAddedBookModeLimit == 0,
+                        recentlyAddedLimit: recentlyAddedBookModeLimit,
                         onFilterChange: {
                             Task {
                                 await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
@@ -353,7 +356,7 @@ struct VocabookView: View {
                 sectionTitle("RECENTLY ADDED", metrics: metrics)
                 Spacer()
                 Button {
-                    openBookMode()
+                    openRecentlyAddedBookMode()
                 } label: {
                     Text("View All")
                         .font(.system(size: metrics.linkFont, weight: .bold, design: .rounded))
@@ -504,6 +507,40 @@ struct VocabookView: View {
                 isShowingBookMode = true
             } else {
                 infoMessage = "No words are available in book mode yet."
+            }
+        }
+    }
+
+    private func openRecentlyAddedBookMode() {
+        guard !isPreparingBookMode else { return }
+        let limit = max(recentAddedCount, recentFlashcards.count)
+        guard limit > 0 else {
+            infoMessage = "No recently added words yet."
+            return
+        }
+        isPreparingBookMode = true
+
+        Task {
+            do {
+                let vbSetting = try await DataServices.shared.settingsService.fetchVBSetting()
+                let pageSize = vbSetting.attributes.wordsPerPage
+                let cards = try await DataServices.shared.flashcardService.fetchRecentlyAddedFlashcards(limit: limit)
+                let pageCount = cards.isEmpty ? 0 : Int(ceil(Double(cards.count) / Double(pageSize)))
+
+                isPreparingBookMode = false
+
+                if pageCount > 0 {
+                    recentlyAddedBookModeLimit = limit
+                    presentedBookModeTier = nil
+                    presentedBookModeConfig = BookModeConfig(allPageIds: Array(1...pageCount), selectedPageId: 1)
+                    isShowingBookMode = true
+                } else {
+                    infoMessage = "No recently added words yet."
+                }
+            } catch {
+                isPreparingBookMode = false
+                logger.error("Failed to open recently added book mode: \(error.localizedDescription, privacy: .public)")
+                infoMessage = "Failed to open recently added."
             }
         }
     }
