@@ -136,12 +136,20 @@ class NetworkManager {
 
     // MARK: - Private Core Request Function
 
+    /// Fetches a resource without an Authorization header. Use for public Strapi endpoints
+    /// where sending a stale JWT causes a 401 even though no auth is required.
+    func fetchPublic<T: Decodable>(from url: URL) async throws -> T {
+        let emptyBody: EmptyPayload? = nil
+        return try await performRequest(url: url, method: "GET", body: emptyBody, skipAuth: true)
+    }
+
     /// Generic function to perform any HTTP request, handle authentication, errors, and decoding.
     private func performRequest<ResponseBody: Decodable, RequestBody: Encodable>(
         url: URL,
         method: String,
         body: RequestBody? = nil,
-        headers: [String: String] = [:]
+        headers: [String: String] = [:],
+        skipAuth: Bool = false
     ) async throws -> ResponseBody {
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -149,7 +157,7 @@ class NetworkManager {
 
         // Authentication endpoint check for JWT
         let isAuthRequest = url.absoluteString.contains("/api/auth/local") || url.absoluteString.contains("/api/auth/local/register")
-        if let token = keychain["jwt"], !isAuthRequest {
+        if !skipAuth, let token = keychain["jwt"], !isAuthRequest {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
@@ -165,7 +173,14 @@ class NetworkManager {
         logger.debug("➡️ \(method) \(url.absoluteString)")
 
         let start = Date()
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            logger.error("🔴 Network error: \(method) \(url.absoluteString) — \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
         let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
         guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         
@@ -180,6 +195,10 @@ class NetworkManager {
         guard (200...299).contains(httpResponse.statusCode) else {
             let errorBody = String(data: data, encoding: .utf8) ?? "No response body"
             logger.error("HTTP Error: \(method) request to \(url) failed with status code \(httpResponse.statusCode). Body: \(errorBody)")
+            if httpResponse.statusCode == 401, !skipAuth, keychain["jwt"] != nil {
+                try? keychain.remove("jwt")
+                logger.warning("⚠️ 401 on authenticated request — cleared stale JWT from keychain.")
+            }
             if let errorResponse = try? decoder.decode(StrapiErrorResponse.self, from: data) {
                 // Throw a custom error with specific Strapi message
                 throw NSError(domain: "NetworkManager.StrapiError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorResponse.error.message])

@@ -3,7 +3,11 @@
     "allow": [
       "Bash(xcodebuild -scheme LangGo -destination 'platform=iOS Simulator,name=iPhone 16' -quiet build)",
       "Bash(xcodebuild -scheme LangGo -destination 'platform=iOS Simulator,name=iPhone 16' build)",
-      "Bash(xcodebuild test *)"
+      "Bash(xcodebuild test *)",
+      "Bash(curl -s \"https://langgo-en-strapi.geniusparentingai.ca/api/proficiency-levels?locale=en&sort=level:asc\")",
+      "Bash(grep \"\\\\.swift$\")",
+      "Bash(curl -sv \"https://langgo-en-strapi.geniusparentingai.ca/api/proficiency-levels?locale=en&sort=level%3Aasc\")",
+      "Bash(awk '/^\\\\/\\\\* Begin XCBuildConfiguration section/,/^\\\\/\\\\* End XCBuildConfiguration section/' /Users/James/develop/langgo/langgo_swift/LangGo.xcodeproj/project.pbxproj)"
     ]
   }
 }

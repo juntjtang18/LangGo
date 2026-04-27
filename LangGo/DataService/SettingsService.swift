@@ -75,11 +75,17 @@ class SettingsService {
     }
 
     func fetchProficiencyLevels(locale: String) async throws -> [ProficiencyLevel] {
-        let localizedLevels = try await fetchLevels(for: locale)
-        if localizedLevels.isEmpty && locale != "en" {
+        if locale == "en" {
             return try await fetchLevels(for: "en")
         }
-        return localizedLevels
+        do {
+            let localizedLevels = try await fetchLevels(for: locale)
+            if !localizedLevels.isEmpty { return localizedLevels }
+            logger.warning("⚠️ Proficiency levels empty for locale '\(locale, privacy: .public)', falling back to 'en'.")
+        } catch {
+            logger.warning("⚠️ Proficiency levels fetch failed for locale '\(locale, privacy: .public)' (\(error.localizedDescription, privacy: .public)), falling back to 'en'.")
+        }
+        return try await fetchLevels(for: "en")
     }
 
     private func fetchLevels(for locale: String) async throws -> [ProficiencyLevel] {
@@ -95,7 +101,7 @@ class SettingsService {
             URLQueryItem(name: "sort", value: "level:asc")
         ]
         guard let url = urlComponents.url else { throw URLError(.badURL) }
-        let response: StrapiListResponse<ProficiencyLevel> = try await networkManager.fetchDirect(from: url)
+        let response: StrapiListResponse<ProficiencyLevel> = try await networkManager.fetchPublic(from: url)
         let levels = response.data ?? []
         SettingsCache.storeProficiencyLevels(levels, locale: locale, using: cacheService)
         return levels
