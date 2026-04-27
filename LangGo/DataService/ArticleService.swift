@@ -11,6 +11,7 @@ final class ArticleService: ObservableObject {
     }
 
     @Published private(set) var userArticlePages: [UserArticlesPageKey: StrapiListResponse<StrapiUserArticle>] = [:]
+    @Published private(set) var userArticlesTotalCount: Int?
     @Published private(set) var isLoadingUserArticles = false
     @Published private(set) var articlesErrorMessage: String?
 
@@ -408,6 +409,7 @@ final class ArticleService: ObservableObject {
         key: UserArticlesPageKey
     ) {
         userArticlePages[key] = response
+        syncUserArticlesTotalCount()
     }
 
     private func publishPatchedUserArticle(_ article: StrapiUserArticle, prependToFirstPage: Bool) {
@@ -441,6 +443,8 @@ final class ArticleService: ObservableObject {
                 meta: updatedPagination.map { StrapiMeta(pagination: $0) }
             )
         }
+
+        syncUserArticlesTotalCount()
     }
 
     private func publishRemovedUserArticle(_ articleId: Int) {
@@ -465,6 +469,22 @@ final class ArticleService: ObservableObject {
                 meta: updatedPagination.map { StrapiMeta(pagination: $0) }
             )
         }
+
+        syncUserArticlesTotalCount()
+    }
+
+    private func syncUserArticlesTotalCount() {
+        if let totalFromPagination = userArticlePages.values
+            .compactMap({ $0.meta?.pagination?.total })
+            .max() {
+            userArticlesTotalCount = totalFromPagination
+            return
+        }
+
+        let knownArticleIDs = Set(userArticlePages.values
+            .flatMap { $0.data ?? [] }
+            .map(\.id))
+        userArticlesTotalCount = knownArticleIDs.isEmpty ? nil : knownArticleIDs.count
     }
 
     private func currentUserID() async throws -> Int {
@@ -493,6 +513,7 @@ final class ArticleService: ObservableObject {
 
         cachedCurrentUserID = userID
         userArticlePages = [:]
+        userArticlesTotalCount = nil
         articlesErrorMessage = nil
     }
 }

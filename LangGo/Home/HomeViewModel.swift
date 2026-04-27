@@ -75,10 +75,29 @@ final class HomeViewModel: ObservableObject {
         let honorTitle: String?
     }
 
+    struct ArticleLibraryPreviewState: Identifiable, Equatable {
+        let id: Int
+        let backendId: Int
+        let title: String
+        let content: String?
+        let wordCount: Int
+        let newWords: Int
+        let progress: Double
+        let primaryTag: String?
+        let tags: [String]
+        let dateLabel: String?
+        let sourceLabel: String?
+        let displayedTags: [String]
+        let progressFraction: Double
+        let progressText: String
+    }
+
     @Published private(set) var rankPointsState = RankPointsCardState.empty
     @Published private(set) var reviewCardState = ReviewCardState.empty
     @Published private(set) var leaderboardBannerState = LeaderboardBannerState.empty
     @Published private(set) var leaderboardSheetState = LeaderboardSheetState.empty
+    @Published private(set) var articleLibraryCount: Int?
+    @Published private(set) var articleLibraryPreviews: [ArticleLibraryPreviewState] = []
     @Published private(set) var isLoadingUserPoints = false
     @Published private(set) var nextFlashcardStatisticsFetchAt: Date?
 
@@ -86,23 +105,30 @@ final class HomeViewModel: ObservableObject {
     private let userPointsService: UserPointsService
     private let pointGroupService: PointGroupService
     private let flashcardService: FlashcardService
+    private let articleService: ArticleService
     private let localeProvider: () -> String
+    private let articlePreviewPageSize: Int
 
     private var cancellables = Set<AnyCancellable>()
     private var hasLoadedUserPoints = false
     private var hasLoadedFlashcardStatistics = false
     private var hasLoadedPointGroup = false
+    private var hasLoadedArticleLibrary = false
 
     init(
         userPointsService: UserPointsService? = nil,
         pointGroupService: PointGroupService? = nil,
         flashcardService: FlashcardService? = nil,
+        articleService: ArticleService? = nil,
+        articlePreviewPageSize: Int = 3,
         localeProvider: (() -> String)? = nil
     ) {
         let services = DataServices.shared
         self.userPointsService = userPointsService ?? services.userPointsService
         self.pointGroupService = pointGroupService ?? services.pointGroupService
         self.flashcardService = flashcardService ?? services.flashcardService
+        self.articleService = articleService ?? services.articleService
+        self.articlePreviewPageSize = articlePreviewPageSize
         self.localeProvider = localeProvider ?? {
             UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
         }
@@ -115,6 +141,7 @@ final class HomeViewModel: ObservableObject {
         await loadUserPointsIfNeeded()
         await loadFlashcardStatisticsIfNeeded()
         await loadPointGroupIfNeeded()
+        await loadArticleLibraryIfNeeded()
     }
 
     func handlePullToRefresh() async {
@@ -188,12 +215,29 @@ final class HomeViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        articleService.$userArticlesTotalCount
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.syncPublishedState()
+                }
+            }
+            .store(in: &cancellables)
+
+        articleService.$userArticlePages
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.syncPublishedState()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func refreshVisibleContent() async {
         await refreshFlashcardStatistics()
         await refreshUserPoints()
         await refreshPointGroup()
+        await refreshArticleLibrary()
     }
 
     private func loadUserPointsIfNeeded() async {
@@ -235,6 +279,16 @@ final class HomeViewModel: ObservableObject {
         await flashcardService.refreshStatistics(forceRefresh: forceRefresh)
     }
 
+    private func loadArticleLibraryIfNeeded() async {
+        guard !hasLoadedArticleLibrary else { return }
+        hasLoadedArticleLibrary = true
+        await articleService.loadUserArticlesPageIfNeeded(page: 1, pageSize: articlePreviewPageSize)
+    }
+
+    private func refreshArticleLibrary() async {
+        await articleService.refreshUserArticles(page: 1, pageSize: articlePreviewPageSize)
+    }
+
     private func loadPointGroupIfNeeded() async {
         guard !hasLoadedPointGroup else { return }
         hasLoadedPointGroup = true
@@ -266,6 +320,65 @@ final class HomeViewModel: ObservableObject {
             userPoints: userPoints,
             leaderboard: leaderboard
         )
+        articleLibraryCount = articleService.userArticlesTotalCount
+        articleLibraryPreviews = makeArticleLibraryPreviewStates()
+    }
+
+    private func makeArticleLibraryPreviewStates() -> [ArticleLibraryPreviewState] {
+        guard let response = resolvedArticlePreviewResponse() else { return [] }
+
+        return (response.data ?? [])
+            .prefix(articlePreviewPageSize)
+            .map(makeArticleLibraryPreviewState)
+    }
+
+    private func resolvedArticlePreviewResponse() -> StrapiListResponse<StrapiUserArticle>? {
+        articleService.userArticlePages
+            .filter { $0.key.page == 1 }
+            .sorted { lhs, rhs in
+                lhs.key.pageSize > rhs.key.pageSize
+            }
+            .first?
+            .value
+    }
+
+    private func makeArticleLibraryPreviewState(from article: StrapiUserArticle) -> ArticleLibraryPreviewState {
+        let trimmedTitle = article.attributes.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = (trimmedTitle?.isEmpty == false ? trimmedTitle : nil) ?? "Untitled Article"
+        let content = article.attributes.content
+        let tagNames = article.attributes.articleTags?.data.compactMap {
+            $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        .filter { !$0.isEmpty } ?? []
+        let wordCount = article.attributes.wordCount
+            ?? content?.split { $0.isWhitespace || $0.isNewline }.count
+            ?? 0
+        let progressFraction = min(max(article.attributes.progress ?? 0, 0), 1)
+        let displayedTags = Array(tagNames.prefix(2)).isEmpty ? ["My Article"] : Array(tagNames.prefix(2))
+        let newWords = max(8, min(max(wordCount / 28, 0), 60))
+        let dateLabel = relativeDateLabel(for: article.attributes.lastReadAt)
+
+        return ArticleLibraryPreviewState(
+            id: article.id,
+            backendId: article.id,
+            title: resolvedTitle,
+            content: content,
+            wordCount: wordCount,
+            newWords: newWords,
+            progress: progressFraction,
+            primaryTag: tagNames.first,
+            tags: tagNames,
+            dateLabel: dateLabel,
+            sourceLabel: "My Article",
+            displayedTags: displayedTags,
+            progressFraction: progressFraction,
+            progressText: "\(Int((progressFraction * 100).rounded()))%"
+        )
+    }
+
+    private func relativeDateLabel(for date: Date?) -> String {
+        guard let date else { return "Saved" }
+        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
     }
 
     private func resolvedLeaderboard(

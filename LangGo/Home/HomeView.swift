@@ -18,6 +18,7 @@ struct HomeView: View {
     @State private var isPreparingBookMode = false
     @State private var placeholderMessage: String?
     @State private var cameraAccessMessage: String?
+    @State private var selectedLibraryArticlePreview: HomeViewModel.ArticleLibraryPreviewState?
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
 
@@ -135,6 +136,22 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $isShowingAddWord) {
             NewWordInputView(viewModel: flashcardViewModel)
+        }
+        .fullScreenCover(item: $selectedLibraryArticlePreview) { preview in
+            ArticleReadingView(
+                article: LibraryArticle(
+                    backendId: preview.backendId,
+                    title: preview.title,
+                    content: preview.content,
+                    wordCount: preview.wordCount,
+                    newWords: preview.newWords,
+                    progress: preview.progress,
+                    tag: preview.primaryTag,
+                    tags: preview.tags,
+                    dateLabel: preview.dateLabel,
+                    sourceLabel: preview.sourceLabel
+                )
+            )
         }
         .fullScreenCover(isPresented: $isShowingArticleScanFlow) {
             UserArticleScanFlowView(
@@ -315,7 +332,7 @@ struct HomeView: View {
                 Button {
                     selectedTab = 2
                 } label: {
-                    Text("View All (12)")
+                    Text(articleLibraryLinkTitle)
                         .font(.system(size: metrics.libraryLinkFont, weight: .bold, design: .rounded))
                         .foregroundStyle(Color(red: 0.34, green: 0.27, blue: 0.98))
                 }
@@ -325,68 +342,112 @@ struct HomeView: View {
             Spacer()
                 .frame(height: metrics.afterSectionLabelSpacing)
 
-            Button {
-                selectedTab = 2
-            } label: {
-                VStack(alignment: .leading, spacing: metrics.libraryCardContentGap) {
-                    HStack(spacing: metrics.libraryTopRowGap) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: metrics.libraryIconCornerRadius, style: .continuous)
-                                .fill(Color(red: 0.72, green: 0.33, blue: 0.98))
-                                .frame(width: metrics.libraryIconBox, height: metrics.libraryIconBox)
-
-                            Image(systemName: "book")
-                                .font(.system(size: metrics.libraryIconFont, weight: .semibold))
-                                .foregroundStyle(Color.white)
-                        }
-
-                        VStack(alignment: .leading, spacing: metrics.libraryTitleGap) {
-                            Text("The Future of AI Technology")
-                                .font(.system(size: metrics.libraryTitleFont, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color(red: 0.21, green: 0.23, blue: 0.31))
-                                .lineLimit(2)
-
-                            HStack(spacing: metrics.libraryTagGap) {
-                                ArticleTag(text: "Technology", metrics: metrics)
-                                ArticleTag(text: "AI", metrics: metrics)
-                            }
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: metrics.libraryChevronFont, weight: .bold))
-                            .foregroundStyle(Color(red: 0.65, green: 0.64, blue: 0.74))
+            VStack(spacing: metrics.actionCardGap) {
+                if viewModel.articleLibraryPreviews.isEmpty {
+                    Button {
+                        selectedTab = 2
+                    } label: {
+                        articleLibraryCard(
+                            metrics: metrics,
+                            title: "No saved articles yet",
+                            tags: ["Library"],
+                            progressText: "0%",
+                            progressFraction: 0
+                        )
                     }
-
-                    HStack {
-                        Text("Progress")
-                            .font(.system(size: metrics.libraryMetaFont, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Color(red: 0.49, green: 0.49, blue: 0.60))
-                        Spacer()
-                        Text("60%")
-                            .font(.system(size: metrics.libraryMetaFont, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(red: 0.49, green: 0.49, blue: 0.60))
-                    }
-
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color(red: 0.89, green: 0.84, blue: 0.98))
-                            Capsule()
-                                .fill(Color(red: 0.70, green: 0.17, blue: 0.98))
-                                .frame(width: proxy.size.width * 0.60)
+                    .buttonStyle(.plain)
+                } else {
+                    ForEach(viewModel.articleLibraryPreviews) { preview in
+                        Button {
+                            selectedLibraryArticlePreview = preview
+                        } label: {
+                            articleLibraryCard(
+                                metrics: metrics,
+                                title: preview.title,
+                                tags: preview.displayedTags,
+                                progressText: preview.progressText,
+                                progressFraction: preview.progressFraction
+                            )
                         }
+                        .buttonStyle(.plain)
                     }
-                    .frame(height: metrics.libraryProgressHeight)
                 }
-                .padding(.horizontal, metrics.libraryCardHorizontalPadding)
-                .padding(.vertical, metrics.libraryCardVerticalPadding)
-                .background(Color(red: 0.97, green: 0.92, blue: 1.00))
-                .clipShape(RoundedRectangle(cornerRadius: metrics.libraryCardCornerRadius, style: .continuous))
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    private var articleLibraryLinkTitle: String {
+        if let articleLibraryCount = viewModel.articleLibraryCount {
+            return "View All (\(articleLibraryCount))"
+        }
+
+        return "View All"
+    }
+
+    private func articleLibraryCard(
+        metrics: HomeMetrics,
+        title: String,
+        tags: [String],
+        progressText: String,
+        progressFraction: Double
+    ) -> some View {
+        VStack(alignment: .leading, spacing: metrics.libraryCardContentGap) {
+            HStack(spacing: metrics.libraryTopRowGap) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: metrics.libraryIconCornerRadius, style: .continuous)
+                        .fill(Color(red: 0.72, green: 0.33, blue: 0.98))
+                        .frame(width: metrics.libraryIconBox, height: metrics.libraryIconBox)
+
+                    Image(systemName: "book")
+                        .font(.system(size: metrics.libraryIconFont, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                }
+
+                VStack(alignment: .leading, spacing: metrics.libraryTitleGap) {
+                    Text(title)
+                        .font(.system(size: metrics.libraryTitleFont, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.21, green: 0.23, blue: 0.31))
+                        .lineLimit(2)
+
+                    HStack(spacing: metrics.libraryTagGap) {
+                        ForEach(tags, id: \.self) { tag in
+                            ArticleTag(text: tag, metrics: metrics)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: metrics.libraryChevronFont, weight: .bold))
+                    .foregroundStyle(Color(red: 0.65, green: 0.64, blue: 0.74))
+            }
+
+            HStack {
+                Text("Progress")
+                    .font(.system(size: metrics.libraryMetaFont, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.49, green: 0.49, blue: 0.60))
+                Spacer()
+                Text(progressText)
+                    .font(.system(size: metrics.libraryMetaFont, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.49, green: 0.49, blue: 0.60))
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(red: 0.89, green: 0.84, blue: 0.98))
+                    Capsule()
+                        .fill(Color(red: 0.70, green: 0.17, blue: 0.98))
+                        .frame(width: proxy.size.width * progressFraction)
+                }
+            }
+            .frame(height: metrics.libraryProgressHeight)
+        }
+        .padding(.horizontal, metrics.libraryCardHorizontalPadding)
+        .padding(.vertical, metrics.libraryCardVerticalPadding)
+        .background(Color(red: 0.97, green: 0.92, blue: 1.00))
+        .clipShape(RoundedRectangle(cornerRadius: metrics.libraryCardCornerRadius, style: .continuous))
     }
 
     private func openLeaderboard() {
@@ -684,9 +745,9 @@ private struct HomeMetrics {
         libraryIconCornerRadius = sx(8)
         libraryIconFont = min(sx(20), sy(20)) 
         libraryTitleGap = sy(6)
-        libraryTitleFont = min(sx(22), sy(22))
+        libraryTitleFont = min(sx(18), sy(18))
         libraryTagGap = sx(5)
-        libraryTagFont = min(sx(16), sy(16))
+        libraryTagFont = min(sx(14), sy(14))
         libraryTagHorizontalPadding = sx(7)
         libraryTagVerticalPadding = sy(2)
         libraryMetaFont = min(sx(16), sy(16))
