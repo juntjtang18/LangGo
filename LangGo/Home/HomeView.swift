@@ -647,22 +647,22 @@ private struct HomeMetrics {
         reviewCardVerticalPadding = sy(16)
         reviewContentGap = sy(16)
         reviewTitleGap = sy(2)
-        reviewLabelFont = min(sx(14), sy(14))
-        reviewCountFont = min(sx(28), sy(30))
+        reviewLabelFont = min(sx(20), sy(20))
+        reviewCountFont = min(sx(32), sy(32))
         reviewIconCircle = sx(38)
-        reviewIconFont = min(sx(18), sy(18)) + 2
+        reviewIconFont = min(sx(20), sy(20))
         reviewPanelHorizontalPadding = sx(14)
         reviewPanelVerticalPadding = sy(12)
         reviewPanelCornerRadius = sx(10)
         reviewRowsGap = sy(10)
-        reviewRowFont = min(sx(15), sy(15)) + 2
-        reviewRowIconFont = min(sx(12), sy(12)) + 2
+        reviewRowFont = min(sx(20), sy(20))
+        reviewRowIconFont = min(sx(20), sy(20))
         reviewButtonTopSpacing = sy(10)
         reviewButtonHeight = sy(58)
         reviewButtonCornerRadius = sx(10)
-        reviewButtonFont = min(sx(17), sy(17)) + 5
+        reviewButtonFont = min(sx(24), sy(24))
         reviewShadowRadius = sx(8)
-        reviewShadowY = sy(4)
+        reviewShadowY = sy(5)
 
         actionCardGap = sx(8)
         actionCardHeight = sy(58)
@@ -670,11 +670,11 @@ private struct HomeMetrics {
         actionCardHorizontalPadding = sx(8)
         actionCardVerticalPadding = sy(8)
         actionIconCircle = sx(28)
-        actionIconFont = min(sx(14), sy(14)) + 2
-        actionTitleFont = min(sx(13), sy(13.5)) + 2
+        actionIconFont = min(sx(20), sy(20))
+        actionTitleFont = min(sx(20), sy(20))
         actionContentGap = sy(7)
 
-        libraryLinkFont = min(sx(13), sy(13)) + 2
+        libraryLinkFont = min(sx(20), sy(20))
         libraryCardCornerRadius = sx(12)
         libraryCardHorizontalPadding = sx(11)
         libraryCardVerticalPadding = sy(11)
@@ -682,15 +682,15 @@ private struct HomeMetrics {
         libraryTopRowGap = sx(9)
         libraryIconBox = sx(26)
         libraryIconCornerRadius = sx(8)
-        libraryIconFont = min(sx(14), sy(14)) + 2
+        libraryIconFont = min(sx(20), sy(20)) 
         libraryTitleGap = sy(6)
-        libraryTitleFont = min(sx(14), sy(14.5)) + 2
+        libraryTitleFont = min(sx(22), sy(22))
         libraryTagGap = sx(5)
-        libraryTagFont = min(sx(10), sy(10.5)) + 2
+        libraryTagFont = min(sx(16), sy(16))
         libraryTagHorizontalPadding = sx(7)
         libraryTagVerticalPadding = sy(2)
-        libraryMetaFont = min(sx(12), sy(12)) + 2
-        libraryChevronFont = min(sx(12), sy(12)) + 2
+        libraryMetaFont = min(sx(16), sy(16))
+        libraryChevronFont = min(sx(16), sy(12))
         libraryProgressHeight = max(5, sy(5))
     }
 }

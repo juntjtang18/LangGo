@@ -122,7 +122,7 @@ struct VocabookView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .myUserPointsDidChange)) { _ in
             Task {
-                await refreshRecentAddedCount()
+                await syncRecentAddedCount()
                 await refreshRecentlyAddedCards()
             }
         }
@@ -464,6 +464,11 @@ struct VocabookView: View {
             logger.error("Failed to fetch recent added count for vocabook: \(error.localizedDescription, privacy: .public)")
             recentAddedCount = 0
         }
+    }
+
+    private func syncRecentAddedCount() async {
+        await DataServices.shared.userPointsService.loadMyUserPoints(locale: baseLanguageLocale)
+        recentAddedCount = DataServices.shared.userPointsService.currentMyUserPoints(locale: baseLanguageLocale)?.word_add ?? 0
     }
 
     private func refreshRecentlyAddedCards() async {

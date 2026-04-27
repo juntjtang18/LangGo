@@ -24,6 +24,7 @@ class AuthService {
         flashcardService.invalidateAllFlashcardCaches()
         MyUserPointsCache.invalidate(using: cacheService)
         PointGroupCache.invalidateAll(using: cacheService)
+        ArticleCache.invalidateAll(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
         return response
     }
@@ -35,6 +36,7 @@ class AuthService {
         flashcardService.invalidateAllFlashcardCaches()
         MyUserPointsCache.invalidate(using: cacheService)
         PointGroupCache.invalidateAll(using: cacheService)
+        ArticleCache.invalidateAll(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
         return response
     }
@@ -159,6 +161,7 @@ class AuthService {
         flashcardService.invalidateAllFlashcardCaches()
         MyUserPointsCache.invalidate(using: cacheService)
         PointGroupCache.invalidateAll(using: cacheService)
+        ArticleCache.invalidateAll(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
     }
 

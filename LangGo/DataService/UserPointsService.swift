@@ -74,7 +74,6 @@ final class UserPointsService: ObservableObject {
         }
 
         myUserPoints = attributes
-        NotificationCenter.default.post(name: .myUserPointsDidChange, object: nil)
         return attributes
     }
 

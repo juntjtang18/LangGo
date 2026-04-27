@@ -30,7 +30,7 @@ final class ArticleServiceCacheFunctionalTests: XCTestCase {
         }
 
         let authResponse = try await loginTestUser()
-        let service = ArticleService()
+        let service = await MainActor.run { ArticleService() }
         clearArticleCaches()
 
         let firstTags = try await service.fetchMyArticleTags()
@@ -46,7 +46,7 @@ final class ArticleServiceCacheFunctionalTests: XCTestCase {
         )
 
         keychain["jwt"] = authResponse.jwt
-        let uniqueTag = "cache-test-\(UUID().uuidString.prefix(8))"
+        let uniqueTag = "ct-\(UUID().uuidString.prefix(8))"
         _ = try await service.createArticleTag(tag: uniqueTag)
 
         try keychain.remove("jwt")
@@ -67,7 +67,7 @@ final class ArticleServiceCacheFunctionalTests: XCTestCase {
         }
 
         _ = try await loginTestUser()
-        let service = ArticleService()
+        let service = await MainActor.run { ArticleService() }
         clearArticleCaches()
 
         let firstResponse = try await service.fetchMyUserArticles(page: 1, pageSize: 10)

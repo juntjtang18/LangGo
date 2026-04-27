@@ -27,30 +27,15 @@ struct LibraryTabView: View {
 }
 
 struct LibraryView: View {
-    private let articlePageSize = 10
-    private let maxCachedArticlePages = 3
-
+    @StateObject private var viewModel = LibraryViewModel()
     @State private var selectedMode: LibraryMode = .myLibrary
-    @State private var libraryArticles: [LibraryArticle] = []
-    @State private var discoverArticles = LibraryArticle.discoverMocks
     @State private var selectedArticle: LibraryArticle?
     @State private var expandedArticleID: LibraryArticle.ID?
     @State private var isShowingAddMenu = false
     @State private var isShowingArticleScanFlow = false
     @State private var articleEditorDraft: ArticleDraft?
-    @State private var availableTags: [String] = []
-    @State private var libraryFilterTags: [String] = []
-    @State private var selectedFilterTags: Set<String> = []
     @State private var tagPageIndex = 0
-    @State private var hasLoadedLibrary = false
-    @State private var isLoadingLibrary = false
-    @State private var isLoadingNextArticlePage = false
-    @State private var isLoadingPreviousArticlePage = false
-    @State private var cachedArticlePages: [Int: [LibraryArticle]] = [:]
-    @State private var cachedArticlePageOrder: [Int] = []
-    @State private var totalArticlePages = 1
     @State private var cameraAccessMessage: String?
-    @State private var articleErrorMessage: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -100,7 +85,7 @@ struct LibraryView: View {
                 }
             }
             .overlay {
-                if isLoadingLibrary && libraryArticles.isEmpty {
+                if viewModel.isLoadingLibrary && viewModel.libraryArticles.isEmpty {
                     loadingOverlay(
                         title: "Loading Library...",
                         message: "Fetching your tags and saved articles."
@@ -115,12 +100,14 @@ struct LibraryView: View {
         }
         .fullScreenCover(isPresented: $isShowingArticleScanFlow) {
             ArticleScanFlowView(
-                availableTags: availableTags,
+                availableTags: viewModel.availableTags,
                 onCancel: {
                     isShowingArticleScanFlow = false
                 },
                 onSave: { draft in
-                    try await saveDraftAsArticle(draft)
+                    try await viewModel.saveDraftAsArticle(draft)
+                    expandedArticleID = nil
+                    selectedMode = .myLibrary
                     isShowingArticleScanFlow = false
                 }
             )
@@ -128,18 +115,20 @@ struct LibraryView: View {
         .fullScreenCover(item: $articleEditorDraft) { draft in
             ArticleEditorView(
                 draft: draft,
-                availableTags: availableTags,
+                availableTags: viewModel.availableTags,
                 onCancel: {
                     articleEditorDraft = nil
                 },
                 onSave: { draft in
-                    try await saveDraftAsArticle(draft, sourceLabel: draft.sourceLabel ?? "Manual")
+                    try await viewModel.saveDraftAsArticle(draft, sourceLabel: draft.sourceLabel ?? "Manual")
+                    expandedArticleID = nil
+                    selectedMode = .myLibrary
                     articleEditorDraft = nil
                 }
             )
         }
         .task {
-            await loadLibraryDataIfNeeded()
+            await viewModel.loadIfNeeded()
         }
         .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
             Button("OK", role: .cancel) {
@@ -150,10 +139,10 @@ struct LibraryView: View {
         }
         .alert("Article Error", isPresented: articleErrorAlertBinding) {
             Button("OK", role: .cancel) {
-                articleErrorMessage = nil
+                viewModel.dismissArticleError()
             }
         } message: {
-            Text(articleErrorMessage ?? "")
+            Text(viewModel.articleErrorMessage ?? "")
         }
     }
 
@@ -225,7 +214,7 @@ struct LibraryView: View {
     }
 
     private func tagFilters(metrics: LibraryMetrics, availableWidth: CGFloat) -> some View {
-        let pages = buildTagPages(tags: resolvedFilterTags, availableWidth: availableWidth, metrics: metrics)
+        let pages = buildTagPages(tags: viewModel.filterTags, availableWidth: availableWidth, metrics: metrics)
         let resolvedPageIndex = min(tagPageIndex, max(pages.count - 1, 0))
         let currentRows = pages.isEmpty ? [] : pages[resolvedPageIndex]
 
@@ -249,9 +238,9 @@ struct LibraryView: View {
                     ForEach(Array(currentRows.enumerated()), id: \.offset) { _, row in
                         HStack(spacing: metrics.tagSpacing) {
                             ForEach(row, id: \.self) { tag in
-                                tagChip(tag, metrics: metrics, isSelected: selectedFilterTags.contains(tag))
+                                tagChip(tag, metrics: metrics, isSelected: viewModel.selectedFilterTags.contains(tag))
                                     .onTapGesture {
-                                        toggleFilterTag(tag)
+                                        viewModel.toggleFilterTag(tag)
                                     }
                             }
                             Spacer(minLength: 0)
@@ -294,21 +283,21 @@ struct LibraryView: View {
 
     private func libraryList(metrics: LibraryMetrics) -> some View {
         LazyVStack(spacing: metrics.cardSpacing) {
-            if isLoadingPreviousArticlePage && !displayedLibraryArticles.isEmpty {
+            if viewModel.isLoadingPreviousArticlePage && !viewModel.displayedLibraryArticles.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, metrics.compactSpacing)
             }
 
-            if isLoadingLibrary && displayedLibraryArticles.isEmpty {
+            if viewModel.isLoadingLibrary && viewModel.displayedLibraryArticles.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, metrics.cardPadding * 2)
-            } else if displayedLibraryArticles.isEmpty {
+            } else if viewModel.displayedLibraryArticles.isEmpty {
                 emptyLibraryCard(metrics: metrics)
             }
 
-            ForEach(displayedLibraryArticles) { article in
+            ForEach(viewModel.displayedLibraryArticles) { article in
                 LibraryArticleCard(
                     article: article,
                     metrics: metrics,
@@ -326,11 +315,14 @@ struct LibraryView: View {
                     }
                 )
                 .onAppear {
-                    handleArticleAppearance(article)
+                    guard selectedMode == .myLibrary else { return }
+                    Task {
+                        await viewModel.handleArticleAppearance(article)
+                    }
                 }
             }
 
-            if isLoadingNextArticlePage && !displayedLibraryArticles.isEmpty {
+            if viewModel.isLoadingNextArticlePage && !viewModel.displayedLibraryArticles.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, metrics.compactSpacing)
@@ -340,28 +332,19 @@ struct LibraryView: View {
 
     private func discoverList(metrics: LibraryMetrics) -> some View {
         VStack(spacing: metrics.cardSpacing) {
-            ForEach(discoverArticles) { article in
+            ForEach(viewModel.discoverArticles) { article in
                 LibraryDiscoverCard(article: article, metrics: metrics) {
-                    addDiscoverArticle(article)
+                    viewModel.addDiscoverArticle(article)
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selectedMode = .myLibrary
+                    }
                 }
             }
         }
     }
 
     private var discoverBadgeCount: Int {
-        min(discoverArticles.count, 3)
-    }
-
-    private func addDiscoverArticle(_ article: LibraryArticle) {
-        guard let index = discoverArticles.firstIndex(where: { $0.id == article.id }) else { return }
-
-        var moved = discoverArticles.remove(at: index)
-        moved.progress = 0.0
-        libraryArticles.insert(moved, at: 0)
-
-        withAnimation(.easeInOut(duration: 0.18)) {
-            selectedMode = .myLibrary
-        }
+        min(viewModel.discoverArticles.count, 3)
     }
 
     private var cameraAccessAlertBinding: Binding<Bool> {
@@ -377,25 +360,13 @@ struct LibraryView: View {
 
     private var articleErrorAlertBinding: Binding<Bool> {
         Binding(
-            get: { articleErrorMessage != nil },
+            get: { viewModel.articleErrorMessage != nil },
             set: { newValue in
                 if !newValue {
-                    articleErrorMessage = nil
+                    viewModel.dismissArticleError()
                 }
             }
         )
-    }
-
-    private var resolvedFilterTags: [String] {
-        let tags = libraryFilterTags
-        return Array(NSOrderedSet(array: tags)) as? [String] ?? tags
-    }
-
-    private var displayedLibraryArticles: [LibraryArticle] {
-        guard !selectedFilterTags.isEmpty else { return libraryArticles }
-        return libraryArticles.filter { article in
-            selectedFilterTags.isSubset(of: Set(article.tags))
-        }
     }
 
     private func openCameraForArticleScan() {
@@ -422,192 +393,6 @@ struct LibraryView: View {
         @unknown default:
             cameraAccessMessage = "Camera access is unavailable right now."
         }
-    }
-
-    @MainActor
-    private func loadLibraryDataIfNeeded() async {
-        guard !hasLoadedLibrary else { return }
-        hasLoadedLibrary = true
-        await loadLibraryData()
-    }
-
-    @MainActor
-    private func loadLibraryData() async {
-        isLoadingLibrary = true
-
-        do {
-            let articleService = DataServices.shared.articleService
-            async let tagsTask = articleService.fetchMyUsedArticleTags()
-            async let articlesTask = articleService.fetchMyUserArticles(page: 1, pageSize: articlePageSize)
-
-            let tags = try await tagsTask
-            let response = try await articlesTask
-
-            let usedTags = tags.compactMap { $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-                .sorted()
-            availableTags = usedTags
-            libraryFilterTags = usedTags
-            tagPageIndex = 0
-            totalArticlePages = max(response.meta?.pagination?.pageCount ?? 1, 1)
-            cachedArticlePages = [1: (response.data ?? []).map(mapUserArticle(_:))]
-            cachedArticlePageOrder = response.data?.isEmpty == false ? [1] : []
-            rebuildArticleWindow()
-        } catch {
-            articleErrorMessage = error.localizedDescription
-        }
-
-        isLoadingLibrary = false
-    }
-
-    @MainActor
-    private func saveDraftAsArticle(_ draft: ArticleDraft, sourceLabel: String = "OCR") async throws {
-        let persisted = try await persistUserArticleDraft(draft, sourceLabel: sourceLabel)
-        expandedArticleID = nil
-        selectedMode = .myLibrary
-        upsertLocalArticle(
-            articleID: persisted.articleID,
-            title: persisted.title,
-            content: persisted.content,
-            wordCount: persisted.wordCount,
-            progress: persisted.progress ?? 0,
-            tags: persisted.tags,
-            sourceLabel: persisted.sourceLabel
-        )
-    }
-
-    private func upsertLocalArticle(
-        articleID: Int,
-        title: String,
-        content: String,
-        wordCount: Int,
-        progress: Double?,
-        tags: [String],
-        sourceLabel: String
-    ) {
-        let normalizedTags = tags
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let article = LibraryArticle(
-            backendId: articleID,
-            title: title,
-            content: content,
-            wordCount: wordCount,
-            newWords: max(8, min(max(wordCount / 28, 0), 60)),
-            progress: progress,
-            tag: normalizedTags.first,
-            tags: normalizedTags,
-            dateLabel: "Just now",
-            sourceLabel: sourceLabel
-        )
-
-        if let existingIndex = libraryArticles.firstIndex(where: { $0.backendId == articleID }) {
-            libraryArticles[existingIndex] = article
-            for page in cachedArticlePages.keys {
-                if let pageIndex = cachedArticlePages[page]?.firstIndex(where: { $0.backendId == articleID }) {
-                    cachedArticlePages[page]?[pageIndex] = article
-                }
-            }
-        } else {
-            if cachedArticlePages[1] != nil {
-                cachedArticlePages[1]?.insert(article, at: 0)
-                if let firstPageCount = cachedArticlePages[1]?.count, firstPageCount > articlePageSize {
-                    cachedArticlePages[1]?.removeLast(firstPageCount - articlePageSize)
-                }
-            } else {
-                cachedArticlePages[1] = [article]
-                cachedArticlePageOrder = [1]
-            }
-        }
-
-        rebuildArticleWindow()
-        let mergedTags = Array(NSOrderedSet(array: availableTags + normalizedTags)) as? [String] ?? (availableTags + normalizedTags)
-        let sortedTags = mergedTags.sorted()
-        availableTags = sortedTags
-        libraryFilterTags = sortedTags
-    }
-
-    private func toggleFilterTag(_ tag: String) {
-        if selectedFilterTags.contains(tag) {
-            selectedFilterTags.remove(tag)
-        } else {
-            selectedFilterTags.insert(tag)
-        }
-    }
-
-    private func handleArticleAppearance(_ article: LibraryArticle) {
-        guard selectedMode == .myLibrary, !displayedLibraryArticles.isEmpty else { return }
-
-        if article.id == displayedLibraryArticles.first?.id {
-            Task {
-                await loadPreviousArticlePageIfNeeded()
-            }
-        }
-
-        if article.id == displayedLibraryArticles.last?.id {
-            Task {
-                await loadNextArticlePageIfNeeded()
-            }
-        }
-    }
-
-    @MainActor
-    private func loadNextArticlePageIfNeeded() async {
-        guard !isLoadingLibrary, !isLoadingNextArticlePage else { return }
-        guard let lastPage = cachedArticlePageOrder.max(), lastPage < totalArticlePages else { return }
-
-        isLoadingNextArticlePage = true
-        defer { isLoadingNextArticlePage = false }
-
-        await loadArticlePage(lastPage + 1, direction: .next)
-    }
-
-    @MainActor
-    private func loadPreviousArticlePageIfNeeded() async {
-        guard !isLoadingLibrary, !isLoadingPreviousArticlePage else { return }
-        guard let firstPage = cachedArticlePageOrder.min(), firstPage > 1 else { return }
-
-        isLoadingPreviousArticlePage = true
-        defer { isLoadingPreviousArticlePage = false }
-
-        await loadArticlePage(firstPage - 1, direction: .previous)
-    }
-
-    @MainActor
-    private func loadArticlePage(_ page: Int, direction: ArticlePageDirection) async {
-        guard cachedArticlePages[page] == nil else { return }
-
-        do {
-            let response = try await DataServices.shared.articleService.fetchMyUserArticles(page: page, pageSize: articlePageSize)
-            totalArticlePages = max(response.meta?.pagination?.pageCount ?? totalArticlePages, totalArticlePages)
-            cachedArticlePages[page] = (response.data ?? []).map(mapUserArticle(_:))
-            cachedArticlePageOrder.append(page)
-            cachedArticlePageOrder = cachedArticlePageOrder.sorted()
-            trimArticlePageWindow(for: direction)
-            rebuildArticleWindow()
-        } catch {
-            articleErrorMessage = error.localizedDescription
-        }
-    }
-
-    private func trimArticlePageWindow(for direction: ArticlePageDirection) {
-        while cachedArticlePageOrder.count > maxCachedArticlePages {
-            let pageToDrop: Int
-            switch direction {
-            case .next:
-                pageToDrop = cachedArticlePageOrder.min() ?? cachedArticlePageOrder[0]
-            case .previous:
-                pageToDrop = cachedArticlePageOrder.max() ?? cachedArticlePageOrder[cachedArticlePageOrder.count - 1]
-            }
-
-            cachedArticlePages.removeValue(forKey: pageToDrop)
-            cachedArticlePageOrder.removeAll { $0 == pageToDrop }
-        }
-    }
-
-    private func rebuildArticleWindow() {
-        let orderedPages = cachedArticlePageOrder.sorted()
-        libraryArticles = orderedPages.flatMap { cachedArticlePages[$0] ?? [] }
     }
 
     private func tagChip(_ tag: String, metrics: LibraryMetrics, isSelected: Bool) -> some View {
@@ -655,32 +440,6 @@ struct LibraryView: View {
         }
 
         return pages
-    }
-
-    private func mapUserArticle(_ article: StrapiUserArticle) -> LibraryArticle {
-        let title = article.attributes.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let content = article.attributes.content ?? ""
-        let tagNames = article.attributes.articleTags?.data.compactMap { $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty } ?? []
-        let wordCount = article.attributes.wordCount ?? content.split { $0.isWhitespace || $0.isNewline }.count
-
-        return LibraryArticle(
-            backendId: article.id,
-            title: (title?.isEmpty == false ? title : "Untitled Article") ?? "Untitled Article",
-            content: content,
-            wordCount: wordCount,
-            newWords: max(8, min(max(wordCount / 28, 0), 60)),
-            progress: article.attributes.progress,
-            tag: tagNames.first,
-            tags: tagNames,
-            dateLabel: relativeDateLabel(for: article.attributes.lastReadAt),
-            sourceLabel: "My Article"
-        )
-    }
-
-    private func relativeDateLabel(for date: Date?) -> String {
-        guard let date else { return "Saved" }
-        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
     }
 
     private func beginEditing(_ article: LibraryArticle) {
@@ -742,61 +501,6 @@ struct LibraryView: View {
     }
 }
 
-private struct PersistedUserArticleDraft {
-    let articleID: Int
-    let title: String
-    let content: String
-    let wordCount: Int
-    let progress: Double?
-    let tags: [String]
-    let sourceLabel: String
-}
-
-private func persistUserArticleDraft(_ draft: ArticleDraft, sourceLabel: String = "OCR") async throws -> PersistedUserArticleDraft {
-    let trimmedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-    let normalizedTitle = trimmedTitle.isEmpty ? "Untitled Article" : trimmedTitle
-    let wordCount = draft.content.split { $0.isWhitespace || $0.isNewline }.count
-    let articleService = await DataServices.shared.articleService
-    let savedTags = try await articleService.findOrCreateArticleTags(tags: draft.tags)
-    let tagIDs = savedTags.map(\.id)
-    let tagNames = savedTags.compactMap { $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { !$0.isEmpty }
-    let savedArticle: StrapiUserArticle
-
-    if let articleId = draft.articleId {
-        savedArticle = try await articleService.updateUserArticle(
-            articleId: articleId,
-            title: normalizedTitle,
-            content: draft.content,
-            languageCode: nil,
-            wordCount: wordCount,
-            progress: 0,
-            lastReadAt: Date(),
-            articleTagIds: tagIDs
-        )
-    } else {
-        savedArticle = try await articleService.createUserArticle(
-            title: normalizedTitle,
-            content: draft.content,
-            languageCode: nil,
-            wordCount: wordCount,
-            progress: 0,
-            lastReadAt: Date(),
-            articleTagIds: tagIDs
-        )
-    }
-
-    return PersistedUserArticleDraft(
-        articleID: savedArticle.id,
-        title: normalizedTitle,
-        content: draft.content,
-        wordCount: wordCount,
-        progress: savedArticle.attributes.progress,
-        tags: tagNames,
-        sourceLabel: sourceLabel
-    )
-}
-
 private enum LibraryMode: CaseIterable {
     case myLibrary
     case discover
@@ -807,11 +511,6 @@ private enum LibraryMode: CaseIterable {
         case .discover: return "Discover"
         }
     }
-}
-
-private enum ArticlePageDirection {
-    case previous
-    case next
 }
 
 private enum LibraryTag {
@@ -889,7 +588,7 @@ struct LibraryArticle: Identifiable, Equatable {
     ]
 }
 
-private struct ArticleDraft: Identifiable {
+struct ArticleDraft: Identifiable {
     let id = UUID()
     var articleId: Int?
     var title: String
@@ -1483,53 +1182,60 @@ private struct CameraCaptureView: UIViewControllerRepresentable {
 }
 
 struct UserArticleScanFlowView: View {
-    @State private var availableTags: [String] = []
-    @State private var articleErrorMessage: String?
+    @StateObject private var viewModel: UserArticleScanFlowViewModel
 
     let onCancel: () -> Void
     let onSaved: () -> Void
 
+    @MainActor
+    init(
+        onCancel: @escaping () -> Void,
+        onSaved: @escaping () -> Void
+    ) {
+        _viewModel = StateObject(wrappedValue: UserArticleScanFlowViewModel())
+        self.onCancel = onCancel
+        self.onSaved = onSaved
+    }
+
+    init(
+        viewModel: UserArticleScanFlowViewModel,
+        onCancel: @escaping () -> Void,
+        onSaved: @escaping () -> Void
+    ) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+        self.onCancel = onCancel
+        self.onSaved = onSaved
+    }
+
     var body: some View {
         ArticleScanFlowView(
-            availableTags: availableTags,
+            availableTags: viewModel.availableTags,
             onCancel: onCancel,
             onSave: { draft in
-                _ = try await persistUserArticleDraft(draft, sourceLabel: draft.sourceLabel ?? "OCR")
+                try await viewModel.saveDraftAsArticle(draft, sourceLabel: draft.sourceLabel ?? "OCR")
                 await MainActor.run {
                     onSaved()
                 }
             }
         )
         .task {
-            await loadAvailableTags()
+            await viewModel.loadIfNeeded()
         }
         .alert("Article Error", isPresented: articleErrorAlertBinding) {
             Button("OK", role: .cancel) {
-                articleErrorMessage = nil
+                viewModel.dismissArticleError()
             }
         } message: {
-            Text(articleErrorMessage ?? "")
-        }
-    }
-
-    @MainActor
-    private func loadAvailableTags() async {
-        do {
-            let tags = try await DataServices.shared.articleService.fetchMyUsedArticleTags()
-            availableTags = tags.compactMap { $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-                .sorted()
-        } catch {
-            articleErrorMessage = error.localizedDescription
+            Text(viewModel.articleErrorMessage ?? "")
         }
     }
 
     private var articleErrorAlertBinding: Binding<Bool> {
         Binding(
-            get: { articleErrorMessage != nil },
+            get: { viewModel.articleErrorMessage != nil },
             set: { newValue in
                 if !newValue {
-                    articleErrorMessage = nil
+                    viewModel.dismissArticleError()
                 }
             }
         )

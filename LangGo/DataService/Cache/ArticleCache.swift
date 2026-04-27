@@ -33,16 +33,34 @@ enum ArticleCache {
         cacheService.loadIfValid(type: [StrapiArticleTag].self, from: articleTagsKey(userID: userID))
     }
 
+    static func loadArticleTagsStale(userID: Int, using cacheService: CacheService = .shared) -> [StrapiArticleTag]? {
+        cacheService.load(type: [StrapiArticleTag].self, from: articleTagsKey(userID: userID))
+    }
+
     static func storeArticleTags(_ tags: [StrapiArticleTag], userID: Int, using cacheService: CacheService = .shared) {
-        cacheService.saveWithPolicy(tags, key: articleTagsKey(userID: userID), ttl: Policy.articleTagsTTL, tags: [articleTagsTag])
+        cacheService.saveWithPolicy(
+            tags,
+            key: articleTagsKey(userID: userID),
+            ttl: Policy.articleTagsTTL,
+            tags: [articleTagsTag]
+        )
     }
 
     static func loadUsedArticleTags(userID: Int, using cacheService: CacheService = .shared) -> [StrapiArticleTag]? {
         cacheService.loadIfValid(type: [StrapiArticleTag].self, from: usedArticleTagsKey(userID: userID))
     }
 
+    static func loadUsedArticleTagsStale(userID: Int, using cacheService: CacheService = .shared) -> [StrapiArticleTag]? {
+        cacheService.load(type: [StrapiArticleTag].self, from: usedArticleTagsKey(userID: userID))
+    }
+
     static func storeUsedArticleTags(_ tags: [StrapiArticleTag], userID: Int, using cacheService: CacheService = .shared) {
-        cacheService.saveWithPolicy(tags, key: usedArticleTagsKey(userID: userID), ttl: Policy.usedArticleTagsTTL, tags: [usedArticleTagsTag])
+        cacheService.saveWithPolicy(
+            tags,
+            key: usedArticleTagsKey(userID: userID),
+            ttl: Policy.usedArticleTagsTTL,
+            tags: [usedArticleTagsTag]
+        )
     }
 
     static func loadUserArticlesPage(
@@ -52,6 +70,18 @@ enum ArticleCache {
         using cacheService: CacheService = .shared
     ) -> StrapiListResponse<StrapiUserArticle>? {
         cacheService.loadIfValid(
+            type: StrapiListResponse<StrapiUserArticle>.self,
+            from: userArticlesKey(userID: userID, page: page, pageSize: pageSize)
+        )
+    }
+
+    static func loadUserArticlesPageStale(
+        userID: Int,
+        page: Int,
+        pageSize: Int,
+        using cacheService: CacheService = .shared
+    ) -> StrapiListResponse<StrapiUserArticle>? {
+        cacheService.load(
             type: StrapiListResponse<StrapiUserArticle>.self,
             from: userArticlesKey(userID: userID, page: page, pageSize: pageSize)
         )
@@ -78,6 +108,17 @@ enum ArticleCache {
         using cacheService: CacheService = .shared
     ) -> StrapiUserArticle? {
         cacheService.loadIfValid(
+            type: StrapiUserArticle.self,
+            from: userArticleDetailKey(userID: userID, articleID: articleID)
+        )
+    }
+
+    static func loadUserArticleDetailStale(
+        userID: Int,
+        articleID: Int,
+        using cacheService: CacheService = .shared
+    ) -> StrapiUserArticle? {
+        cacheService.load(
             type: StrapiUserArticle.self,
             from: userArticleDetailKey(userID: userID, articleID: articleID)
         )
@@ -143,6 +184,54 @@ enum ArticleCache {
                 data: articles,
                 meta: updatedPagination.map { StrapiMeta(pagination: $0) }
             )
+
+            cacheService.saveWithPolicy(
+                page,
+                key: key,
+                ttl: Policy.articlePageTTL,
+                tags: [userArticlesTag]
+            )
+        }
+    }
+
+    static func removeUserArticle(
+        _ articleID: Int,
+        userID: Int,
+        using cacheService: CacheService = .shared
+    ) {
+        cacheService.delete(key: userArticleDetailKey(userID: userID, articleID: articleID))
+
+        let pageKeys = cacheService.keys(for: userArticlesTag)
+            .filter { $0.hasPrefix("userArticles.user.\(userID).page.") }
+
+        for key in pageKeys {
+            guard var page: StrapiListResponse<StrapiUserArticle> = cacheService.load(
+                type: StrapiListResponse<StrapiUserArticle>.self,
+                from: key
+            ) else {
+                continue
+            }
+
+            var articles = page.data ?? []
+            let originalCount = articles.count
+            articles.removeAll { $0.id == articleID }
+
+            guard articles.count != originalCount else { continue }
+
+            let updatedPagination = page.meta?.pagination.map {
+                StrapiPagination(
+                    page: $0.page,
+                    pageSize: $0.pageSize,
+                    pageCount: $0.pageCount,
+                    total: max($0.total - (originalCount - articles.count), articles.count)
+                )
+            }
+
+            page = StrapiListResponse(
+                data: articles,
+                meta: updatedPagination.map { StrapiMeta(pagination: $0) }
+            )
+
             cacheService.saveWithPolicy(
                 page,
                 key: key,
@@ -153,15 +242,10 @@ enum ArticleCache {
     }
 
     static func invalidateAfterTagWrite(using cacheService: CacheService = .shared) {
-        cacheService.invalidate(tags: [articleTagsTag, usedArticleTagsTag, userArticlesTag])
+        cacheService.invalidate(tags: [articleTagsTag, usedArticleTagsTag, userArticlesTag, userArticleDetailTag])
     }
 
-    static func invalidateAfterArticleWrite(tagsChanged: Bool, using cacheService: CacheService = .shared) {
-        var tags: [CacheService.CacheTag] = [userArticlesTag, userArticleDetailTag]
-        if tagsChanged {
-            tags.append(articleTagsTag)
-            tags.append(usedArticleTagsTag)
-        }
-        cacheService.invalidate(tags: tags)
+    static func invalidateAll(using cacheService: CacheService = .shared) {
+        cacheService.invalidate(tags: [articleTagsTag, usedArticleTagsTag, userArticlesTag, userArticleDetailTag])
     }
 }
