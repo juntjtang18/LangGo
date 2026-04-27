@@ -1086,7 +1086,7 @@ private struct LibraryArticleCard: View {
 
                 Spacer(minLength: metrics.compactSpacing)
 
-                Image(systemName: "book.pages")
+                Image(systemName: "book")
                     .font(.system(size: metrics.iconFont, weight: .bold))
                     .foregroundStyle(isExpanded ? Color.black : Color(red: 0.40, green: 0.30, blue: 1.00))
             }

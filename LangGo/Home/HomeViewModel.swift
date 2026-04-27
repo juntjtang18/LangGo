@@ -131,10 +131,12 @@ final class HomeViewModel: ObservableObject {
     }
 
     func handleSceneDidBecomeActive() async {
+        logger.debug("Home refresh trigger: scene active")
         await refreshVisibleContent()
     }
 
     func handleHomeTabSelected() async {
+        logger.debug("Home refresh trigger: tab selected")
         await refreshVisibleContent()
     }
 

@@ -335,7 +335,7 @@ struct HomeView: View {
                                 .fill(Color(red: 0.72, green: 0.33, blue: 0.98))
                                 .frame(width: metrics.libraryIconBox, height: metrics.libraryIconBox)
 
-                            Image(systemName: "book.pages")
+                            Image(systemName: "book")
                                 .font(.system(size: metrics.libraryIconFont, weight: .semibold))
                                 .foregroundStyle(Color.white)
                         }
