@@ -1,5 +1,6 @@
 // LangGo/Vocabook/ExamViewModel.swift
 
+import Combine
 import SwiftUI
 
 // Enum to define the direction of the exam
@@ -26,14 +27,28 @@ class ExamViewModel: ObservableObject {
 
     private var currentPage = 0
     private var loadedCardIds = Set<Int>()
-    private var autoLoadTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
 
     var currentCard: Flashcard? {
         guard currentCardIndex >= 0 && currentCardIndex < flashcards.count else { return nil }
         return flashcards[currentCardIndex]
     }
 
-    init() {}
+    init() {
+        flashcardService.$reviewFlashcards
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] cards in
+                self?.mergeReviewFlashcards(cards)
+            }
+            .store(in: &cancellables)
+
+        flashcardService.$isLoadingAllReviewFlashcards
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isLoading in
+                self?.isAutoLoadingRemainingPages = isLoading
+            }
+            .store(in: &cancellables)
+    }
 
     func loadExamCards() async {
         guard !isLoading else { return }
@@ -47,42 +62,20 @@ class ExamViewModel: ObservableObject {
         loadedCardIds.removeAll()
         flashcards.removeAll()
         resetForNewCard()
-        autoLoadTask?.cancel()
-        autoLoadTask = nil
-        isAutoLoadingRemainingPages = false
 
+        mergeReviewFlashcards(flashcardService.reviewFlashcards)
         await loadNextPageIfNeeded(force: true)
         isLoading = false
 
-        startAutoLoadingRemainingPages()
+        flashcardService.ensureReviewFlashcardsFullyLoaded(pageSize: pageSize)
     }
 
     func loadMoreIfNeeded() async {
-        // Safety net only. The normal flow now loads all remaining pages
-        // automatically after the first page is available.
+        // This is only a UI safety net. The shared background loading task lives
+        // in FlashcardService, so multiple ExamViewModel instances do not start
+        // duplicate backend pagination loops.
         guard flashcards.count - currentCardIndex <= prefetchThreshold else { return }
         await loadNextPageIfNeeded(force: false)
-    }
-
-    private func startAutoLoadingRemainingPages() {
-        guard hasMorePages else { return }
-        guard autoLoadTask == nil else { return }
-
-        autoLoadTask = Task { [weak self] in
-            await self?.loadRemainingPages()
-        }
-    }
-
-    private func loadRemainingPages() async {
-        isAutoLoadingRemainingPages = true
-        defer {
-            isAutoLoadingRemainingPages = false
-            autoLoadTask = nil
-        }
-
-        while hasMorePages && !Task.isCancelled {
-            await loadNextPageIfNeeded(force: false)
-        }
     }
 
     private func loadNextPageIfNeeded(force: Bool) async {
@@ -100,12 +93,7 @@ class ExamViewModel: ObservableObject {
                 dueOnly: true
             )
 
-            let examReadyCards = cards.filter(isExamReady)
-            let newCards = examReadyCards.filter { loadedCardIds.insert($0.id).inserted }
-
-            if !newCards.isEmpty {
-                flashcards.append(contentsOf: newCards)
-            }
+            appendExamReadyCards(cards)
 
             currentPage = pagination?.page ?? nextPage
             hasMorePages = currentPage < (pagination?.pageCount ?? currentPage)
@@ -116,6 +104,20 @@ class ExamViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
             hasMorePages = false
+        }
+    }
+
+    private func mergeReviewFlashcards(_ cards: [Flashcard]) {
+        guard !cards.isEmpty else { return }
+        appendExamReadyCards(cards)
+    }
+
+    private func appendExamReadyCards(_ cards: [Flashcard]) {
+        let examReadyCards = cards.filter(isExamReady)
+        let newCards = examReadyCards.filter { loadedCardIds.insert($0.id).inserted }
+
+        if !newCards.isEmpty {
+            flashcards.append(contentsOf: newCards)
         }
     }
 
@@ -191,9 +193,5 @@ class ExamViewModel: ObservableObject {
     private func resetForNewCard() {
         selectedOption = nil
         isAnswerSubmitted = false
-    }
-
-    deinit {
-        autoLoadTask?.cancel()
     }
 }
