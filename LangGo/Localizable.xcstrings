@@ -402,6 +402,9 @@
         }
       }
     },
+    "Could not load more cards: %@" : {
+
+    },
     "Current password" : {
 
     },
@@ -758,6 +761,9 @@
       }
     },
     "Loading Exam..." : {
+
+    },
+    "Loading more..." : {
 
     },
     "Loading stories..." : {

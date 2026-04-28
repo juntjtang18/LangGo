@@ -33,6 +33,8 @@ final class FlashcardService: ObservableObject {
     private let dateFormatter = ISO8601DateFormatter()
     private let flashcardStatisticsMinimumFetchInterval: TimeInterval = 2
     private var lastFlashcardStatisticsNetworkFetchAt: Date?
+    private var reviewFlashcardNetworkPageBuffer: [Int: [Flashcard]] = [:]
+    private var reviewFlashcardNetworkPagination: StrapiPagination?
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
@@ -318,6 +320,19 @@ final class FlashcardService: ObservableObject {
     }
 
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
+            logger.debug("Review cache is FRESH. Returning review page \(page) from cache.")
+            return pageSlice(from: cached, page: page, pageSize: pageSize)
+        }
+
+        logger.debug("Review cache is STALE. Fetching review page \(page) from network.")
+        let (cards, pagination) = try await fetchReviewFlashcardsPageFromNetwork(page: page, pageSize: pageSize)
+        patchReviewFlashcardsCache(with: cards, page: page, pagination: pagination)
+        return (cards, pagination)
+    }
+
+    private func fetchReviewFlashcardsPageFromNetwork(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else { throw URLError(.badURL) }
         urlComponents.queryItems = [
             URLQueryItem(name: "pagination[page]", value: "\(page)"),
@@ -329,8 +344,50 @@ final class FlashcardService: ObservableObject {
         let response: StrapiListResponse<StrapiFlashcard> = try await networkManager.fetchDirect(from: url)
         return ((response.data ?? []).map(transformStrapiCard), response.meta?.pagination)
     }
-    
-    private func fetchFlashcardsPageFromNetwork(
+
+    private func pageSlice(from cards: [Flashcard], page: Int, pageSize: Int) -> ([Flashcard], StrapiPagination?) {
+        let totalItems = cards.count
+        let totalPages = pageSize > 0 ? (totalItems + pageSize - 1) / pageSize : 0
+
+        guard page > 0, pageSize > 0, page <= totalPages || totalItems == 0 else {
+            return ([], StrapiPagination(page: page, pageSize: pageSize, pageCount: totalPages, total: totalItems))
+        }
+
+        let startIndex = (page - 1) * pageSize
+        let endIndex = min(startIndex + pageSize, totalItems)
+        let pageItems = startIndex < endIndex ? Array(cards[startIndex..<endIndex]) : []
+        return (pageItems, StrapiPagination(page: page, pageSize: pageSize, pageCount: totalPages, total: totalItems))
+    }
+
+    private func patchReviewFlashcardsCache(with cards: [Flashcard], page: Int, pagination: StrapiPagination?) {
+        guard let pagination else { return }
+
+        if page == 1 {
+            reviewFlashcardNetworkPageBuffer.removeAll()
+            reviewFlashcardNetworkPagination = pagination
+        }
+
+        reviewFlashcardNetworkPageBuffer[page] = cards
+        reviewFlashcardNetworkPagination = pagination
+
+        let pageCount = pagination.pageCount
+        guard pageCount > 0 else {
+            FlashcardCache.storeReviewFlashcards([], using: cacheService)
+            logger.debug("Saved empty review flashcard cache.")
+            return
+        }
+
+        let hasEveryPage = (1...pageCount).allSatisfy { reviewFlashcardNetworkPageBuffer[$0] != nil }
+        guard hasEveryPage else {
+            logger.debug("Review cache patch waiting for remaining pages. Cached \(self.reviewFlashcardNetworkPageBuffer.count) / \(pageCount) pages in memory.")
+            return
+        }
+
+        let allCards = (1...pageCount).flatMap { reviewFlashcardNetworkPageBuffer[$0] ?? [] }
+        FlashcardCache.storeReviewFlashcards(allCards, using: cacheService)
+        logger.debug("Review cache patched with \(allCards.count) cards after all pages loaded.")
+    }
+private func fetchFlashcardsPageFromNetwork(
         page: Int,
         pageSize: Int,
         reviewTier: String? = nil,

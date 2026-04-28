@@ -1,27 +1,12 @@
-  Feature: Tapping "View All" in the VocabookView → Recently Added section now opens a full-screen book mode showing all words sorted by most recently added (newest first).                                                        
+ The fix is complete. Summary of what happened and what was changed:                                                                                                                                                               
                                                                                                                                                                                                                                     
-  4 files changed, following the UI → ViewModel → DataService → Cache/Strapi architecture:                                                                                                                                          
+  Root cause: iOS keychain data persists across app reinstalls. The user had a stale/expired JWT from a previous install. Strapi validates the JWT header on every request before checking permissions — so even the public         
+  /api/proficiency-levels endpoint returned 401 when an invalid token was sent.                                                                                                                                                     
                                                                                                                                                                                                                                     
-  FlashcardService.swift                                                                                                                                                                                                            
-                                                            
-  - Added fetchAllMyFlashcardsRecentlyAdded() — fetches all cards from cache/network and sorts them by createdAt:desc                                                                                                               
-  - Added sortRecentlyAdded: Bool = false parameter to fetchFlashcards() — routes to the new sorted fetch when true
-                                                                                                                                                                                                                                    
-  VocapageLoader.swift                                      
-                                                                                                                                                                                                                                    
-  - Added sortRecentlyAdded: Bool = false to loadPage(), forceReloadPage(), and page() accessors                                                                                                                                    
-  - Updated cacheKey() to produce "recentlyAdded.page.N" keys when in recently-added mode, keeping it isolated from the default and tier-filtered page caches
-                                                                                                                                                                                                                                    
-  VocapageHostView.swift                                                                                                                                                                                                            
-                                                                                                                                                                                                                                    
-  - Added sortRecentlyAdded: Bool = false to the initializer and stored as a property                                                                                                                                               
-  - Threaded sortRecentlyAdded through all loader calls: .task, handleFilterChange, rebuildAllPageIds, deleteCardAndRefresh, refreshAfterExternalDeletion, and advanceToNextPageAndContinue
-  - Due-words filter is disabled (allowsDueFilter: false) when in recently-added mode                                                                                                                                               
-                                                                                                                                                                                                                                    
-  VocabookView.swift                                                                                                                                                                                                                
-                                                                                                                                                                                                                                    
-  - Added @State private var isRecentlyAddedBookMode = false
-  - Added openRecentlyAddedBookMode() — calculates page count from fetchAllMyFlashcardsRecentlyAdded(), sets isRecentlyAddedBookMode = true, opens the full-screen cover
-  - Wired the "View All" button to openRecentlyAddedBookMode() instead of the generic openBookMode()                                                                                                                                
-  - Passes sortRecentlyAdded: isRecentlyAddedBookMode and allowsDueFilter: !isRecentlyAddedBookMode to VocapageHostView                                                                                                             
-  - Resets isRecentlyAddedBookMode = false on dismiss 
+  Three changes:                                                                                                                                                                                                                    
+
+  1. NetworkManager.fetchPublic (new method) — makes a GET request without an Authorization header. Use this for any public Strapi endpoint where the JWT is irrelevant.                                                            
+  2. SettingsService.fetchLevels(for:) — now calls fetchPublic instead of fetchDirect. Proficiency levels is an onboarding endpoint that needs no auth; it should never send a JWT.
+  3. NetworkManager.performRequest on 401 — automatically removes the stale JWT from the keychain when an authenticated request returns 401. This prevents the stale token from poisoning future requests after the user re-opens   
+  the app. 
+

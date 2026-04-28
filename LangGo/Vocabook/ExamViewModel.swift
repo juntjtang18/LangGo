@@ -10,6 +10,8 @@ enum ExamDirection {
 @MainActor
 class ExamViewModel: ObservableObject {
     private let flashcardService = DataServices.shared.flashcardService
+    private let pageSize = 20
+    private let prefetchThreshold = 5
 
     @Published var flashcards: [Flashcard] = []
     @Published var currentCardIndex: Int = 0
@@ -18,35 +20,110 @@ class ExamViewModel: ObservableObject {
     @Published var direction: ExamDirection = .baseToTarget
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
+    @Published var isLoadingMore: Bool = false
+    @Published var hasMorePages: Bool = true
+    @Published var isAutoLoadingRemainingPages: Bool = false
+
+    private var currentPage = 0
+    private var loadedCardIds = Set<Int>()
+    private var autoLoadTask: Task<Void, Never>?
 
     var currentCard: Flashcard? {
         guard currentCardIndex >= 0 && currentCardIndex < flashcards.count else { return nil }
         return flashcards[currentCardIndex]
     }
-    
+
     init() {}
 
     func loadExamCards() async {
+        guard !isLoading else { return }
+
         isLoading = true
+        isLoadingMore = false
         errorMessage = nil
+        hasMorePages = true
+        currentPage = 0
+        currentCardIndex = 0
+        loadedCardIds.removeAll()
+        flashcards.removeAll()
+        resetForNewCard()
+        autoLoadTask?.cancel()
+        autoLoadTask = nil
+        isAutoLoadingRemainingPages = false
+
+        await loadNextPageIfNeeded(force: true)
+        isLoading = false
+
+        startAutoLoadingRemainingPages()
+    }
+
+    func loadMoreIfNeeded() async {
+        // Safety net only. The normal flow now loads all remaining pages
+        // automatically after the first page is available.
+        guard flashcards.count - currentCardIndex <= prefetchThreshold else { return }
+        await loadNextPageIfNeeded(force: false)
+    }
+
+    private func startAutoLoadingRemainingPages() {
+        guard hasMorePages else { return }
+        guard autoLoadTask == nil else { return }
+
+        autoLoadTask = Task { [weak self] in
+            await self?.loadRemainingPages()
+        }
+    }
+
+    private func loadRemainingPages() async {
+        isAutoLoadingRemainingPages = true
+        defer {
+            isAutoLoadingRemainingPages = false
+            autoLoadTask = nil
+        }
+
+        while hasMorePages && !Task.isCancelled {
+            await loadNextPageIfNeeded(force: false)
+        }
+    }
+
+    private func loadNextPageIfNeeded(force: Bool) async {
+        guard hasMorePages else { return }
+        guard force || !isLoadingMore else { return }
+
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
         do {
-            let dueCards = try await flashcardService.fetchAllReviewFlashcards()
-            
-            // Filter for cards that are valid for an exam
-            let examReadyCards = dueCards.filter { card in
-                 guard let def = card.wordDefinition?.attributes else { return false }
-                 let hasExamBase = def.examBase != nil && !def.examBase!.isEmpty
-                 let hasExamTarget = def.examTarget != nil && !def.examTarget!.isEmpty
-                 return hasExamBase && hasExamTarget
+            let nextPage = currentPage + 1
+            let (cards, pagination) = try await flashcardService.fetchFlashcards(
+                page: nextPage,
+                pageSize: pageSize,
+                dueOnly: true
+            )
+
+            let examReadyCards = cards.filter(isExamReady)
+            let newCards = examReadyCards.filter { loadedCardIds.insert($0.id).inserted }
+
+            if !newCards.isEmpty {
+                flashcards.append(contentsOf: newCards)
             }
 
-            self.flashcards = examReadyCards
-            self.currentCardIndex = 0
-            
+            currentPage = pagination?.page ?? nextPage
+            hasMorePages = currentPage < (pagination?.pageCount ?? currentPage)
+
+            if flashcards.isEmpty && hasMorePages {
+                await loadNextPageIfNeeded(force: true)
+            }
         } catch {
-            self.errorMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
+            hasMorePages = false
         }
-        isLoading = false
+    }
+
+    private func isExamReady(_ card: Flashcard) -> Bool {
+        guard let def = card.wordDefinition?.attributes else { return false }
+        let hasExamBase = def.examBase?.isEmpty == false
+        let hasExamTarget = def.examTarget?.isEmpty == false
+        return hasExamBase && hasExamTarget
     }
 
     var questionText: String? {
@@ -55,7 +132,6 @@ class ExamViewModel: ObservableObject {
     }
 
     var examOptions: [ExamOption]? {
-        // CORRECTED: Access attributes directly from the wordDefinition.
         guard let def = currentCard?.wordDefinition?.attributes else { return nil }
 
         if direction == .baseToTarget {
@@ -73,10 +149,10 @@ class ExamViewModel: ObservableObject {
         guard !isAnswerSubmitted else { return }
         selectedOption = option
         isAnswerSubmitted = true
-        
+
         guard let card = currentCard else { return }
         let result: ReviewResult = option.isCorrect == true ? .correct : .wrong
-        
+
         Task {
             do {
                 _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
@@ -92,7 +168,7 @@ class ExamViewModel: ObservableObject {
             }
         }
     }
-    
+
     func swapDirection() {
         direction = (direction == .baseToTarget) ? .targetToBase : .baseToTarget
         resetForNewCard()
@@ -115,5 +191,9 @@ class ExamViewModel: ObservableObject {
     private func resetForNewCard() {
         selectedOption = nil
         isAnswerSubmitted = false
+    }
+
+    deinit {
+        autoLoadTask?.cancel()
     }
 }
