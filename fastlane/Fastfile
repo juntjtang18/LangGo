@@ -25,9 +25,11 @@ platform :ios do
     )
 
     build_app(
-      scheme: "LangGo",
-      export_method: "app-store"
-    )
+       scheme: "LangGo",
+       export_method: "app-store",
+       xcargs: "-allowProvisioningUpdates"
+   )
+
 
     upload_to_testflight(
       api_key: api_key
