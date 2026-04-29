@@ -4,6 +4,7 @@ default_platform(:ios)
 
 platform :ios do
   CERT_REPO_URL = "https://github.com/juntjtang18/LangGo-certificates.git"
+  APP_IDENTIFIER = "LangGoSwiftApp"
 
   def match_git_auth
     Base64.strict_encode64("juntjtang18:#{ENV['MATCH_GIT_TOKEN']}")
@@ -21,6 +22,7 @@ platform :ios do
       type: "appstore",
       git_url: CERT_REPO_URL,
       git_basic_authorization: match_git_auth,
+      app_identifier: APP_IDENTIFIER,
       readonly: true,
       api_key: api_key
     )
