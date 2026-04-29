@@ -8,31 +8,73 @@ enum FlashcardCache {
         static let tierFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
         static let recentFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
     }
+    private static var currentUserId: Int? {
+        let userId = UserDefaults.standard.integer(forKey: "userId")
+        return userId > 0 ? userId : nil
+    }
 
-    static let statisticsTag = CacheService.CacheTag(rawValue: "flashcard-statistics")
-    static let reviewFlashcardsTag = CacheService.CacheTag(rawValue: "review-flashcards")
-    static let allMyFlashcardsTag = CacheService.CacheTag(rawValue: "all-my-flashcards")
-    static let tierFlashcardsTag = CacheService.CacheTag(rawValue: "tier-flashcards")
-    static let recentFlashcardsTag = CacheService.CacheTag(rawValue: "recent-flashcards")
+    static var currentUserCacheScope: String {
+        if let userId = currentUserId { return "user.\(userId)" }
+        return "anonymous"
+    }
+
+    static func scopedKey(_ key: String, userId: Int? = nil) -> String {
+        if let userId, userId > 0 {
+            return "flashcards.user.\(userId).\(key)"
+        }
+        return "flashcards.\(currentUserCacheScope).\(key)"
+    }
+
+    private static func scopedTag(_ tag: String) -> CacheService.CacheTag {
+        CacheService.CacheTag(rawValue: "flashcards.\(currentUserCacheScope).\(tag)")
+    }
+
+    static var statisticsTag: CacheService.CacheTag { scopedTag("statistics") }
+    static var reviewFlashcardsTag: CacheService.CacheTag { scopedTag("review-flashcards") }
+    static var allMyFlashcardsTag: CacheService.CacheTag { scopedTag("all-my-flashcards") }
+    static var tierFlashcardsTag: CacheService.CacheTag { scopedTag("tier-flashcards") }
+    static var recentFlashcardsTag: CacheService.CacheTag { scopedTag("recent-flashcards") }
+
+    static let legacyStatisticsKey = "flashcardStatistics"
+    static let legacyReviewFlashcardsKey = "reviewFlashcards"
+    static let legacyAllMyFlashcardsKey = "allMyFlashcards"
+
+    /// Removes cache entries created by older builds that used global, non-user-scoped keys.
+    /// New user-scoped caches are intentionally preserved.
+    static func invalidateLegacyGlobalCaches(using cacheService: CacheService = .shared) {
+        cacheService.delete(key: legacyStatisticsKey)
+        cacheService.delete(key: legacyReviewFlashcardsKey)
+        cacheService.delete(key: legacyAllMyFlashcardsKey)
+
+        for key in cacheService.keys(for: CacheService.CacheTag(rawValue: "flashcard-statistics")) { cacheService.delete(key: key) }
+        for key in cacheService.keys(for: CacheService.CacheTag(rawValue: "review-flashcards")) { cacheService.delete(key: key) }
+        for key in cacheService.keys(for: CacheService.CacheTag(rawValue: "all-my-flashcards")) { cacheService.delete(key: key) }
+        for key in cacheService.keys(for: CacheService.CacheTag(rawValue: "tier-flashcards")) { cacheService.delete(key: key) }
+        for key in cacheService.keys(for: CacheService.CacheTag(rawValue: "recent-flashcards")) { cacheService.delete(key: key) }
+    }
 
     static func statisticsKey() -> String {
-        "flashcardStatistics"
+        scopedKey("flashcardStatistics")
     }
 
     static func reviewFlashcardsKey() -> String {
-        "reviewFlashcards"
+        scopedKey("reviewFlashcards")
     }
 
     static func allMyFlashcardsKey() -> String {
-        "allMyFlashcards"
+        scopedKey("allMyFlashcards")
     }
 
     static func tierFlashcardsKey(reviewTier: String) -> String {
-        "allMyFlashcards.tier.\(reviewTier)"
+        scopedKey("allMyFlashcards.tier.\(reviewTier)")
+    }
+
+    static func recentFlashcardsKeyPrefix() -> String {
+        scopedKey("recentFlashcards.limit.")
     }
 
     static func recentFlashcardsKey(limit: Int) -> String {
-        "recentFlashcards.limit.\(limit)"
+        "\(recentFlashcardsKeyPrefix())\(limit)"
     }
 
     static func loadStatistics(using cacheService: CacheService = .shared) -> StrapiStatistics? {
@@ -171,7 +213,7 @@ enum FlashcardCache {
     }
 
     private static func patchRecentFlashcardsAfterWordAdded(flashcard: Flashcard, using cacheService: CacheService) {
-        let prefix = "recentFlashcards.limit."
+        let prefix = recentFlashcardsKeyPrefix()
         let keys = cacheService.keys(for: recentFlashcardsTag)
 
         for key in keys where key.hasPrefix(prefix) {

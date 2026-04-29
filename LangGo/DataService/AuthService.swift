@@ -14,14 +14,13 @@ import os
 class AuthService {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "AuthService")
     private let networkManager = NetworkManager.shared
-    private let flashcardService = FlashcardService()
     private let cacheService = CacheService.shared
     
     func login(credentials: LoginCredentials) async throws -> AuthResponse {
         logger.debug("AuthService: Attempting login.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local") else { throw URLError(.badURL) }
         let response: AuthResponse = try await networkManager.post(to: url, body: credentials)
-        flashcardService.invalidateAllFlashcardCaches()
+        FlashcardCache.invalidateLegacyGlobalCaches(using: cacheService)
         MyUserPointsCache.invalidate(using: cacheService)
         PointGroupCache.invalidateAll(using: cacheService)
         ArticleCache.invalidateAll(using: cacheService)
@@ -33,7 +32,7 @@ class AuthService {
         logger.debug("AuthService: Attempting signup.")
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register") else { throw URLError(.badURL) }
         let response: AuthResponse = try await networkManager.post(to: url, body: payload)
-        flashcardService.invalidateAllFlashcardCaches()
+        FlashcardCache.invalidateLegacyGlobalCaches(using: cacheService)
         MyUserPointsCache.invalidate(using: cacheService)
         PointGroupCache.invalidateAll(using: cacheService)
         ArticleCache.invalidateAll(using: cacheService)
@@ -158,7 +157,7 @@ class AuthService {
             at: url,
             headers: ["X-Account-Delete-Password": currentPassword]
         )
-        flashcardService.invalidateAllFlashcardCaches()
+        FlashcardCache.invalidateLegacyGlobalCaches(using: cacheService)
         MyUserPointsCache.invalidate(using: cacheService)
         PointGroupCache.invalidateAll(using: cacheService)
         ArticleCache.invalidateAll(using: cacheService)

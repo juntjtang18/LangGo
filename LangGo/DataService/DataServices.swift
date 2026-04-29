@@ -40,4 +40,8 @@ final class DataServices {
         let strapiService = StrapiService()
         self.reviewSettingsManager = ReviewSettingsManager(strapiService: strapiService)
     }
+    func resetUserScopedRuntimeState() {
+        flashcardService.resetUserScopedRuntimeState()
+    }
+
 }
