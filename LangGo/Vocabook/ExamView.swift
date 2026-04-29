@@ -137,15 +137,10 @@ struct ExamView: View {
                 Button(action: viewModel.goToNextCard) {
                     Image(systemName: "arrow.right.circle.fill")
                 }
-                .disabled(viewModel.currentCardIndex >= viewModel.flashcards.count - 1)
+                .disabled(!viewModel.canGoNext)
                 .font(.largeTitle)
             }
             .padding()
-        }
-        .task(id: viewModel.currentCardIndex) {
-            // Safety net only. The ViewModel now automatically loads all remaining
-            // pages after the first page is shown.
-            await viewModel.loadMoreIfNeeded()
         }
     }
 

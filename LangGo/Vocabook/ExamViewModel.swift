@@ -12,7 +12,6 @@ enum ExamDirection {
 class ExamViewModel: ObservableObject {
     private let flashcardService = DataServices.shared.flashcardService
     private let pageSize = 20
-    private let prefetchThreshold = 5
 
     @Published var flashcards: [Flashcard] = []
     @Published var currentCardIndex: Int = 0
@@ -25,13 +24,16 @@ class ExamViewModel: ObservableObject {
     @Published var hasMorePages: Bool = true
     @Published var isAutoLoadingRemainingPages: Bool = false
 
-    private var currentPage = 0
     private var loadedCardIds = Set<Int>()
     private var cancellables = Set<AnyCancellable>()
 
     var currentCard: Flashcard? {
         guard currentCardIndex >= 0 && currentCardIndex < flashcards.count else { return nil }
         return flashcards[currentCardIndex]
+    }
+
+    var canGoNext: Bool {
+        currentCardIndex < flashcards.count - 1
     }
 
     init() {
@@ -57,50 +59,46 @@ class ExamViewModel: ObservableObject {
         isLoadingMore = false
         errorMessage = nil
         hasMorePages = true
-        currentPage = 0
         currentCardIndex = 0
         loadedCardIds.removeAll()
         flashcards.removeAll()
         resetForNewCard()
 
-        mergeReviewFlashcards(flashcardService.reviewFlashcards)
-        await loadNextPageIfNeeded(force: true)
+        do {
+            let availableCards = try await flashcardService.fetchAvailableReviewFlashcards(pageSize: pageSize)
+            mergeReviewFlashcards(availableCards)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
         isLoading = false
 
+        // The service owns one shared background task. If another review mode
+        // already started it, this call reuses that task instead of starting a
+        // second loader.
         flashcardService.ensureReviewFlashcardsFullyLoaded(pageSize: pageSize)
+
     }
 
     func loadMoreIfNeeded() async {
-        // This is only a UI safety net. The shared background loading task lives
-        // in FlashcardService, so multiple ExamViewModel instances do not start
-        // duplicate backend pagination loops.
-        guard flashcards.count - currentCardIndex <= prefetchThreshold else { return }
-        await loadNextPageIfNeeded(force: false)
+        // Kept for older ExamView callers. Loading more is service-owned now;
+        // the ViewModel only merges newly published cards from FlashcardService.
+        flashcardService.ensureReviewFlashcardsFullyLoaded(pageSize: pageSize)
     }
 
-    private func loadNextPageIfNeeded(force: Bool) async {
-        guard hasMorePages else { return }
-        guard force || !isLoadingMore else { return }
-
+    private func loadFirstPage() async {
         isLoadingMore = true
         defer { isLoadingMore = false }
 
         do {
-            let nextPage = currentPage + 1
             let (cards, pagination) = try await flashcardService.fetchFlashcards(
-                page: nextPage,
+                page: 1,
                 pageSize: pageSize,
                 dueOnly: true
             )
 
             appendExamReadyCards(cards)
-
-            currentPage = pagination?.page ?? nextPage
-            hasMorePages = currentPage < (pagination?.pageCount ?? currentPage)
-
-            if flashcards.isEmpty && hasMorePages {
-                await loadNextPageIfNeeded(force: true)
-            }
+            hasMorePages = (pagination?.page ?? 1) < (pagination?.pageCount ?? 1)
         } catch {
             errorMessage = error.localizedDescription
             hasMorePages = false
@@ -110,6 +108,7 @@ class ExamViewModel: ObservableObject {
     private func mergeReviewFlashcards(_ cards: [Flashcard]) {
         guard !cards.isEmpty else { return }
         appendExamReadyCards(cards)
+        hasMorePages = flashcardService.isLoadingAllReviewFlashcards
     }
 
     private func appendExamReadyCards(_ cards: [Flashcard]) {
@@ -177,10 +176,9 @@ class ExamViewModel: ObservableObject {
     }
 
     func goToNextCard() {
-        if currentCardIndex < flashcards.count - 1 {
-            currentCardIndex += 1
-            resetForNewCard()
-        }
+        guard canGoNext else { return }
+        currentCardIndex += 1
+        resetForNewCard()
     }
 
     func goToPreviousCard() {

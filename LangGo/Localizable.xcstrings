@@ -405,6 +405,9 @@
     "Could not load more cards: %@" : {
 
     },
+    "Could not load review cards." : {
+
+    },
     "Current password" : {
 
     },
@@ -763,7 +766,13 @@
     "Loading Exam..." : {
 
     },
+    "Loading more cards..." : {
+
+    },
     "Loading more..." : {
+
+    },
+    "Loading review cards..." : {
 
     },
     "Loading stories..." : {
