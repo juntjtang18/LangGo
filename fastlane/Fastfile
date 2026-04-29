@@ -5,6 +5,8 @@ default_platform(:ios)
 platform :ios do
   CERT_REPO_URL = "https://github.com/juntjtang18/LangGo-certificates.git"
   APP_IDENTIFIER = "LangGoSwiftApp"
+  CI_KEYCHAIN = "fastlane_tmp_keychain"
+  CI_KEYCHAIN_PASSWORD = "ci_temp_password"
 
   def match_git_auth
     Base64.strict_encode64("juntjtang18:#{ENV['MATCH_GIT_TOKEN']}")
@@ -18,19 +20,34 @@ platform :ios do
       key_content: ENV["APP_STORE_CONNECT_API_KEY"]
     )
 
+    create_keychain(
+      name: CI_KEYCHAIN,
+      password: CI_KEYCHAIN_PASSWORD,
+      default_keychain: true,
+      unlock: true,
+      timeout: 3600,
+      lock_when_sleeps: false
+    )
+
     match(
       type: "appstore",
       git_url: CERT_REPO_URL,
       git_basic_authorization: match_git_auth,
       app_identifier: APP_IDENTIFIER,
       readonly: true,
-      api_key: api_key
+      api_key: api_key,
+      keychain_name: CI_KEYCHAIN,
+      keychain_password: CI_KEYCHAIN_PASSWORD
     )
 
     build_app(
       scheme: "LangGo",
       export_method: "app-store",
-      xcargs: "-allowProvisioningUpdates"
+      export_options: {
+        provisioningProfiles: {
+          APP_IDENTIFIER => "match AppStore LangGoSwiftApp"
+        }
+      }
     )
 
     upload_to_testflight(
