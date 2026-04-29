@@ -1,6 +1,8 @@
 default_platform(:ios)
 
 platform :ios do
+  CERT_REPO_URL = "https://github.com/juntjtang18/LangGo-certificates"
+
   desc "Create App Store signing certs and profiles"
   lane :setup_signing do
     api_key = app_store_connect_api_key(
@@ -11,6 +13,7 @@ platform :ios do
 
     match(
       type: "appstore",
+      git_url: CERT_REPO_URL,
       api_key: api_key
     )
   end
@@ -25,6 +28,7 @@ platform :ios do
 
     match(
       type: "appstore",
+      git_url: CERT_REPO_URL,
       readonly: true,
       api_key: api_key
     )
@@ -39,18 +43,18 @@ platform :ios do
     )
   end
 
-desc "Delete old distribution signing from match"
-lane :nuke_signing do
-  api_key = app_store_connect_api_key(
-    key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
-    issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
-    key_content: ENV["APP_STORE_CONNECT_API_KEY"]
-  )
+  desc "Delete old App Store signing from match"
+  lane :nuke_signing do
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+      key_content: ENV["APP_STORE_CONNECT_API_KEY"]
+    )
 
-  match_nuke(
-    type: "appstore",
-    api_key: api_key
-  )
+    match_nuke(
+      type: "appstore",
+      git_url: CERT_REPO_URL,
+      api_key: api_key
+    )
+  end
 end
-end
-
