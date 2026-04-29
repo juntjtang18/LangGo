@@ -15,6 +15,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 ## iOS
 
+### ios setup_signing
+
+```sh
+[bundle exec] fastlane ios setup_signing
+```
+
+Create App Store signing certs and profiles
+
 ### ios beta
 
 ```sh

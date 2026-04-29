@@ -445,7 +445,10 @@
 				INFOPLIST_FILE = LangGo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LangGo;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSCameraUsageDescription = "LangGo uses the camera to scan article images and extract text with OCR.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "LangGo uses your local network connection to reach your development Strapi server while testing the app on a physical device.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs microphone access to capture your voice for the AI conversation partner.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LangGo uses your photo library so you can choose a profile photo.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to convert your voice to text for the AI conversation partner.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -459,7 +462,7 @@
 				);
 				MARKETING_VERSION = 1.1;
 				OTHER_SWIFT_FLAGS = "-DLEARNING_ENGLISH";
-				PRODUCT_BUNDLE_IDENTIFIER = LangGoSwiftApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.juntjtang18.langgo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "USE_LOCAL_IP DEBUG";
@@ -484,7 +487,10 @@
 				INFOPLIST_FILE = LangGo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LangGo;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSCameraUsageDescription = "LangGo uses the camera to scan article images and extract text with OCR.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "LangGo uses your local network connection to reach your development Strapi server while testing the app on a physical device.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs microphone access to capture your voice for the AI conversation partner.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "LangGo uses your photo library so you can choose a profile photo.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to convert your voice to text for the AI conversation partner.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -498,7 +504,7 @@
 				);
 				MARKETING_VERSION = 1.1;
 				OTHER_SWIFT_FLAGS = "-DLEARNING_ENGLISH";
-				PRODUCT_BUNDLE_IDENTIFIER = LangGoSwiftApp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.juntjtang18.langgo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;

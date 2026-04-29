@@ -4,12 +4,6 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>NSCameraUsageDescription</key>
-	<string>LangGo uses the camera to scan article images and extract text with OCR.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>LangGo uses your local network connection to reach your development Strapi server while testing the app on a physical device.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>LangGo uses your photo library so you can choose a profile photo.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
