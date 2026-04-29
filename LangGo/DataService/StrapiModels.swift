@@ -12,8 +12,8 @@ struct StrapiFlashcard: Codable {
 }
 
 struct FlashcardAttributes: Codable {
-    let createdAt: String?
-    let updatedAt: String?
+    let createdAt: Date?
+    let updatedAt: Date?
     let locale: String?
     let lastReviewedAt: Date?
     let wordDefinition: WordDefinitionRelation?
@@ -171,16 +171,84 @@ struct UserProfileUpdatePayload: Encodable {
     let baseLanguage: String
     let proficiency: String? // Changed from Int?
     let reminder_enabled: Bool?
+    let telephone: String?
+    let bio: String?
+    let visible_on_ladder: Bool?
+
+    init(
+        baseLanguage: String,
+        proficiency: String?,
+        reminder_enabled: Bool?,
+        telephone: String? = nil,
+        bio: String? = nil,
+        visible_on_ladder: Bool? = nil
+    ) {
+        self.baseLanguage = baseLanguage
+        self.proficiency = proficiency
+        self.reminder_enabled = reminder_enabled
+        self.telephone = telephone
+        self.bio = bio
+        self.visible_on_ladder = visible_on_ladder
+    }
 
     enum CodingKeys: String, CodingKey {
-        case baseLanguage, proficiency
+        case baseLanguage, proficiency, telephone
+        case visible_on_ladder
         case reminder_enabled = "reminder_enabled"
+        case bio = "Bio"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(baseLanguage, forKey: .baseLanguage)
+        try container.encodeIfPresent(proficiency, forKey: .proficiency)
+        try container.encodeIfPresent(reminder_enabled, forKey: .reminder_enabled)
+        try container.encodeIfPresent(telephone, forKey: .telephone)
+        try container.encodeIfPresent(bio, forKey: .bio)
+        try container.encodeIfPresent(visible_on_ladder, forKey: .visible_on_ladder)
     }
 }
 
 // Add this struct to wrap the payload
 struct UserProfileUpdatePayloadWrapper: Encodable {
     let data: UserProfileUpdatePayload
+}
+
+struct UserAvatarUpdatePayload: Encodable {
+    let avatarImageId: Int
+
+    enum CodingKeys: String, CodingKey {
+        case avatarImageId = "avatar_img"
+    }
+}
+
+struct UserAvatarUpdatePayloadWrapper: Encodable {
+    let data: UserAvatarUpdatePayload
+}
+
+struct UploadedMediaFile: Codable, Identifiable {
+    let id: Int
+    let name: String?
+    let alternativeText: String?
+    let caption: String?
+    let width: Int?
+    let height: Int?
+    let formats: [String: MediaFormat]?
+    let hash: String?
+    let ext: String?
+    let mime: String?
+    let size: Double?
+    let url: String?
+    let previewUrl: String?
+    let provider: String?
+    let createdAt: String?
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, caption, width, height, formats, hash, ext, mime, size, url, provider, createdAt, updatedAt
+        case alternativeText
+        case previewUrl
+    }
 }
 
 
@@ -229,9 +297,15 @@ struct StrapiStatistics: Codable {
     let totalCards: Int
     let remembered: Int
     let dueForReview: Int
-    let reviewed: Int
-    let hardToRemember: Int
+    let reviewed: Int?
+    let hardToRemember: Int?
     let byTier: [StrapiTierStat]
+    let nextFetchAt: String?
+    let batchWindowMinutes: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case totalCards, remembered, dueForReview, reviewed, hardToRemember, byTier, nextFetchAt, batchWindowMinutes
+    }
 }
 struct StrapiTierStat: Codable, Identifiable {
     let id: Int
@@ -242,13 +316,183 @@ struct StrapiTierStat: Codable, Identifiable {
     let cooldown_hours: Int
     let count: Int
     let dueCount: Int
-    let hardToRememberCount: Int
+    let hardToRememberCount: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, tier
         case displayName = "display_name"
         case min_streak, max_streak, cooldown_hours, count, dueCount, hardToRememberCount
     }
+}
+
+struct MyUserPointsResponse: Codable {
+    let data: MyUserPointsData?
+    let meta: StrapiMeta?
+}
+
+struct MyUserPointsData: Codable {
+    let id: Int?
+    let attributes: MyUserPointsAttributes
+}
+
+struct MyUserPointsAttributes: Codable {
+    let record_date: String?
+    let points: Int
+    let points_add: Int
+    let word_count: Int
+    let word_add: Int
+    let article_count: Int
+    let article_add: Int
+    let group_rank_change: Int
+    let rank: Int
+    let rank_change: Int
+    let rank_text: String?
+
+    var rankText: String? { rank_text }
+}
+
+extension MyUserPointsAttributes {
+    static let empty = MyUserPointsAttributes(
+        record_date: nil,
+        points: 0,
+        points_add: 0,
+        word_count: 0,
+        word_add: 0,
+        article_count: 0,
+        article_add: 0,
+        group_rank_change: 0,
+        rank: 0,
+        rank_change: 0,
+        rank_text: nil
+    )
+}
+
+struct MyPointGroupResponse: Codable {
+    let data: MyPointGroupData
+    let meta: StrapiMeta?
+}
+
+struct MyPointGroupData: Codable {
+    let pointGroup: PointGroupSummary?
+    let myMembership: MyPointGroupMembership
+    let leaderboard: [PointGroupLeaderboardMember]
+
+    enum CodingKeys: String, CodingKey {
+        case pointGroup = "point_group"
+        case myMembership = "my_membership"
+        case leaderboard
+    }
+}
+
+struct PointGroupLeaderboardResponse: Codable {
+    let data: PointGroupLeaderboardData
+    let meta: StrapiMeta?
+}
+
+struct PointGroupLeaderboardData: Codable {
+    let pointGroup: PointGroupSummary?
+    let currentUserPosition: Int?
+    let groupMemberCount: Int
+    let leaderboard: [PointGroupLeaderboardMember]
+
+    enum CodingKeys: String, CodingKey {
+        case pointGroup = "point_group"
+        case currentUserPosition = "current_user_position"
+        case groupMemberCount = "group_member_count"
+        case leaderboard
+    }
+}
+
+struct PointGroupSummary: Codable {
+    let id: Int
+    let groupNo: Int?
+    let groupRank: PointGroupRank?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case groupNo = "group_no"
+        case groupRank = "group_rank"
+    }
+}
+
+struct PointGroupRank: Codable {
+    let id: Int
+    let title: String?
+    let minPeriodPoints: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title
+        case minPeriodPoints = "min_period_points"
+    }
+}
+
+struct MyPointGroupMembership: Codable {
+    let userPointGroupId: Int?
+    let periodPoints: Int
+    let positionInGroup: Int?
+    let groupMemberCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case userPointGroupId = "user_point_group_id"
+        case periodPoints = "period_points"
+        case positionInGroup = "position_in_group"
+        case groupMemberCount = "group_member_count"
+    }
+}
+
+struct PointGroupLeaderboardMember: Codable, Identifiable {
+    let position: Int
+    let periodPoints: Int
+    let isCurrentUser: Bool
+    let userPointGroupId: Int?
+    let user: PointGroupLeaderboardUser
+
+    var id: Int {
+        userPointGroupId ?? position
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case position
+        case periodPoints = "period_points"
+        case isCurrentUser = "is_current_user"
+        case userPointGroupId = "user_point_group_id"
+        case user
+    }
+}
+
+struct PointGroupLeaderboardUser: Codable {
+    let id: Int?
+    let username: String?
+    let email: String?
+    let honorTitle: PointGroupHonorTitle?
+    let userProfile: PointGroupUserProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case id, username, email
+        case honorTitle = "honor_title"
+        case userProfile = "user_profile"
+    }
+}
+
+struct PointGroupHonorTitle: Codable {
+    let id: Int
+    let title: String?
+}
+
+struct PointGroupUserProfile: Codable {
+    let id: Int
+    let baseLanguage: String?
+    let avatarImage: PointGroupAvatarImage?
+
+    enum CodingKeys: String, CodingKey {
+        case id, baseLanguage
+        case avatarImage = "avatar_img"
+    }
+}
+
+struct PointGroupAvatarImage: Codable {
+    let id: Int
+    let url: String?
 }
 
 // MARK: - Review Models
@@ -293,7 +537,19 @@ typealias WordDefinitionRelation = Relation<StrapiData<WordDefinitionAttributes>
 typealias WordRelation = Relation<StrapiData<WordAttributes>>
 typealias MediaRelation = Relation<StrapiData<MediaAttributes>>
 typealias ReviewTireRelation = Relation<StrapiData<ReviewTireAttributes>>
-typealias WordDefinitionResponse = StrapiSingleResponse<WordDefinitionAttributes>
+
+struct CreateWordDefinitionResponse: Codable {
+    let data: StrapiData<WordDefinitionAttributes>
+    let meta: CreateWordDefinitionMeta?
+}
+
+struct CreateWordDefinitionMeta: Codable {
+    let flashcardCreated: Bool
+    let flashcardId: Int?
+    let reviewTier: String?
+}
+
+typealias WordDefinitionResponse = CreateWordDefinitionResponse
 
 
 // MARK: - Component Schemas & Attributes
@@ -425,9 +681,83 @@ struct TranslateWordInContextResponse: Decodable {
     let partOfSpeech: String
 }
 
+// MARK: - User Article Models
+struct StrapiArticleTag: Codable, Identifiable {
+    let id: Int
+    let attributes: StrapiArticleTagAttributes
+}
+
+struct StrapiArticleTagAttributes: Codable {
+    let tag: String?
+}
+
+struct StrapiUserArticle: Codable, Identifiable {
+    let id: Int
+    let attributes: StrapiUserArticleAttributes
+}
+
+struct StrapiUserArticleAttributes: Codable {
+    let title: String?
+    let content: String?
+    let languageCode: String?
+    let wordCount: Int?
+    let progress: Double?
+    let lastReadAt: Date?
+    let articleTags: ManyRelation<StrapiArticleTag>?
+
+    enum CodingKeys: String, CodingKey {
+        case title, content, progress
+        case languageCode = "language_code"
+        case wordCount = "word_count"
+        case lastReadAt = "last_read_at"
+        case articleTags = "article_tags"
+    }
+}
+
+struct CreateArticleTagRequest: Encodable {
+    let data: CreateArticleTagPayload
+}
+
+struct CreateArticleTagPayload: Encodable {
+    let tag: String
+    let user: Int
+}
+
+struct UpdateArticleTagRequest: Encodable {
+    let data: UpdateArticleTagPayload
+}
+
+struct UpdateArticleTagPayload: Encodable {
+    let tag: String
+}
+
+struct SaveUserArticleRequest: Encodable {
+    let data: SaveUserArticlePayload
+}
+
+struct SaveUserArticlePayload: Encodable {
+    let title: String
+    let content: String
+    let languageCode: String?
+    let wordCount: Int?
+    let user: Int
+    let progress: Double?
+    let lastReadAt: Date?
+    let articleTags: [Int]
+
+    enum CodingKeys: String, CodingKey {
+        case title, content, user, progress
+        case languageCode = "language_code"
+        case wordCount = "word_count"
+        case lastReadAt = "last_read_at"
+        case articleTags = "article_tags"
+    }
+}
+
 
 struct Flashcard: Codable, Identifiable, Equatable {
     let id: Int
+    let createdAt: Date?
     
     // This now holds the complete related WordDefinition object, including its ID and attributes.
     let wordDefinition: StrapiWordDefinition?
@@ -449,8 +779,9 @@ struct Flashcard: Codable, Identifiable, Equatable {
     var isRemembered: Bool
     var reviewTire: String?
 
-    init(id: Int, wordDefinition: StrapiWordDefinition?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, reviewTire: String?) {
+    init(id: Int, createdAt: Date?, wordDefinition: StrapiWordDefinition?, lastReviewedAt: Date?, correctStreak: Int, wrongStreak: Int, isRemembered: Bool, reviewTire: String?) {
         self.id = id
+        self.createdAt = createdAt
         self.wordDefinition = wordDefinition
         self.lastReviewedAt = lastReviewedAt
         self.correctStreak = correctStreak

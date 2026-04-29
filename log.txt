@@ -1,0 +1,72 @@
+2026-04-26 09:23:04.589671-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Looking up debug dylib relative path
+2026-04-26 09:23:04.590358-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Found debug dylib relative path string `LangGo.debug.dylib`
+2026-04-26 09:23:04.590368-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Looking up debug dylib entry point name
+2026-04-26 09:23:04.590372-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] No debug dylib entry point name defined.
+2026-04-26 09:23:04.590375-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Looking up debug dylib install name
+2026-04-26 09:23:04.590379-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Found debug dylib install name string `@rpath/LangGo.debug.dylib`
+2026-04-26 09:23:04.590383-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Looking for Previews JIT link entry point.
+2026-04-26 09:23:04.593901-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] No Previews JIT entry point found.
+2026-04-26 09:23:04.593919-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Gave PreviewsInjection a chance to run and it returned, continuing with debug dylib.
+2026-04-26 09:23:04.593924-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Looking for main entry point.
+2026-04-26 09:23:04.593930-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Opening debug dylib with '@rpath/LangGo.debug.dylib'
+2026-04-26 09:23:04.593957-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Debug dylib handle: 0xae7959e0
+2026-04-26 09:23:04.593963-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] No entry point found. Checking for alias.
+2026-04-26 09:23:04.593970-0700 LangGo[2339:225583] [PreviewsAgentExecutorLibrary] Calling provided entry point.
+2026-04-26 09:23:05.088581-0700 LangGo[2339:225612] [catalog] Unable to list voice folder
+2026-04-26 09:23:05.113161-0700 LangGo[2339:225607] [CacheService] ✅ Successfully loaded data from disk cache for key: currentUserProfile
+2026-04-26 09:23:05.113814-0700 LangGo[2339:225583] [ReviewSettingsManager] Loading review tire settings from server.
+2026-04-26 09:23:05.118034-0700 LangGo[2339:225607] [CacheService] ✅ Successfully loaded data from disk cache for key: reviewTireSettings
+2026-04-26 09:23:05.118264-0700 LangGo[2339:225583] [ReviewSettingsManager] Review settings loaded. Mastery streak set to: 11
+2026-04-26 09:23:05.118332-0700 LangGo[2339:225583] [InitialLoadingView] JWT validated. User chinese2 logged in.
+2026-04-26 09:23:05.159139-0700 LangGo[2339:225612] [catalog] Unable to list voice folder
+2026-04-26 09:23:05.178468-0700 LangGo[2339:225612] [catalog] Unable to list voice folder
+No symbol named 'book.pages' found in system symbol set
+2026-04-26 09:23:05.257011-0700 LangGo[2339:225607] [AuthService] AuthService: Fetching current user points.
+2026-04-26 09:23:05.260552-0700 LangGo[2339:225607] [NetworkManager] ➡️ GET http://192.168.1.72:1338/api/my-user-points?locale=zh-Hans
+2026-04-26 09:23:05.956463-0700 LangGo[2339:225611] [NetworkManager] ⬅️ 200 from GET http://192.168.1.72:1338/api/my-user-points?locale=zh-Hans with body: {"data":{"id":4,"attributes":{"record_date":"2026-04-25","points":131,"points_add":59,"word_count":14,"word_add":14,"article_count":1,"article_add":1,"group_rank_change":0,"rank":1,"rank_change":0,"createdAt":"2026-04-25T10:06:05.031Z","updatedAt":"2026-04-25T18:47:20.208Z","user":{"data":{"id":60,"attributes":{"username":"chinese2","email":"chinese2@langgo.ca","provider":"local","password":"$2a$10$JtHla7SjQ82H4f/lFugmIuYthxFAby2Y.yBo.oE1BICy88kzicq9e","resetPasswordToken":null,"confirmationToken":null,"confirmed":true,"blocked":false,"createdAt":"2025-08-17T04:38:35.018Z","updatedAt":"2026-04-21T21:38:00.497Z","honor_title":{"data":null}}}},"point_group":{"data":{"id":1,"attributes":{"group_no":1,"createdAt":"2026-04-23T07:20:53.123Z","updatedAt":"2026-04-23T07:20:53.123Z","group_rank":{"data":{"id":4,"attributes":{"title":"学习起步者","min_period_points":0,"createdAt":"2026-04-22T07:50:15.051Z","updatedAt":"2026-04-22T07:50:15.051Z","locale":"zh"}}}}}},"rank_text":"幼儿园小班"}},"meta":{}}
+2026-04-26 09:23:05.980127-0700 LangGo[2339:225611] [CacheService] 💾 Successfully saved data to cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:05.980431-0700 LangGo[2339:225611] [SwiftUI] Publishing changes from background threads is not allowed; make sure to publish values from the main thread (via operators like receive(on:)) on model updates.
+2026-04-26 09:23:05.990079-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:05.990543-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:05.990892-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:06.025632-0700 LangGo[2339:225605] [FlashcardService] Fetching flashcard statistics from network.
+2026-04-26 09:23:06.027079-0700 LangGo[2339:225605] [NetworkManager] ➡️ GET http://192.168.1.72:1338/api/flashcard-stat
+2026-04-26 09:23:06.361166-0700 LangGo[2339:225611] [NetworkManager] ⬅️ 200 from GET http://192.168.1.72:1338/api/flashcard-stat with body: {"data":{"totalCards":34,"remembered":0,"dueForReview":34,"reviewed":null,"hardToRemember":null,"byTier":[{"id":1,"tier":"new","display_name":"New Word","min_streak":0,"max_streak":2,"cooldown_hours":6,"count":17,"dueCount":8,"hardToRememberCount":null},{"id":2,"tier":"warmup","display_name":"Getting Familiar","min_streak":3,"max_streak":6,"cooldown_hours":24,"count":17,"dueCount":17,"hardToRememberCount":null},{"id":3,"tier":"weekly","display_name":"Well Practiced","min_streak":7,"max_streak":8,"cooldown_hours":168,"count":0,"dueCount":0,"hardToRememberCount":null},{"id":4,"tier":"monthly","display_name":"Almost Remembered","min_streak":9,"max_streak":10,"cooldown_hours":720,"count":0,"dueCount":0,"hardToRememberCount":null},{"id":5,"tier":"remembered","display_name":"Remembered","min_streak":11,"max_streak":10000000,"cooldown_hours":1000000,"count":0,"dueCount":0,"hardToRememberCount":null}],"nextFetchAt":null,"batchWindowMinutes":20}}
+2026-04-26 09:23:06.377382-0700 LangGo[2339:225611] [CacheService] 💾 Successfully saved data to cache for key: flashcardStatistics
+2026-04-26 09:23:06.377478-0700 LangGo[2339:225611] [FlashcardService] 💾 Saved fetched statistics to cache.
+2026-04-26 09:23:06.377913-0700 LangGo[2339:225611] [AuthService] AuthService: Fetching current user's point group.
+2026-04-26 09:23:06.380753-0700 LangGo[2339:225611] [NetworkManager] ➡️ GET http://192.168.1.72:1338/api/my-point-group?locale=zh-Hans
+2026-04-26 09:23:06.381919-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:06.382273-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:06.382577-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:07.086158-0700 LangGo[2339:225607] [NetworkManager] ⬅️ 200 from GET http://192.168.1.72:1338/api/my-point-group?locale=zh-Hans with body: {"data":{"point_group":{"id":1,"group_no":1,"group_rank":{"id":4,"title":"学习起步者","min_period_points":0}},"my_membership":{"user_point_group_id":1,"period_points":75,"position_in_group":1,"group_member_count":1},"leaderboard":[{"position":1,"period_points":75,"is_current_user":true,"user_point_group_id":1,"user":{"id":60,"username":"chinese2","email":"chinese2@langgo.ca","honor_title":null,"user_profile":{"id":33,"baseLanguage":"zh-Hans","avatar_img":{"id":20,"url":"https://storage.googleapis.com/langgo-en-storage/avatar_72354985_E1_BF_4769_9_D15_4_F8_F1_AC_0587_E_2c97c1f5e0/avatar_72354985_E1_BF_4769_9_D15_4_F8_F1_AC_0587_E_2c97c1f5e0.jpg"}}}}]},"meta":{}}
+2026-04-26 09:23:07.104675-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:07.105025-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:23:07.105278-0700 LangGo[2339:225583] [CacheService] ✅ Successfully loaded data from in-memory cache for key: myUserPoints.locale.zh-Hans
+
+
+
+Press the HomeLeaderboardCard for several second and then release, it will show the leaderboard view
+2026-04-26 09:30:13.307808-0700 LangGo[2339:225611] [AuthService] AuthService: Fetching point group leaderboard for group ID 1.
+2026-04-26 09:30:13.318392-0700 LangGo[2339:225611] [NetworkManager] ➡️ GET http://192.168.1.72:1338/api/point-groups/1/leaderboard?locale=zh-Hans
+2026-04-26 09:30:14.140086-0700 LangGo[2339:225611] [NetworkManager] ⬅️ 200 from GET http://192.168.1.72:1338/api/point-groups/1/leaderboard?locale=zh-Hans with body: {"data":{"point_group":{"id":1,"group_no":1,"group_rank":{"id":4,"title":"学习起步者","min_period_points":0}},"current_user_position":1,"group_member_count":1,"leaderboard":[{"position":1,"period_points":75,"is_current_user":true,"user_point_group_id":1,"user":{"id":60,"username":"chinese2","email":"chinese2@langgo.ca","honor_title":null,"user_profile":{"id":33,"baseLanguage":"zh-Hans","avatar_img":{"id":20,"url":"https://storage.googleapis.com/langgo-en-storage/avatar_72354985_E1_BF_4769_9_D15_4_F8_F1_AC_0587_E_2c97c1f5e0/avatar_72354985_E1_BF_4769_9_D15_4_F8_F1_AC_0587_E_2c97c1f5e0.jpg"}}}}]},"meta":{}}
+2026-04-26 09:30:14.149362-0700 LangGo[2339:225583] [CacheService] ⌛ Cache expired for key: myUserPoints.locale.zh-Hans
+2026-04-26 09:30:14.162244-0700 LangGo[2339:225583] [CacheService] 🗑️ Successfully deleted cache for key: myUserPoints.locale.zh-Hans
+Back home and press again:
+2026-04-26 09:33:19.110356-0700 LangGo[2339:228008] [AuthService] AuthService: Fetching point group leaderboard for group ID 1.
+2026-04-26 09:33:19.117674-0700 LangGo[2339:228008] [NetworkManager] ➡️ GET http://192.168.1.72:1338/api/point-groups/1/leaderboard?locale=zh-Hans
+2026-04-26 09:33:19.791569-0700 LangGo[2339:228093] [NetworkManager] ⬅️ 200 from GET http://192.168.1.72:1338/api/point-groups/1/leaderboard?locale=zh-Hans with body: {"data":{"point_group":{"id":1,"group_no":1,"group_rank":{"id":4,"title":"学习起步者","min_period_points":0}},"current_user_position":1,"group_member_count":1,"leaderboard":[{"position":1,"period_points":75,"is_current_user":true,"user_point_group_id":1,"user":{"id":60,"username":"chinese2","email":"chinese2@langgo.ca","honor_title":null,"user_profile":{"id":33,"baseLanguage":"zh-Hans","avatar_img":{"id":20,"url":"https://storage.googleapis.com/langgo-en-storage/avatar_72354985_E1_BF_4769_9_D15_4_F8_F1_AC_0587_E_2c97c1f5e0/avatar_72354985_E1_BF_4769_9_D15_4_F8_F1_AC_0587_E_2c97c1f5e0.jpg"}}}}]},"meta":{}}
+
+
+but the rank shows 0.
+
+And when go back to home view, the HomeRankPointsCard shows points is 0+0
+Need to find out the reason and fix it. 
+
+
+
+
+
+
+
+

@@ -3,6 +3,31 @@ import SwiftUI
 import AVFoundation
 import os
 
+extension Flashcard {
+    var speechTargetText: String {
+        wordDefinition?.attributes.word?.data?.attributes.targetText ?? backContent
+    }
+
+    var speechBaseText: String {
+        wordDefinition?.attributes.baseText ?? frontContent
+    }
+}
+
+extension String {
+    var normalizedSpeechLanguageCode: String {
+        switch self {
+        case "en":
+            return "en-US"
+        case "fr":
+            return "fr-FR"
+        case "zh-Hans":
+            return "zh-CN"
+        default:
+            return self
+        }
+    }
+}
+
 enum ReadingMode: String, Codable {
     case inactive
     case repeatWord
@@ -91,10 +116,10 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
         switch currentStep {
         case .firstReadTarget, .secondReadTarget:
-            textToSpeak = card.backContent
+            textToSpeak = card.speechTargetText
             languageCode = Config.learningTargetLanguageCode
         case .readBase:
-            textToSpeak = card.frontContent
+            textToSpeak = card.speechBaseText
             languageCode = UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en-US"
         case .finished:
             // End of one word sequence; notify host.
@@ -102,12 +127,16 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
             return
         }
 
-        // Normalize some common language codes
-        if languageCode == "fr" { languageCode = "fr-FR" }
-        if languageCode == "zh-Hans" { languageCode = "zh-CN" }
+        languageCode = languageCode.normalizedSpeechLanguageCode
+
+        guard !textToSpeak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            logger.error("!!! No text available to speak for flashcard \(card.id).")
+            finishOneWord()
+            return
+        }
 
         let utterance = AVSpeechUtterance(string: textToSpeak)
-        utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
+        utterance.voice = resolvedVoice(for: languageCode)
 
         if utterance.voice == nil {
             logger.error("!!! VOICE NOT FOUND for language code '\(languageCode)'. Skipping.")
@@ -118,6 +147,15 @@ class SpeechManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
 
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
         synthesizer.speak(utterance)
+    }
+
+    private func resolvedVoice(for languageCode: String) -> AVSpeechSynthesisVoice? {
+        if let exactVoice = AVSpeechSynthesisVoice(language: languageCode) {
+            return exactVoice
+        }
+
+        let prefix = languageCode.split(separator: "-").first.map(String.init) ?? languageCode
+        return AVSpeechSynthesisVoice.speechVoices().first { $0.language.hasPrefix(prefix) }
     }
 
     private func finishOneWord() {

@@ -8,10 +8,9 @@ struct ExamView: View {
     var body: some View {
         NavigationStack {
             VStack {
-                // MODIFIED: The view now handles loading, error, and content states.
-                if viewModel.isLoading {
+                if viewModel.flashcards.isEmpty && viewModel.isLoading {
                     ProgressView("Loading Exam...")
-                } else if let errorMessage = viewModel.errorMessage {
+                } else if viewModel.flashcards.isEmpty, let errorMessage = viewModel.errorMessage {
                     Text("Error: \(errorMessage)")
                         .foregroundColor(.red)
                         .padding()
@@ -19,8 +18,9 @@ struct ExamView: View {
                     Text("No cards available for an exam at this time.")
                         .font(.title)
                         .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
                 } else {
-                    // This is the main exam content, shown only when data is ready.
                     examContent
                 }
             }
@@ -31,25 +31,42 @@ struct ExamView: View {
                     Button("Close") { dismiss() }
                 }
             }
-            // The .task modifier triggers the data load when the view appears.
             .task {
                 await viewModel.loadExamCards()
             }
         }
     }
-    
-    // The main UI for the exam, extracted into a computed property for clarity.
+
     private var examContent: some View {
         VStack {
-            VStack {
+            VStack(spacing: 6) {
                 ProgressView(value: progressValue, total: progressTotal)
-                Text(progressCountString)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 8) {
+                    Text(progressCountString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if viewModel.isAutoLoadingRemainingPages || viewModel.isLoadingMore {
+                        ProgressView()
+                            .scaleEffect(0.7)
+
+                        Text("Loading more...")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             .padding(.horizontal)
             .padding(.top, 8)
-            
+
+            if let errorMessage = viewModel.errorMessage, !viewModel.isLoadingMore {
+                Text("Could not load more cards: \(errorMessage)")
+                    .font(.footnote)
+                    .foregroundColor(.red)
+                    .padding(.horizontal)
+                    .padding(.top, 4)
+            }
+
             if let question = viewModel.questionText, let options = viewModel.examOptions {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(question)
@@ -98,9 +115,9 @@ struct ExamView: View {
                 }
                 .padding()
             }
-            
+
             Spacer()
-            
+
             HStack {
                 Button(action: viewModel.goToPreviousCard) {
                     Image(systemName: "arrow.left.circle.fill")
@@ -109,37 +126,37 @@ struct ExamView: View {
                 .font(.largeTitle)
 
                 Spacer()
-                
+
                 Button(action: viewModel.swapDirection) {
                     Image(systemName: "arrow.2.squarepath")
                 }
                 .font(.largeTitle)
 
                 Spacer()
-                
+
                 Button(action: viewModel.goToNextCard) {
                     Image(systemName: "arrow.right.circle.fill")
                 }
-                .disabled(viewModel.currentCardIndex >= viewModel.flashcards.count - 1)
+                .disabled(!viewModel.canGoNext)
                 .font(.largeTitle)
             }
             .padding()
         }
     }
-    
+
     private var progressValue: Double {
         guard viewModel.flashcards.count > 0 else { return 0 }
         return Double(viewModel.currentCardIndex + 1)
     }
+
     private var progressTotal: Double {
         Double(max(1, viewModel.flashcards.count))
     }
+
     private var progressCountString: String {
         let formatter = NumberFormatter()
         formatter.locale = .current
         let format = NSLocalizedString("%lld of %lld", comment: "Progress count format (e.g., 1 of 10)")
         return String(format: format, viewModel.currentCardIndex + 1, viewModel.flashcards.count)
     }
-
-
 }

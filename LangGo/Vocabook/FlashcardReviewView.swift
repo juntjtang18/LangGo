@@ -14,12 +14,17 @@ final class ReviewSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelega
     }
 
     func speakOnce(card: Flashcard, completion: @escaping () -> Void) {
+        stop()
         self.completion = completion
-        // Speak TARGET ONLY (consistent for all locales)
-        let word = card.wordDefinition?.attributes.word?.data?.attributes.targetText
-            ?? card.frontContent
+        let word = card.speechTargetText
+        guard !word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            completion()
+            self.completion = nil
+            return
+        }
         let u = AVSpeechUtterance(string: word)
-        u.voice = AVSpeechSynthesisVoice(language: "en-US")
+        let languageCode = Config.learningTargetLanguageCode.normalizedSpeechLanguageCode
+        u.voice = AVSpeechSynthesisVoice(language: languageCode) ?? AVSpeechSynthesisVoice(language: "en-US")
         u.rate  = AVSpeechUtteranceDefaultSpeechRate
         tts.speak(u)
     }
@@ -45,6 +50,7 @@ struct FlashcardReviewView: View {
     @State private var showFireworks = false
     @State private var showBadge = false
     @State private var isSubmittingFinalCard = false
+    @State private var isWaitingForMoreReviewCards = false
 
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled = false
     @State private var isRepeating = false
@@ -58,9 +64,24 @@ struct FlashcardReviewView: View {
                 VStack {
                     if viewModel.reviewCards.isEmpty {
                         Spacer()
-                        Text("No cards to review.")
-                            .font(.title)
-                            .foregroundColor(.secondary)
+                        if viewModel.isLoadingReviewCards || viewModel.isAutoLoadingReviewCards {
+                            ProgressView("Loading review cards...")
+                                .font(.headline)
+                        } else if let errorMessage = viewModel.reviewErrorMessage {
+                            VStack(spacing: 12) {
+                                Text("Could not load review cards.")
+                                    .font(.title3.weight(.semibold))
+                                Text(errorMessage)
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                            }
+                        } else {
+                            Text("No cards to review.")
+                                .font(.title)
+                                .foregroundColor(.secondary)
+                        }
                         Spacer()
                     } else {
                         VStack {
@@ -72,6 +93,16 @@ struct FlashcardReviewView: View {
                             Text(progressCountString)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+
+                            if viewModel.isAutoLoadingReviewCards {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                    Text("Loading more cards...")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                         .padding()
                         
@@ -108,30 +139,41 @@ struct FlashcardReviewView: View {
 
                         Spacer()
                         
+                        if isWaitingForMoreReviewCards {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Loading more cards...")
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.bottom, 4)
+                        }
+
                         HStack(spacing: 20) {
                             Button(action: { markCard(.wrong) }) {
                                 Text("Don't Know").style(.wrongButton)
                             }
+                            .disabled(isWaitingForMoreReviewCards)
                             
                             Button(action: { markCard(.correct) }) {
                                 Text("Correct").style(.correctButton)
                             }
+                            .disabled(isWaitingForMoreReviewCards)
                         }
                         .padding()
                     }
                 }
                 .navigationTitle("Review Session")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: { dismiss() }) {
-                            HStack {
-                                Image(systemName: "chevron.left")
-                                Text("Back")
-                            }
+                .navigationBarItems(leading:
+                    Button(action: { dismiss() }) {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
                         }
                     }
-                }
+                )
                 .task {
                     // Load vbSetting.interval1 once
                     if let vb = try? await DataServices.shared.settingsService.fetchVBSetting() {
@@ -185,6 +227,12 @@ struct FlashcardReviewView: View {
                 )
                 .transition(.scale.combined(with: .opacity))
             }
+        }
+        .onChange(of: viewModel.reviewCards.count) { newCount in
+            guard isWaitingForMoreReviewCards, currentIndex < newCount - 1 else { return }
+            isWaitingForMoreReviewCards = false
+            isFlipped = false
+            currentIndex += 1
         }
     }
 
@@ -241,7 +289,13 @@ struct FlashcardReviewView: View {
     private func markCard(_ answer: ReviewResult) {
         guard let card = viewModel.reviewCards[safe: currentIndex] else { return }
 
-        if currentIndex == viewModel.reviewCards.count - 1 {
+        if currentIndex == viewModel.reviewCards.count - 1 && viewModel.isAutoLoadingReviewCards {
+            // This is only the last currently available card. More cards may be
+            // published by FlashcardService, so do not treat it as final.
+            isWaitingForMoreReviewCards = true
+            isFlipped = false
+            viewModel.submitReviewOptimistic(for: card, result: answer)
+        } else if currentIndex == viewModel.reviewCards.count - 1 {
             // This is the LAST card. Wait for the review to complete.
             Task {
                 isSubmittingFinalCard = true
@@ -262,9 +316,14 @@ struct FlashcardReviewView: View {
     private func goToNextCard() {
         if currentIndex < viewModel.reviewCards.count - 1 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard currentIndex < viewModel.reviewCards.count - 1 else { return }
                 isFlipped = false
                 currentIndex += 1
             }
+        } else if viewModel.isAutoLoadingReviewCards {
+            // More cards are still being shared by FlashcardService. Stay on the
+            // current card instead of completing the session from a partial list.
+            return
         } else {
             isSessionComplete = true
             

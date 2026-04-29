@@ -1,5 +1,6 @@
 // LangGo/Vocabook/FlashcardViewModel.swift
 import SwiftUI
+import Combine
 import os
 
 @MainActor
@@ -11,8 +12,28 @@ class FlashcardViewModel: ObservableObject {
     @Published var myCards: [Flashcard] = []
     @Published var reviewCards: [Flashcard] = []
     @Published var userReviewLogs: [StrapiReviewLog] = []  // keep if you use it elsewhere
+    @Published var isLoadingReviewCards: Bool = false
+    @Published var isAutoLoadingReviewCards: Bool = false
+    @Published var reviewErrorMessage: String?
 
-    init() {}
+    private var reviewCardIds = Set<Int>()
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        flashcardService.$reviewFlashcards
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] cards in
+                self?.mergeReviewCards(cards)
+            }
+            .store(in: &cancellables)
+
+        flashcardService.$isLoadingAllReviewFlashcards
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isLoading in
+                self?.isAutoLoadingReviewCards = isLoading
+            }
+            .store(in: &cancellables)
+    }
 
     // MARK: - Cards
     
@@ -30,16 +51,45 @@ class FlashcardViewModel: ObservableObject {
     // MARK: - Review Session
     
     func prepareReviewSession() async {
-        logger.info("Attempting to fetch review session from server.")
+        guard !isLoadingReviewCards else { return }
+
+        logger.info("Preparing review session from available review cards.")
+        isLoadingReviewCards = true
+        reviewErrorMessage = nil
+
+        if reviewCards.isEmpty {
+            reviewCardIds.removeAll()
+        }
+
         do {
-            let fetchedCards = try await flashcardService.fetchAllReviewFlashcards()
-            self.reviewCards = fetchedCards.sorted {
-                ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast)
-            }
-            logger.info("prepareReviewSession: Loaded \(self.reviewCards.count) cards for review.")
+            let availableCards = try await flashcardService.fetchAvailableReviewFlashcards(pageSize: 100)
+            mergeReviewCards(availableCards)
+            logger.info("prepareReviewSession: Loaded \(self.reviewCards.count) available cards for review.")
         } catch {
-            logger.error("Could not fetch review session from server. Error: \(error.localizedDescription)")
-            self.reviewCards = []
+            logger.error("Could not prepare review session. Error: \(error.localizedDescription)")
+            reviewErrorMessage = error.localizedDescription
+            if reviewCards.isEmpty {
+                reviewCardIds.removeAll()
+            }
+        }
+
+        isLoadingReviewCards = false
+
+        // The service owns the shared full-load task. This reuses an existing
+        // autoload if ExamView or another review mode already started one.
+        flashcardService.ensureReviewFlashcardsFullyLoaded(pageSize: 100)
+    }
+
+    private func mergeReviewCards(_ cards: [Flashcard]) {
+        guard !cards.isEmpty else { return }
+
+        let sortedCards = cards.sorted {
+            ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast)
+        }
+
+        let newCards = sortedCards.filter { reviewCardIds.insert($0.id).inserted }
+        if !newCards.isEmpty {
+            reviewCards.append(contentsOf: newCards)
         }
     }
 

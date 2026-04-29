@@ -5,9 +5,14 @@ final class DataServices {
     static let shared = DataServices()
 
     let authService: AuthService
+    let userPointsService: UserPointsService
+    let pointGroupService: PointGroupService
+
     let flashcardService: FlashcardService
     let wordService: WordService
     let settingsService: SettingsService
+    let articleTagService: ArticleTagService
+    let articleService: ArticleService
     
     let storyService: StoryService
     let conversationService: ConversationService
@@ -15,12 +20,17 @@ final class DataServices {
 
     private init() {
         self.authService = AuthService()
-        
+        self.userPointsService = UserPointsService()
+        self.pointGroupService = PointGroupService()
+
         let flashcardService = FlashcardService()
         self.flashcardService = flashcardService
 
         self.wordService = WordService(flashcardService: self.flashcardService)
         self.settingsService = SettingsService()
+        let articleTagService = ArticleTagService()
+        self.articleTagService = articleTagService
+        self.articleService = ArticleService(articleTagService: articleTagService)
         
         self.storyService = StoryService()
         self.conversationService = ConversationService()

@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingView: View {
     /// This property wrapper reads from and writes to UserDefaults.
     @AppStorage("isRefreshModeEnabled") private var isRefreshModeEnabled = false
+    @AppStorage("isNetworkTimingLogEnabled") private var isNetworkTimingLogEnabled = false
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -11,6 +12,7 @@ struct SettingView: View {
             Form {
                 Section(header: Text("Data Options"), footer: Text("This will control data refreshing behavior in a future update.")) {
                     Toggle("REFRESH mode", isOn: $isRefreshModeEnabled)
+                    Toggle("Network timing log", isOn: $isNetworkTimingLogEnabled)
                 }
             }
             .navigationTitle("Settings")

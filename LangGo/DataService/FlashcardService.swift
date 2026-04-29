@@ -8,6 +8,7 @@
 
 // LangGo/DataService/FlashcardService.swift
 
+import Combine
 import Foundation
 import os
 
@@ -17,62 +18,153 @@ extension Notification.Name {
     static let flashcardsDidChange = Notification.Name("com.langGo.swift.flashcardsDidChange")
 }
 
-class FlashcardService {
+final class FlashcardService: ObservableObject {
+    @Published private(set) var flashcards: [Flashcard] = []
+    @Published private(set) var reviewFlashcards: [Flashcard] = []
+    @Published private(set) var isLoadingAllReviewFlashcards = false
+    @Published private(set) var flashcardStatistics: StrapiStatistics?
+    @Published private(set) var nextFlashcardStatisticsFetchAt: Date?
+    @Published private(set) var isLoadingFlashcards = false
+    @Published private(set) var flashcardsErrorMessage: String?
+    @Published private(set) var isLoadingStatistics = false
+    @Published private(set) var statisticsErrorMessage: String?
+
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardService")
     private let cacheService = CacheService.shared
     private let networkManager = NetworkManager.shared
-    
-    private var isAllMyFlashcardsCacheStale = true
-    private var isReviewFlashcardsCacheStale = true
-    
-    private let allMyFlashcardsCacheKey = "allMyFlashcards"
-    private let reviewFlashcardsCacheKey = "allMyReviewFlashcards"
-    private let flashcardStatisticsCacheKey = "flashcardStatistics"
+    private let dateFormatter = ISO8601DateFormatter()
+    private let flashcardStatisticsMinimumFetchInterval: TimeInterval = 2
+    private var lastFlashcardStatisticsNetworkFetchAt: Date?
+    private var reviewFlashcardNetworkPageBuffer: [Int: [Flashcard]] = [:]
+    private var reviewFlashcardNetworkPagination: StrapiPagination?
+    private var reviewFlashcardNetworkPagePaginations: [Int: StrapiPagination] = [:]
+    private var reviewFlashcardPageTasks: [Int: Task<([Flashcard], StrapiPagination?), Error>] = [:]
+    private var reviewFlashcardsFullLoadTask: Task<Void, Never>?
+    private var reviewFlashcardNetworkExpectedPageCount: Int?
+    private var reviewFlashcardNetworkExpectedTotal: Int?
+    private let reviewFlashcardStateLock = NSLock()
+
+    private func withReviewFlashcardStateLock<T>(_ work: () throws -> T) rethrows -> T {
+        reviewFlashcardStateLock.lock()
+        defer { reviewFlashcardStateLock.unlock() }
+        return try work()
+    }
 
     private var isRefreshModeEnabled: Bool {
         UserDefaults.standard.bool(forKey: "isRefreshModeEnabled")
     }
-    
-    func fetchFlashcardStatistics() async throws -> StrapiStatistics {
-        if !isRefreshModeEnabled, let cachedStats = cacheService.load(type: StrapiStatistics.self, from: flashcardStatisticsCacheKey) {
+
+    func loadStatisticsIfNeeded() async {
+        await setStatisticsErrorMessage(nil)
+
+        if let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
             logger.debug("✅ Returning flashcard statistics from cache.")
-            return cachedStats
+            await publishStatistics(cachedStats)
+            return
         }
 
-        logger.debug("Fetching flashcard statistics from network.")
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else { throw URLError(.badURL) }
+        await refreshStatistics(forceRefresh: false)
+    }
 
-        let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
-        let stats = resp.data
+    func refreshStatistics(forceRefresh: Bool = false) async {
+        _ = try? await fetchFlashcardStatistics(forceRefresh: forceRefresh)
+    }
 
-        cacheService.save(stats, key: flashcardStatisticsCacheKey)
-        logger.debug("💾 Saved fetched statistics to cache.")
-        return stats
+    func loadFlashcardsIfNeeded() async {
+        await setFlashcardsErrorMessage(nil)
+
+        if let cachedCards = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
+            logger.debug("✅ Returning all 'my flashcards' from cache.")
+            await publishFlashcards(cachedCards)
+            return
+        }
+
+        await refreshFlashcards()
+    }
+
+    func refreshFlashcards() async {
+        _ = try? await fetchAllMyFlashcards()
+    }
+
+    func fetchFlashcardStatistics(forceRefresh: Bool = false) async throws -> StrapiStatistics {
+        await setStatisticsLoading(true)
+        await setStatisticsErrorMessage(nil)
+
+        do {
+            if !forceRefresh,
+               !isRefreshModeEnabled,
+               let lastFetch = lastFlashcardStatisticsNetworkFetchAt,
+               Date().timeIntervalSince(lastFetch) < flashcardStatisticsMinimumFetchInterval,
+               let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
+                logger.debug("✅ Returning flashcard statistics from cache due to short repeat-fetch guard.")
+                await publishStatistics(cachedStats)
+                await setStatisticsLoading(false)
+                return cachedStats
+            }
+
+            logger.debug("Fetching flashcard statistics from network.")
+            guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else {
+                throw URLError(.badURL)
+            }
+
+            let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
+            let stats = resp.data
+            lastFlashcardStatisticsNetworkFetchAt = Date()
+
+            FlashcardCache.storeStatistics(stats, using: cacheService)
+            logger.debug("💾 Saved fetched statistics to cache.")
+            await publishStatistics(stats)
+            await setStatisticsLoading(false)
+            return stats
+        } catch {
+            logger.error("Failed to fetch flashcard statistics: \(error.localizedDescription, privacy: .public)")
+            await setStatisticsErrorMessage(error.localizedDescription)
+            await setStatisticsLoading(false)
+            throw error
+        }
     }
 
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
-        if !isReviewFlashcardsCacheStale, let cached = cacheService.load(type: [Flashcard].self, from: reviewFlashcardsCacheKey) {
+        return try await fetchAvailableReviewFlashcards(pageSize: 100)
+    }
+
+    /// Returns the best currently available review-card set without blocking the UI
+    /// on a full refresh.
+    ///
+    /// Behavior:
+    /// - Fresh persistent cache: return the full cached set.
+    /// - Full refresh already running: return all buffered/published cards immediately.
+    /// - No cache and no refresh running: fetch the first page, publish it, then let
+    ///   the service-owned background loader finish the full set.
+    ///
+    /// The persistent review cache is still only marked valid by
+    /// `fetchAllReviewFlashcardsFromNetworkAndCommit` after every expected backend
+    /// page has been loaded.
+    func fetchAvailableReviewFlashcards(pageSize: Int = 100) async throws -> [Flashcard] {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
             logger.debug("✅ Review cache is FRESH. Returning \(cached.count) cards.")
+            await publishReviewFlashcards(cached)
             return cached
         }
 
-        logger.debug("➡️ Review cache is STALE. Fetching all pages from network.")
-        var allCards: [Flashcard] = []
-        var currentPage = 1
-        var hasMorePages = true
-
-        while hasMorePages {
-            let (cards, pagination) = try await fetchReviewFlashcardsPage(page: currentPage, pageSize: 100)
-            if !cards.isEmpty { allCards.append(contentsOf: cards) }
-            hasMorePages = (pagination?.page ?? 1) < (pagination?.pageCount ?? 1)
-            currentPage += 1
+        let available = await currentAvailableReviewFlashcards()
+        if isReviewFlashcardsFullLoadRunning(), !available.isEmpty {
+            logger.debug("Review full-load is running. Returning \(available.count) available review cards immediately.")
+            await publishReviewFlashcards(available)
+            return available
         }
-        
-        logger.debug("✅ Fetched \(allCards.count) review flashcards.")
-        cacheService.save(allCards, key: reviewFlashcardsCacheKey)
-        isReviewFlashcardsCacheStale = false
-        logger.debug("✅ Review cache updated. Flag set to FALSE.")
-        return allCards
+
+        logger.debug("Review cache is STALE. Fetching first review page and starting/reusing background full-load.")
+        let (firstPageCards, _) = try await fetchReviewFlashcardsPage(page: 1, pageSize: pageSize)
+        ensureReviewFlashcardsFullyLoaded(pageSize: pageSize)
+
+        let refreshedAvailable = await currentAvailableReviewFlashcards()
+        if !refreshedAvailable.isEmpty {
+            return refreshedAvailable
+        }
+
+        return firstPageCards
     }
 
     func submitFlashcardReview(cardId: Int, result: ReviewResult) async throws -> Flashcard {
@@ -85,6 +177,7 @@ class FlashcardService {
         }
 
         invalidateAllFlashcardCaches()
+        PointGroupCache.invalidateAll(using: cacheService)
         return transformStrapiCard(updatedStrapiCard)
     }
     
@@ -118,14 +211,62 @@ class FlashcardService {
     }
 
     func fetchAllMyFlashcards() async throws -> [Flashcard] {
-        return try await getOrFetchAllMyFlashcards()
+        await setFlashcardsLoading(true)
+        await setFlashcardsErrorMessage(nil)
+
+        do {
+            let cards = try await getOrFetchAllMyFlashcards()
+            await publishFlashcards(cards)
+            await setFlashcardsLoading(false)
+            return cards
+        } catch {
+            logger.error("Failed to fetch all user flashcards: \(error.localizedDescription, privacy: .public)")
+            await setFlashcardsErrorMessage(error.localizedDescription)
+            await setFlashcardsLoading(false)
+            throw error
+        }
+    }
+
+    func fetchAllMyFlashcards(reviewTier: String) async throws -> [Flashcard] {
+        return try await getOrFetchAllMyFlashcards(reviewTier: reviewTier)
+    }
+
+    func fetchRecentlyAddedFlashcards(limit: Int) async throws -> [Flashcard] {
+        guard limit > 0 else { return [] }
+
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadRecentFlashcards(limit: limit, using: cacheService) {
+            logger.debug("✅ Returning recent flashcards from cache for limit \(limit).")
+            return cached
+        }
+
+        if !isRefreshModeEnabled,
+           let cachedAll = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
+            let recent = Array(sortByMostRecentCreation(cachedAll).prefix(limit))
+            FlashcardCache.storeRecentFlashcards(recent, limit: limit, using: cacheService)
+            logger.debug("✅ Derived recent flashcards from all-cards cache.")
+            return recent
+        }
+
+        logger.debug("Fetching recent flashcards from network with limit \(limit).")
+        let (cards, _) = try await fetchFlashcardsPageFromNetwork(page: 1, pageSize: limit, sortByMostRecentCreation: true)
+        let recent = Array(sortByMostRecentCreation(cards).prefix(limit))
+        FlashcardCache.storeRecentFlashcards(recent, limit: limit, using: cacheService)
+        return recent
     }
     
-    func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false) async throws -> ([Flashcard], StrapiPagination?) {
+    func fetchFlashcards(page: Int, pageSize: Int, dueOnly: Bool = false, reviewTier: String? = nil, recentlyAddedLimit: Int = 0) async throws -> ([Flashcard], StrapiPagination?) {
         if dueOnly {
             return try await fetchReviewFlashcardsPage(page: page, pageSize: pageSize)
         }
-        let allFlashcards = try await getOrFetchAllMyFlashcards()
+        let allFlashcards: [Flashcard]
+        if recentlyAddedLimit > 0 {
+            allFlashcards = try await fetchRecentlyAddedFlashcards(limit: recentlyAddedLimit)
+        } else if let reviewTier, !reviewTier.isEmpty {
+            allFlashcards = try await getOrFetchAllMyFlashcards(reviewTier: reviewTier)
+        } else {
+            allFlashcards = try await getOrFetchAllMyFlashcards()
+        }
         
         let totalItems = allFlashcards.count
         let totalPages = (totalItems + pageSize - 1) / pageSize
@@ -142,24 +283,32 @@ class FlashcardService {
     }
 
     func invalidateAllFlashcardCaches() {
-        cacheService.delete(key: allMyFlashcardsCacheKey)
-        cacheService.delete(key: reviewFlashcardsCacheKey)
-        cacheService.delete(key: flashcardStatisticsCacheKey)
+        FlashcardCache.invalidateAfterFlashcardWrite(using: cacheService)
+        withReviewFlashcardStateLock {
+            reviewFlashcardsFullLoadTask?.cancel()
+            reviewFlashcardsFullLoadTask = nil
+            reviewFlashcardPageTasks.values.forEach { $0.cancel() }
+            reviewFlashcardPageTasks.removeAll()
+            resetReviewFlashcardNetworkBufferLocked()
+        }
+        Task {
+            await publishReviewFlashcards([])
+            await setReviewFlashcardsFullLoadActive(false)
+        }
+        notifyFlashcardsDidChange()
         
-        isAllMyFlashcardsCacheStale = true
-        isReviewFlashcardsCacheStale = true
-        
-        // MODIFIED: After invalidating the cache, post the notification on the main
-        // thread. This tells any listening part of the app to re-fetch its data.
+        logger.debug("✏️ SUCCESS: All flashcard caches invalidated.")
+    }
+
+    func notifyFlashcardsDidChange() {
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .flashcardsDidChange, object: nil)
         }
-        
-        logger.debug("✏️ SUCCESS: All flashcard caches invalidated. Stale flags set to TRUE.")
     }
     
     private func getOrFetchAllMyFlashcards() async throws -> [Flashcard] {
-        if !isAllMyFlashcardsCacheStale, let cached = cacheService.load(type: [Flashcard].self, from: allMyFlashcardsCacheKey) {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
             logger.debug("✅ Returning all 'my flashcards' from cache.")
             return cached
         }
@@ -176,13 +325,206 @@ class FlashcardService {
             currentPage += 1
         }
         
-        cacheService.save(allCards, key: allMyFlashcardsCacheKey)
-        isAllMyFlashcardsCacheStale = false
+        FlashcardCache.storeAllMyFlashcards(allCards, using: cacheService)
         logger.debug("💾 Saved all 'my flashcards' to cache.")
         return allCards
     }
 
+    private func getOrFetchAllMyFlashcards(reviewTier: String) async throws -> [Flashcard] {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadTierFlashcards(reviewTier: reviewTier, using: cacheService) {
+            logger.debug("✅ Returning tier flashcards from cache for tier '\(reviewTier, privacy: .public)'.")
+            return cached
+        }
+
+        if !isRefreshModeEnabled,
+           let cachedAll = FlashcardCache.loadAllMyFlashcards(using: cacheService) {
+            let filtered = cachedAll.filter { $0.reviewTire == reviewTier }
+            FlashcardCache.storeTierFlashcards(filtered, reviewTier: reviewTier, using: cacheService)
+            logger.debug("✅ Derived tier flashcards for '\(reviewTier, privacy: .public)' from all-cards cache.")
+            return filtered
+        }
+
+        logger.debug("Cache for tier flashcards '\(reviewTier, privacy: .public)' is stale. Fetching all pages from network.")
+        var allCards: [Flashcard] = []
+        var currentPage = 1
+        var hasMorePages = true
+
+        while hasMorePages {
+            let (cards, pagination) = try await fetchFlashcardsPageFromNetwork(page: currentPage, pageSize: 100, reviewTier: reviewTier)
+            if !cards.isEmpty { allCards.append(contentsOf: cards) }
+            hasMorePages = (pagination?.page ?? 1) < (pagination?.pageCount ?? 1)
+            currentPage += 1
+        }
+
+        FlashcardCache.storeTierFlashcards(allCards, reviewTier: reviewTier, using: cacheService)
+        logger.debug("💾 Saved tier flashcards to cache for tier '\(reviewTier, privacy: .public)'.")
+        return allCards
+    }
+
+    func ensureReviewFlashcardsFullyLoaded(pageSize firstPageSize: Int = 100) {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
+            Task { await publishReviewFlashcards(cached) }
+            return
+        }
+
+        let didStartTask = withReviewFlashcardStateLock { () -> Bool in
+            guard reviewFlashcardsFullLoadTask == nil else {
+                return false
+            }
+
+            reviewFlashcardsFullLoadTask = Task { [weak self] in
+                await self?.loadAllReviewFlashcardsInBackground(firstPageSize: firstPageSize)
+            }
+            return true
+        }
+
+        if !didStartTask {
+            logger.debug("Review full-load task already running. Reusing existing task.")
+        }
+    }
+
+    private func isReviewFlashcardsFullLoadRunning() -> Bool {
+        withReviewFlashcardStateLock {
+            reviewFlashcardsFullLoadTask != nil
+        }
+    }
+
+    private func currentAvailableReviewFlashcards() async -> [Flashcard] {
+        let bufferedCards = reviewFlashcardNetworkBufferSnapshot().cards
+        if !bufferedCards.isEmpty {
+            return bufferedCards
+        }
+
+        return await MainActor.run {
+            self.reviewFlashcards
+        }
+    }
+
+    private func loadAllReviewFlashcardsInBackground(firstPageSize: Int) async {
+        await setReviewFlashcardsFullLoadActive(true)
+        defer {
+            withReviewFlashcardStateLock {
+                reviewFlashcardsFullLoadTask = nil
+            }
+            Task { await setReviewFlashcardsFullLoadActive(false) }
+        }
+
+        do {
+            _ = try await fetchAllReviewFlashcardsFromNetworkAndCommit(firstPageSize: firstPageSize)
+        } catch is CancellationError {
+            logger.debug("Review full-load task was cancelled. Leaving review cache invalid/stale.")
+        } catch {
+            logger.error("Failed background-loading review flashcards: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func fetchAllReviewFlashcardsFromNetworkAndCommit(firstPageSize: Int) async throws -> [Flashcard] {
+        let firstPage: ([Flashcard], StrapiPagination?)
+
+        if let bufferedFirstPage = bufferedReviewFlashcardsPage(page: 1) {
+            logger.debug("Using already buffered review first page before paged full-load.")
+            firstPage = bufferedFirstPage
+        } else {
+            resetReviewFlashcardNetworkBuffer()
+            firstPage = try await fetchReviewFlashcardsPageFromNetworkDeduped(page: 1, pageSize: firstPageSize)
+            await bufferReviewFlashcardsPage(firstPage.0, page: 1, pagination: firstPage.1)
+        }
+
+        try Task.checkCancellation()
+
+        guard let firstPagination = firstPage.1 else {
+            throw URLError(.badServerResponse)
+        }
+
+        let expectedPageCount = firstPagination.pageCount
+        let expectedTotal = firstPagination.total
+
+        if expectedTotal == 0 {
+            FlashcardCache.storeReviewFlashcards([], using: cacheService)
+            await publishReviewFlashcards([])
+            logger.debug("✅ Review cache committed with 0 cards.")
+            return []
+        }
+
+        guard expectedPageCount > 0 else {
+            throw ReviewFlashcardCacheCommitError.incomplete
+        }
+
+        if expectedPageCount > 1 {
+            logger.debug("Fetching remaining review flashcards using normal page/pageSize loop: pages 2...\(expectedPageCount).")
+
+            for page in 2...expectedPageCount {
+                try Task.checkCancellation()
+
+                if isReviewFlashcardsPageBuffered(page) {
+                    continue
+                }
+
+                let pageResult = try await fetchReviewFlashcardsPageFromNetworkDeduped(page: page, pageSize: firstPagination.pageSize)
+                await bufferReviewFlashcardsPage(pageResult.0, page: page, pagination: pageResult.1)
+            }
+        }
+
+        try Task.checkCancellation()
+
+        let allCards = try commitReviewFlashcardsCacheIfComplete()
+        await publishReviewFlashcards(allCards)
+        logger.debug("✅ Review cache committed after normal paged full-load with \(allCards.count) cards.")
+        return allCards
+    }
+
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+        if !isRefreshModeEnabled,
+           let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
+            logger.debug("Review cache is FRESH. Returning review page \(page) from cache.")
+            await publishReviewFlashcards(cached)
+            return pageSlice(from: cached, page: page, pageSize: pageSize)
+        }
+
+        if let bufferedPage = bufferedReviewFlashcardsPage(page: page) {
+            logger.debug("Review cache is STALE, but page \(page) is already loaded in memory. Returning buffered page.")
+            return bufferedPage
+        }
+
+        logger.debug("Review cache is STALE. Fetching review page \(page) from network or shared page task.")
+        let (cards, pagination) = try await fetchReviewFlashcardsPageFromNetworkDeduped(page: page, pageSize: pageSize)
+        await patchReviewFlashcardsCache(with: cards, page: page, pagination: pagination)
+        return (cards, pagination)
+    }
+
+    private func fetchReviewFlashcardsPageFromNetworkDeduped(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+        if let existingTask = withReviewFlashcardStateLock({ reviewFlashcardPageTasks[page] }) {
+            logger.debug("Joining existing review page \(page) network task.")
+            return try await existingTask.value
+        }
+
+        let task = Task { [weak self] () throws -> ([Flashcard], StrapiPagination?) in
+            guard let self else { throw CancellationError() }
+            return try await self.fetchReviewFlashcardsPageFromNetwork(page: page, pageSize: pageSize)
+        }
+
+        let taskState = withReviewFlashcardStateLock { () -> (task: Task<([Flashcard], StrapiPagination?), Error>, didStore: Bool) in
+            if let existingTask = reviewFlashcardPageTasks[page] {
+                return (existingTask, false)
+            }
+            reviewFlashcardPageTasks[page] = task
+            return (task, true)
+        }
+
+        defer {
+            if taskState.didStore {
+                withReviewFlashcardStateLock {
+                    reviewFlashcardPageTasks[page] = nil
+                }
+            }
+        }
+
+        return try await taskState.task.value
+    }
+
+    private func fetchReviewFlashcardsPageFromNetwork(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/review-flashcards") else { throw URLError(.badURL) }
         urlComponents.queryItems = [
             URLQueryItem(name: "pagination[page]", value: "\(page)"),
@@ -194,15 +536,145 @@ class FlashcardService {
         let response: StrapiListResponse<StrapiFlashcard> = try await networkManager.fetchDirect(from: url)
         return ((response.data ?? []).map(transformStrapiCard), response.meta?.pagination)
     }
-    
-    private func fetchFlashcardsPageFromNetwork(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+
+    private func pageSlice(from cards: [Flashcard], page: Int, pageSize: Int) -> ([Flashcard], StrapiPagination?) {
+        let totalItems = cards.count
+        let totalPages = pageSize > 0 ? (totalItems + pageSize - 1) / pageSize : 0
+
+        guard page > 0, pageSize > 0, page <= totalPages || totalItems == 0 else {
+            return ([], StrapiPagination(page: page, pageSize: pageSize, pageCount: totalPages, total: totalItems))
+        }
+
+        let startIndex = (page - 1) * pageSize
+        let endIndex = min(startIndex + pageSize, totalItems)
+        let pageItems = startIndex < endIndex ? Array(cards[startIndex..<endIndex]) : []
+        return (pageItems, StrapiPagination(page: page, pageSize: pageSize, pageCount: totalPages, total: totalItems))
+    }
+
+    private func patchReviewFlashcardsCache(with cards: [Flashcard], page: Int, pagination: StrapiPagination?) async {
+        await bufferReviewFlashcardsPage(cards, page: page, pagination: pagination)
+
+        do {
+            let allCards = try commitReviewFlashcardsCacheIfComplete()
+            await publishReviewFlashcards(allCards)
+            logger.debug("Review cache patched and committed with \(allCards.count) cards after all pages loaded.")
+        } catch ReviewFlashcardCacheCommitError.incomplete {
+            let snapshot = reviewFlashcardNetworkBufferSnapshot()
+            await publishReviewFlashcards(snapshot.cards)
+            logger.debug("Review cache patch is incomplete. Cached \(snapshot.pageCount) / \(snapshot.expectedPageCount) pages in memory only; persistent cache remains stale.")
+        } catch {
+            logger.error("Review cache patch failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func bufferReviewFlashcardsPage(_ cards: [Flashcard], page: Int, pagination: StrapiPagination?) async {
+        guard let pagination else { return }
+
+        let bufferedCards = withReviewFlashcardStateLock { () -> [Flashcard] in
+            if page == 1 {
+                resetReviewFlashcardNetworkBufferLocked()
+            }
+
+            reviewFlashcardNetworkPageBuffer[page] = cards
+            reviewFlashcardNetworkPagePaginations[page] = pagination
+            reviewFlashcardNetworkPagination = pagination
+            reviewFlashcardNetworkExpectedPageCount = pagination.pageCount
+            reviewFlashcardNetworkExpectedTotal = pagination.total
+
+            return reviewFlashcardNetworkPageBuffer.keys.sorted().flatMap { reviewFlashcardNetworkPageBuffer[$0] ?? [] }
+        }
+
+        await publishReviewFlashcards(bufferedCards)
+    }
+
+    private func commitReviewFlashcardsCacheIfComplete() throws -> [Flashcard] {
+        let allCards = try withReviewFlashcardStateLock { () throws -> [Flashcard] in
+            guard let expectedPageCount = reviewFlashcardNetworkExpectedPageCount,
+                  let expectedTotal = reviewFlashcardNetworkExpectedTotal else {
+                throw ReviewFlashcardCacheCommitError.incomplete
+            }
+
+            guard expectedPageCount > 0 else {
+                return []
+            }
+
+            let hasEveryPage = (1...expectedPageCount).allSatisfy { reviewFlashcardNetworkPageBuffer[$0] != nil }
+            guard hasEveryPage else {
+                throw ReviewFlashcardCacheCommitError.incomplete
+            }
+
+            let allCards = (1...expectedPageCount).flatMap { reviewFlashcardNetworkPageBuffer[$0] ?? [] }
+            guard allCards.count == expectedTotal else {
+                logger.debug("Review cache not committed because buffered count \(allCards.count) does not match expected total \(expectedTotal).")
+                throw ReviewFlashcardCacheCommitError.incomplete
+            }
+
+            return allCards
+        }
+
+        FlashcardCache.storeReviewFlashcards(allCards, using: cacheService)
+        return allCards
+    }
+
+    private func resetReviewFlashcardNetworkBuffer() {
+        withReviewFlashcardStateLock {
+            resetReviewFlashcardNetworkBufferLocked()
+        }
+    }
+
+    private func resetReviewFlashcardNetworkBufferLocked() {
+        reviewFlashcardNetworkPageBuffer.removeAll()
+        reviewFlashcardNetworkPagePaginations.removeAll()
+        reviewFlashcardNetworkPagination = nil
+        reviewFlashcardNetworkExpectedPageCount = nil
+        reviewFlashcardNetworkExpectedTotal = nil
+    }
+
+    private func bufferedReviewFlashcardsPage(page: Int) -> ([Flashcard], StrapiPagination?)? {
+        withReviewFlashcardStateLock {
+            guard let bufferedCards = reviewFlashcardNetworkPageBuffer[page] else { return nil }
+            let pagination = reviewFlashcardNetworkPagePaginations[page] ?? reviewFlashcardNetworkPagination
+            return (bufferedCards, pagination)
+        }
+    }
+
+    private func isReviewFlashcardsPageBuffered(_ page: Int) -> Bool {
+        withReviewFlashcardStateLock {
+            reviewFlashcardNetworkPageBuffer[page] != nil
+        }
+    }
+
+    private func reviewFlashcardNetworkBufferSnapshot() -> (cards: [Flashcard], pageCount: Int, expectedPageCount: Int) {
+        withReviewFlashcardStateLock {
+            let cards = reviewFlashcardNetworkPageBuffer.keys.sorted().flatMap { reviewFlashcardNetworkPageBuffer[$0] ?? [] }
+            return (cards, reviewFlashcardNetworkPageBuffer.count, reviewFlashcardNetworkExpectedPageCount ?? 0)
+        }
+    }
+
+    private enum ReviewFlashcardCacheCommitError: Error {
+        case incomplete
+    }
+
+    private func fetchFlashcardsPageFromNetwork(
+        page: Int,
+        pageSize: Int,
+        reviewTier: String? = nil,
+        sortByMostRecentCreation: Bool = false
+    ) async throws -> ([Flashcard], StrapiPagination?) {
         guard var urlComponents = URLComponents(string: "\(Config.strapiBaseUrl)/api/flashcards/mine") else { throw URLError(.badURL) }
-        urlComponents.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "pagination[page]", value: "\(page)"),
             URLQueryItem(name: "pagination[pageSize]", value: "\(pageSize)"),
             URLQueryItem(name: "populate[word_definition][populate]", value: "word,partOfSpeech"),
             URLQueryItem(name: "locale", value: "all")
         ]
+        if let reviewTier, !reviewTier.isEmpty {
+            queryItems.append(URLQueryItem(name: "tier", value: reviewTier))
+        }
+        if sortByMostRecentCreation {
+            queryItems.append(URLQueryItem(name: "sort[0]", value: "createdAt:desc"))
+        }
+        urlComponents.queryItems = queryItems
         guard let url = urlComponents.url else { throw URLError(.badURL) }
         let response: StrapiListResponse<StrapiFlashcard> = try await networkManager.fetchDirect(from: url)
         return ((response.data ?? []).map(transformStrapiCard), response.meta?.pagination)
@@ -212,6 +684,7 @@ class FlashcardService {
         let attributes = strapiCard.attributes
         return Flashcard(
             id: strapiCard.id,
+            createdAt: attributes.createdAt,
             wordDefinition: attributes.wordDefinition?.data,
             lastReviewedAt: attributes.lastReviewedAt,
             correctStreak: attributes.correctStreak ?? 0,
@@ -219,5 +692,82 @@ class FlashcardService {
             isRemembered: attributes.isRemembered,
             reviewTire: attributes.reviewTire?.data?.attributes.tier
         )
+    }
+
+    private func sortByMostRecentCreation(_ cards: [Flashcard]) -> [Flashcard] {
+        cards.sorted { lhs, rhs in
+            switch (lhs.createdAt, rhs.createdAt) {
+            case let (leftDate?, rightDate?) where leftDate != rightDate:
+                return leftDate > rightDate
+            default:
+                return lhs.id > rhs.id
+            }
+        }
+    }
+
+    private func publishReviewFlashcards(_ cards: [Flashcard]) async {
+        await MainActor.run {
+            self.reviewFlashcards = cards
+        }
+    }
+
+    private func setReviewFlashcardsFullLoadActive(_ isActive: Bool) async {
+        await MainActor.run {
+            self.isLoadingAllReviewFlashcards = isActive
+        }
+    }
+
+    private func publishFlashcards(_ cards: [Flashcard]) async {
+        await MainActor.run {
+            self.flashcards = cards
+        }
+    }
+
+    private func publishStatistics(_ statistics: StrapiStatistics?) async {
+        let nextFetchAt = nextFlashcardStatisticsFetchDate(from: statistics)
+        await MainActor.run {
+            self.flashcardStatistics = statistics
+            self.nextFlashcardStatisticsFetchAt = nextFetchAt
+        }
+    }
+
+    private func setFlashcardsLoading(_ isLoading: Bool) async {
+        await MainActor.run {
+            self.isLoadingFlashcards = isLoading
+        }
+    }
+
+    private func setFlashcardsErrorMessage(_ message: String?) async {
+        await MainActor.run {
+            self.flashcardsErrorMessage = message
+        }
+    }
+
+    private func setStatisticsLoading(_ isLoading: Bool) async {
+        await MainActor.run {
+            self.isLoadingStatistics = isLoading
+        }
+    }
+
+    private func setStatisticsErrorMessage(_ message: String?) async {
+        await MainActor.run {
+            self.statisticsErrorMessage = message
+        }
+    }
+
+    private func nextFlashcardStatisticsFetchDate(from statistics: StrapiStatistics?) -> Date? {
+        guard let statistics else {
+            return nil
+        }
+
+        guard statistics.dueForReview == 0 else {
+            return nil
+        }
+
+        guard let nextFetchAt = statistics.nextFetchAt else {
+            return nil
+        }
+
+        return dateFormatter.date(from: nextFetchAt)
     }
 }

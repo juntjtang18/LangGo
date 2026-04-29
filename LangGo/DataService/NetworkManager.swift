@@ -8,8 +8,10 @@ class NetworkManager {
     static let shared = NetworkManager()
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private let session: URLSession
     private let keychain = Keychain(service: Config.keychainService)
     private let logger = Logger(subsystem: "com.langGo.swift", category: "NetworkManager")
+    private let timingLogEnabledKey = "isNetworkTimingLogEnabled"
 
     private init() {
         decoder = JSONDecoder()
@@ -23,6 +25,14 @@ class NetworkManager {
         
         decoder.dateDecodingStrategy = .formatted(formatter)
         encoder.dateEncodingStrategy = .formatted(formatter)
+
+        let configuration = URLSessionConfiguration.default
+        configuration.waitsForConnectivity = true
+        session = URLSession(configuration: configuration)
+    }
+
+    private var isTimingLogEnabled: Bool {
+        UserDefaults.standard.bool(forKey: timingLogEnabledKey)
     }
 
     // MARK: - Generic HTTP Request Methods
@@ -93,17 +103,61 @@ class NetworkManager {
         let _: EmptyResponse = try await performRequest(url: url, method: "DELETE")
     }
 
+    /// Performs a DELETE request with additional headers, expecting an empty response.
+    func delete(at url: URL, headers: [String: String]) async throws {
+        let _: EmptyResponse = try await performRequest(url: url, method: "DELETE", headers: headers)
+    }
+
+    /// Uploads a single multipart file and decodes the response.
+    func uploadMultipart<ResponseBody: Decodable>(
+        to url: URL,
+        fileData: Data,
+        fieldName: String = "files",
+        fileName: String,
+        mimeType: String,
+        additionalFields: [String: String] = [:]
+    ) async throws -> ResponseBody {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let body = createMultipartBody(
+            boundary: boundary,
+            fileData: fileData,
+            fieldName: fieldName,
+            fileName: fileName,
+            mimeType: mimeType,
+            additionalFields: additionalFields
+        )
+        return try await performMultipartRequest(
+            url: url,
+            method: "POST",
+            body: body,
+            contentType: "multipart/form-data; boundary=\(boundary)"
+        )
+    }
+
     // MARK: - Private Core Request Function
 
+    /// Fetches a resource without an Authorization header. Use for public Strapi endpoints
+    /// where sending a stale JWT causes a 401 even though no auth is required.
+    func fetchPublic<T: Decodable>(from url: URL) async throws -> T {
+        let emptyBody: EmptyPayload? = nil
+        return try await performRequest(url: url, method: "GET", body: emptyBody, skipAuth: true)
+    }
+
     /// Generic function to perform any HTTP request, handle authentication, errors, and decoding.
-    private func performRequest<ResponseBody: Decodable, RequestBody: Encodable>(url: URL, method: String, body: RequestBody? = nil) async throws -> ResponseBody {
+    private func performRequest<ResponseBody: Decodable, RequestBody: Encodable>(
+        url: URL,
+        method: String,
+        body: RequestBody? = nil,
+        headers: [String: String] = [:],
+        skipAuth: Bool = false
+    ) async throws -> ResponseBody {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         // Authentication endpoint check for JWT
         let isAuthRequest = url.absoluteString.contains("/api/auth/local") || url.absoluteString.contains("/api/auth/local/register")
-        if let token = keychain["jwt"], !isAuthRequest {
+        if !skipAuth, let token = keychain["jwt"], !isAuthRequest {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
@@ -111,20 +165,40 @@ class NetworkManager {
             request.httpBody = try encoder.encode(body)
         }
 
+        for (headerField, value) in headers {
+            request.setValue(value, forHTTPHeaderField: headerField)
+        }
+
         // --- NEW REQUEST LOG ---
         logger.debug("➡️ \(method) \(url.absoluteString)")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let start = Date()
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            logger.error("🔴 Network error: \(method) \(url.absoluteString) — \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+        let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
         guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         
         // --- NEW RESPONSE LOG ---
         let responseBodyString = String(data: data, encoding: .utf8) ?? "[No response body]"
         let logBody = responseBodyString.count > 1000 ? "\(responseBodyString.prefix(1000))... (truncated)" : responseBodyString
         logger.debug("⬅️ \(httpResponse.statusCode) from \(method) \(url.absoluteString) with body: \(logBody)")
+        if isTimingLogEnabled {
+            logger.debug("⏱️ \(method) \(url.path(percentEncoded: false)) completed in \(elapsedMs)ms (\(data.count) bytes, status \(httpResponse.statusCode))")
+        }
 
         guard (200...299).contains(httpResponse.statusCode) else {
             let errorBody = String(data: data, encoding: .utf8) ?? "No response body"
             logger.error("HTTP Error: \(method) request to \(url) failed with status code \(httpResponse.statusCode). Body: \(errorBody)")
+            if httpResponse.statusCode == 401, !skipAuth, keychain["jwt"] != nil {
+                try? keychain.remove("jwt")
+                logger.warning("⚠️ 401 on authenticated request — cleared stale JWT from keychain.")
+            }
             if let errorResponse = try? decoder.decode(StrapiErrorResponse.self, from: data) {
                 // Throw a custom error with specific Strapi message
                 throw NSError(domain: "NetworkManager.StrapiError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorResponse.error.message])
@@ -158,7 +232,107 @@ class NetworkManager {
         let emptyBody: EmptyPayload? = nil
         return try await performRequest(url: url, method: method, body: emptyBody)
     }
+
+    private func performRequest<ResponseBody: Decodable>(
+        url: URL,
+        method: String,
+        headers: [String: String]
+    ) async throws -> ResponseBody {
+        let emptyBody: EmptyPayload? = nil
+        return try await performRequest(url: url, method: method, body: emptyBody, headers: headers)
+    }
+
+    private func performMultipartRequest<ResponseBody: Decodable>(
+        url: URL,
+        method: String,
+        body: Data,
+        contentType: String
+    ) async throws -> ResponseBody {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+
+        let isAuthRequest = url.absoluteString.contains("/api/auth/local") || url.absoluteString.contains("/api/auth/local/register")
+        if let token = keychain["jwt"], !isAuthRequest {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        request.httpBody = body
+
+        logger.debug("➡️ \(method) \(url.absoluteString)")
+
+        let start = Date()
+        let (data, response) = try await session.data(for: request)
+        let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
+        guard let httpResponse = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+
+        let responseBodyString = String(data: data, encoding: .utf8) ?? "[No response body]"
+        let logBody = responseBodyString.count > 1000 ? "\(responseBodyString.prefix(1000))... (truncated)" : responseBodyString
+        logger.debug("⬅️ \(httpResponse.statusCode) from \(method) \(url.absoluteString) with body: \(logBody)")
+        if isTimingLogEnabled {
+            logger.debug("⏱️ \(method) \(url.path(percentEncoded: false)) completed in \(elapsedMs)ms (\(data.count) bytes, status \(httpResponse.statusCode))")
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorBody = String(data: data, encoding: .utf8) ?? "No response body"
+            logger.error("HTTP Error: \(method) request to \(url) failed with status code \(httpResponse.statusCode). Body: \(errorBody)")
+            if let errorResponse = try? decoder.decode(StrapiErrorResponse.self, from: data) {
+                throw NSError(domain: "NetworkManager.StrapiError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorResponse.error.message])
+            }
+            throw URLError(.badServerResponse, userInfo: [NSLocalizedDescriptionKey: "Received status code \(httpResponse.statusCode)."])
+        }
+
+        if data.isEmpty {
+            if ResponseBody.self is EmptyResponse.Type {
+                return EmptyResponse() as! ResponseBody
+            }
+            logger.error("Decoding Error: Expected \(ResponseBody.self) but received empty data.")
+            throw URLError(.cannotParseResponse)
+        }
+
+        do {
+            return try decoder.decode(ResponseBody.self, from: data)
+        } catch {
+            logger.error("Decoding Error: Failed to decode \(ResponseBody.self). Error: \(error.localizedDescription)")
+            logger.error("Decoding Error Details: \(error)")
+            if let jsonString = String(data: data, encoding: .utf8) { logger.error("Raw JSON: \(jsonString)") }
+            throw error
+        }
+    }
+
+    private func createMultipartBody(
+        boundary: String,
+        fileData: Data,
+        fieldName: String,
+        fileName: String,
+        mimeType: String,
+        additionalFields: [String: String]
+    ) -> Data {
+        var body = Data()
+        let lineBreak = "\r\n"
+
+        for (name, value) in additionalFields {
+            body.appendString("--\(boundary)\(lineBreak)")
+            body.appendString("Content-Disposition: form-data; name=\"\(name)\"\(lineBreak)\(lineBreak)")
+            body.appendString("\(value)\(lineBreak)")
+        }
+
+        body.appendString("--\(boundary)\(lineBreak)")
+        body.appendString("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\(lineBreak)")
+        body.appendString("Content-Type: \(mimeType)\(lineBreak)\(lineBreak)")
+        body.append(fileData)
+        body.appendString(lineBreak)
+        body.appendString("--\(boundary)--\(lineBreak)")
+
+        return body
+    }
 }
 
 // This struct is only for internal `performRequest` overloads that might not have a body.
 private struct EmptyPayload: Codable {}
+
+private extension Data {
+    mutating func appendString(_ string: String) {
+        append(Data(string.utf8))
+    }
+}

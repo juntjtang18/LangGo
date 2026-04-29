@@ -21,7 +21,7 @@ struct VocapageView: View {
             VStack {
                 if vocapage == nil {
                     ProgressView()
-                } else if let vocapage = vocapage {
+                } else if vocapage != nil {
                     VocapageContentListView(
                         sortedFlashcards: sortedFlashcards,
                         showBaseText: showBaseText,
@@ -116,4 +116,3 @@ private struct VocapageContentListView: View {
         }
     }
 }
-

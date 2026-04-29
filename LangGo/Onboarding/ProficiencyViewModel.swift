@@ -9,32 +9,32 @@
 // Onboarding/ProficiencyViewModel.swift
 
 import SwiftUI
+import os
 
 @MainActor
 class ProficiencyViewModel: ObservableObject {
     @Published var proficiencyLevels: [ProficiencyLevel] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
-    
+
     private let settingsService = DataServices.shared.settingsService
-    
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "ProficiencyViewModel")
+
     func fetchLevels() async {
-        // Avoid refetching if data is already loaded.
         guard proficiencyLevels.isEmpty else { return }
-        
+
         isLoading = true
         errorMessage = nil
-        
-        // Get the user's selected language from UserDefaults.
+
         let locale = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "en"
-        
+
         do {
             proficiencyLevels = try await settingsService.fetchProficiencyLevels(locale: locale)
         } catch {
             errorMessage = "Could not load proficiency levels. Please check your connection."
-            print("Error fetching proficiency levels: \(error.localizedDescription)")
+            logger.error("❌ fetchProficiencyLevels(locale: \(locale, privacy: .public)) failed: \(error, privacy: .public)")
         }
-        
+
         isLoading = false
     }
 }

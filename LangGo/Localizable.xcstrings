@@ -10,6 +10,9 @@
     "(%@)" : {
 
     },
+    "#8" : {
+
+    },
     "%@ " : {
 
     },
@@ -36,7 +39,7 @@
     "%lld" : {
 
     },
-    "%lld due" : {
+    "%lld min read" : {
 
     },
     "%lld of %lld" : {
@@ -50,7 +53,65 @@
         }
       }
     },
+    "%lld words" : {
+
+    },
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "%lld/150" : {
+
+    },
+    "%lld%%" : {
+
+    },
+    "•" : {
+
+    },
+    "+%lld new" : {
+
+    },
+    "+1 (555) 123-4567" : {
+
+    },
+    "+124" : {
+
+    },
+    "<" : {
+
+    },
+    ">" : {
+
+    },
+    "⚠️ Note" : {
+
+    },
+    "⚠️ Warning" : {
+
+    },
+    "1,243 learners" : {
+
+    },
+    "2,847" : {
+
+    },
+    "ACHIEVEMENTS" : {
+
+    },
     "Action successful!" : {
+
+    },
+    "Add" : {
+
+    },
+    "Add Article" : {
 
     },
     "Add New Word" : {
@@ -64,6 +125,9 @@
       }
     },
     "Add some words to your vocabook to get started." : {
+
+    },
+    "Add Tags" : {
 
     },
     "Add to VocaBook" : {
@@ -89,6 +153,9 @@
     "AI Conversation Partner" : {
 
     },
+    "Alex Johnson" : {
+
+    },
     "All Words" : {
 
     },
@@ -96,6 +163,24 @@
 
     },
     "Are you sure?" : {
+
+    },
+    "Article" : {
+
+    },
+    "Article Error" : {
+
+    },
+    "Article Reader" : {
+
+    },
+    "Article Title" : {
+
+    },
+    "Articles" : {
+
+    },
+    "Ascent" : {
 
     },
     "Back" : {
@@ -126,13 +211,22 @@
         }
       }
     },
+    "Back to Library" : {
+
+    },
     "Base (%@)" : {
 
     },
     "Base Language" : {
 
     },
+    "Browse & manage your vocabulary" : {
+
+    },
     "by %@" : {
+
+    },
+    "Camera Access Needed" : {
 
     },
     "Cancel" : {
@@ -149,6 +243,7 @@
       }
     },
     "CHANGE PASSWORD" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -176,6 +271,15 @@
         }
       }
     },
+    "Change Profile Photo" : {
+
+    },
+    "Choose how you'd like to add content to your library" : {
+
+    },
+    "Choose the language you want LangGo to use as your native language when learning vocabulary." : {
+
+    },
     "Close" : {
       "localizations" : {
         "zh-Hans" : {
@@ -186,7 +290,11 @@
         }
       }
     },
+    "Coming Soon" : {
+
+    },
     "Complete some lessons or add new words to get cards for your quiz." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -196,7 +304,11 @@
         }
       }
     },
+    "Confirm Account Deletion" : {
+
+    },
     "Confirm New Password" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -290,7 +402,17 @@
         }
       }
     },
+    "Could not load more cards: %@" : {
+
+    },
+    "Could not load review cards." : {
+
+    },
+    "Current password" : {
+
+    },
     "Current Password" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -318,13 +440,13 @@
         }
       }
     },
+    "CUSTOM TAG" : {
+
+    },
     "Cycle All" : {
 
     },
     "Cycle Page" : {
-
-    },
-    "Daily recommendations" : {
 
     },
     "Data Options" : {
@@ -356,6 +478,12 @@
       }
     },
     "Delete" : {
+
+    },
+    "DELETE" : {
+
+    },
+    "Delete Account" : {
 
     },
     "Delete Word" : {
@@ -429,6 +557,12 @@
     "Due Words" : {
 
     },
+    "Edit Article" : {
+
+    },
+    "Edit Profile" : {
+
+    },
     "Edit Word" : {
 
     },
@@ -470,6 +604,9 @@
         }
       }
     },
+    "Enter tag name" : {
+
+    },
     "Enter target word" : {
 
     },
@@ -482,6 +619,9 @@
           }
         }
       }
+    },
+    "Enter your current password to permanently delete your account." : {
+
     },
     "Error: %@" : {
 
@@ -496,10 +636,13 @@
         }
       }
     },
-    "Explore by Course" : {
+    "Extracting article text from your photo." : {
 
     },
     "Filter" : {
+
+    },
+    "Filter by tags" : {
 
     },
     "Finish onboarding and get started" : {
@@ -529,10 +672,19 @@
     "Input Text (%@)" : {
 
     },
-    "LangGo" : {
+    "LangGo Privacy Policy" : {
+
+    },
+    "LangGo Terms of Service" : {
 
     },
     "LangGo to Pro, Ready to GO!" : {
+
+    },
+    "Larger" : {
+
+    },
+    "Leaderboard" : {
 
     },
     "Learn This" : {
@@ -546,6 +698,7 @@
       }
     },
     "LEARNING PREFERENCES" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -594,6 +747,12 @@
         }
       }
     },
+    "Loading article..." : {
+
+    },
+    "Loading Book..." : {
+
+    },
     "Loading cards..." : {
       "localizations" : {
         "zh-Hans" : {
@@ -605,6 +764,15 @@
       }
     },
     "Loading Exam..." : {
+
+    },
+    "Loading more cards..." : {
+
+    },
+    "Loading more..." : {
+
+    },
+    "Loading review cards..." : {
 
     },
     "Loading stories..." : {
@@ -629,6 +797,9 @@
           }
         }
       }
+    },
+    "Log Out" : {
+
     },
     "Login" : {
       "localizations" : {
@@ -692,7 +863,14 @@
         }
       }
     },
+    "Network timing log" : {
+
+    },
+    "New Article" : {
+
+    },
     "New Password" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -743,6 +921,9 @@
     "Nice work! You’ve finished today’s due words." : {
 
     },
+    "No article content is available yet." : {
+
+    },
     "No cards available for an exam at this time." : {
 
     },
@@ -757,6 +938,7 @@
       }
     },
     "No Cards for Quiz" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -804,7 +986,13 @@
         }
       }
     },
-    "No tier data yet." : {
+    "No saved articles yet" : {
+
+    },
+    "No tags added yet" : {
+
+    },
+    "No tags yet" : {
 
     },
     "No words to show for this page." : {
@@ -820,6 +1008,15 @@
 
     },
     "Notebook Settings" : {
+
+    },
+    "Notice" : {
+
+    },
+    "NOTIFICATIONS" : {
+
+    },
+    "Notify when words are due" : {
 
     },
     "OK" : {
@@ -850,7 +1047,7 @@
         }
       }
     },
-    "Open %@" : {
+    "Opening Book..." : {
 
     },
     "Page Review" : {
@@ -905,10 +1102,19 @@
     "Previous" : {
 
     },
-    "Proficiency" : {
+    "Privacy & Security" : {
 
     },
-    "Proficiency levels could not be loaded." : {
+    "Privacy Policy" : {
+
+    },
+    "Processing OCR..." : {
+
+    },
+    "Processing..." : {
+
+    },
+    "Proficiency" : {
 
     },
     "Profile" : {
@@ -939,10 +1145,11 @@
         }
       }
     },
-    "Profile / Menu" : {
+    "Profile Photo" : {
 
     },
     "Profile Update" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -998,6 +1205,9 @@
         }
       }
     },
+    "QUICK SELECT" : {
+
+    },
     "Read" : {
 
     },
@@ -1008,6 +1218,9 @@
 
     },
     "Reading Session" : {
+
+    },
+    "Reading Settings" : {
 
     },
     "Recording Error" : {
@@ -1041,9 +1254,6 @@
         }
       }
     },
-    "Refresh statistics" : {
-
-    },
     "Repeat Word" : {
 
     },
@@ -1075,10 +1285,10 @@
         }
       }
     },
-    "Review Complete" : {
+    "Retake" : {
 
     },
-    "Review Reminders" : {
+    "Review Complete" : {
 
     },
     "Review Session" : {
@@ -1143,10 +1353,16 @@
     "Save to Vocabook" : {
 
     },
+    "Saving Article..." : {
+
+    },
     "Saving..." : {
 
     },
     "Search" : {
+
+    },
+    "Search vocabulary..." : {
 
     },
     "Searching…" : {
@@ -1159,6 +1375,15 @@
 
     },
     "Select a Voice" : {
+
+    },
+    "Select Tags" : {
+
+    },
+    "SELECTED (%lld)" : {
+
+    },
+    "Selected words can be translated and added to your vocabook." : {
 
     },
     "Session Complete!" : {
@@ -1193,6 +1418,9 @@
       }
     },
     "Show Base Text" : {
+
+    },
+    "Show me on the leaderboard" : {
 
     },
     "Sign Up" : {
@@ -1257,16 +1485,22 @@
     "Skip onboarding" : {
 
     },
-    "Speaking" : {
+    "Smaller" : {
 
     },
     "Standard Voices" : {
+
+    },
+    "Start Card Review" : {
 
     },
     "Start Reading" : {
 
     },
     "Start recording" : {
+
+    },
+    "Start writing or paste your article content here..." : {
 
     },
     "Stop" : {
@@ -1310,15 +1544,11 @@
         }
       }
     },
-    "Streak %lld–%lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Streak %1$lld–%2$lld"
-          }
-        }
-      }
+    "TAGS" : {
+
+    },
+    "Tap Any Word to Translate" : {
+
     },
     "Target (%@)" : {
 
@@ -1326,10 +1556,25 @@
     "Target word" : {
 
     },
+    "Terms of Service" : {
+
+    },
     "The correct answer is: **%@**" : {
 
     },
     "The top row plays the standard voice; the bottom and right buttons play your recording. Both save a reference waveform." : {
+
+    },
+    "These terms describe the rules for using LangGo, your account responsibilities, and the limits and conditions that apply to the service." : {
+
+    },
+    "This action cannot be undone. All your vocabulary, progress, and account data will be permanently deleted." : {
+
+    },
+    "This action is permanent. Enter your current password to delete your account and sign out." : {
+
+    },
+    "This policy explains how LangGo uses account information, learning content, and device permissions when you use the app." : {
 
     },
     "This will control data refreshing behavior in a future update." : {
@@ -1363,7 +1608,13 @@
     "This word will be permanently deleted from your vocabook." : {
 
     },
-    "Tier Breakdown" : {
+    "Total Points" : {
+
+    },
+    "Total Vocabulary" : {
+
+    },
+    "Total Words" : {
 
     },
     "Translate" : {
@@ -1406,7 +1657,16 @@
     "Translation unavailable." : {
 
     },
+    "TYPE \"DELETE\" TO CONFIRM" : {
+
+    },
     "Type or hold to speak..." : {
+
+    },
+    "Unable to Save" : {
+
+    },
+    "Unavailable" : {
 
     },
     "Unit 1 Introductions" : {
@@ -1443,10 +1703,38 @@
     "Unlock with Premium" : {
 
     },
+    "Up 4" : {
+
+    },
+    "Up 4 spots" : {
+
+    },
+    "Update Password" : {
+
+    },
+    "Updating your article and tags." : {
+
+    },
     "Updating..." : {
 
     },
+    "Uploading Photo..." : {
+
+    },
+    "Uploading..." : {
+
+    },
+    "Use Photo" : {
+
+    },
+    "Use Scan Article or Manual Input to create your first article." : {
+
+    },
+    "Use this photo for OCR?" : {
+
+    },
     "USER PROFILE" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -1475,6 +1763,7 @@
       }
     },
     "Username" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -1501,6 +1790,9 @@
           }
         }
       }
+    },
+    "Username cannot be changed right now" : {
+
     },
     "Verifying Session..." : {
       "localizations" : {
@@ -1530,19 +1822,22 @@
         }
       }
     },
+    "View All" : {
+
+    },
+    "View Leaderboard" : {
+
+    },
     "View Mode" : {
 
     },
-    "Vocabulary" : {
+    "Vocabook" : {
 
     },
     "Vocabulary Notebook Settings" : {
 
     },
     "Want to remember 10× more — with less effort?" : {
-
-    },
-    "Welcome back!" : {
 
     },
     "Welcome to LangGo" : {
@@ -1576,7 +1871,7 @@
     "What is your native language?" : {
 
     },
-    "What would you like to practice today?" : {
+    "When enabled, your progress and rank will be visible to other users on the leaderboard" : {
 
     },
     "Without review, most people forget 90% of new words in 2 days. Our smart Vocabulary Notebook reminds you only when you’re about to forget — not too soon, not too late." : {
@@ -1586,6 +1881,9 @@
 
     },
     "Word Repeat" : {
+
+    },
+    "Word Review Reminders" : {
 
     },
     "Wrong" : {
@@ -1620,6 +1918,21 @@
 
     },
     "You have no words due for review." : {
+
+    },
+    "You'll still see the leaderboard, but others won't see your rank or username." : {
+
+    },
+    "Your complete vocabulary library" : {
+
+    },
+    "Your journey to glory" : {
+
+    },
+    "Your latest words will appear here." : {
+
+    },
+    "Your Score" : {
 
     }
   },

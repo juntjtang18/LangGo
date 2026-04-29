@@ -1,0 +1,12 @@
+ The fix is complete. Summary of what happened and what was changed:                                                                                                                                                               
+                                                                                                                                                                                                                                    
+  Root cause: iOS keychain data persists across app reinstalls. The user had a stale/expired JWT from a previous install. Strapi validates the JWT header on every request before checking permissions — so even the public         
+  /api/proficiency-levels endpoint returned 401 when an invalid token was sent.                                                                                                                                                     
+                                                                                                                                                                                                                                    
+  Three changes:                                                                                                                                                                                                                    
+
+  1. NetworkManager.fetchPublic (new method) — makes a GET request without an Authorization header. Use this for any public Strapi endpoint where the JWT is irrelevant.                                                            
+  2. SettingsService.fetchLevels(for:) — now calls fetchPublic instead of fetchDirect. Proficiency levels is an onboarding endpoint that needs no auth; it should never send a JWT.
+  3. NetworkManager.performRequest on 401 — automatically removes the stale JWT from the keychain when an authenticated request returns 401. This prevents the stale token from poisoning future requests after the user re-opens   
+  the app. 
+

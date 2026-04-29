@@ -88,8 +88,8 @@ class VocabookViewModel: ObservableObject {
             totalCards            = stats.totalCards
             rememberedCount       = stats.remembered
             dueForReviewCount     = stats.dueForReview
-            reviewedCount         = stats.reviewed
-            hardToRememberCount   = stats.hardToRemember
+            reviewedCount         = stats.reviewed ?? 0
+            hardToRememberCount   = stats.hardToRemember ?? 0
             tierStats             = stats.byTier.sorted { $0.min_streak < $1.min_streak }
         } catch {
             logger.error("loadStatistics failed: \(error.localizedDescription)")
