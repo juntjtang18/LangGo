@@ -29,7 +29,7 @@ platform :ios do
 
     build_app(
       scheme: "LangGo",
-      export_method: "app-store"
+      export_method: "app-store",
       xcargs: "-allowProvisioningUpdates"
     )
 
