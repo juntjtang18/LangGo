@@ -31,6 +31,14 @@ Create App Store signing certs and profiles
 
 Build and upload to TestFlight
 
+### ios nuke_signing
+
+```sh
+[bundle exec] fastlane ios nuke_signing
+```
+
+Delete old distribution signing from match
+
 ----
 
 This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
