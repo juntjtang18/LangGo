@@ -56,10 +56,7 @@ class FlashcardViewModel: ObservableObject {
         logger.info("Preparing review session from available review cards.")
         isLoadingReviewCards = true
         reviewErrorMessage = nil
-
-        if reviewCards.isEmpty {
-            reviewCardIds.removeAll()
-        }
+        resetReviewSessionState()
 
         do {
             let availableCards = try await flashcardService.fetchAvailableReviewFlashcards(pageSize: 100)
@@ -68,9 +65,6 @@ class FlashcardViewModel: ObservableObject {
         } catch {
             logger.error("Could not prepare review session. Error: \(error.localizedDescription)")
             reviewErrorMessage = error.localizedDescription
-            if reviewCards.isEmpty {
-                reviewCardIds.removeAll()
-            }
         }
 
         isLoadingReviewCards = false
@@ -78,6 +72,11 @@ class FlashcardViewModel: ObservableObject {
         // The service owns the shared full-load task. This reuses an existing
         // autoload if ExamView or another review mode already started one.
         flashcardService.ensureReviewFlashcardsFullyLoaded(pageSize: 100)
+    }
+
+    private func resetReviewSessionState() {
+        reviewCards.removeAll()
+        reviewCardIds.removeAll()
     }
 
     private func mergeReviewCards(_ cards: [Flashcard]) {

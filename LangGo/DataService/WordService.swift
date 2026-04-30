@@ -48,12 +48,11 @@ class WordService {
                     UserSessionManager.shared.currentUser?.user_profile?.baseLanguage
                 }
 
-                MyUserPointsCache.patchAfterWordAdded(
+                UserSnapshotCache.patchAfterWordAdded(
                     locales: [nil, selectedLanguage, baseLanguage],
                     using: self.cacheService
                 )
 
-                PointGroupCache.invalidateAll(using: self.cacheService)
                 self.flashcardService.notifyFlashcardsDidChange()
             }
         )

@@ -114,14 +114,10 @@ struct VocabookView: View {
         .task {
             await loadDashboardData()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .flashcardsDidChange)) { _ in
-            Task {
-                await vocabookViewModel.loadStatistics()
-                await refreshRecentAddedCount()
-                await refreshRecentlyAddedCards()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .myUserPointsDidChange)) { _ in
+        // VocabookViewModel already observes .flashcardsDidChange and refreshes
+        // vocabook pages/statistics. Do not also refresh here, or one flashcard
+        // review can trigger duplicate /api/flashcard-stat requests.
+        .onReceive(NotificationCenter.default.publisher(for: .userSnapshotDidChange)) { _ in
             Task {
                 await syncRecentAddedCount()
                 await refreshRecentlyAddedCards()
@@ -461,8 +457,8 @@ struct VocabookView: View {
 
     private func refreshRecentAddedCount() async {
         do {
-            let points = try await DataServices.shared.userPointsService.refreshMyUserPoints(locale: baseLanguageLocale)
-            recentAddedCount = points?.word_add ?? 0
+            let snapshot = try await DataServices.shared.userSnapshotService.refreshSnapshot(locale: baseLanguageLocale)
+            recentAddedCount = snapshot?.word_add ?? 0
         } catch {
             logger.error("Failed to fetch recent added count for vocabook: \(error.localizedDescription, privacy: .public)")
             recentAddedCount = 0
@@ -470,8 +466,8 @@ struct VocabookView: View {
     }
 
     private func syncRecentAddedCount() async {
-        await DataServices.shared.userPointsService.loadMyUserPoints(locale: baseLanguageLocale)
-        recentAddedCount = DataServices.shared.userPointsService.currentMyUserPoints(locale: baseLanguageLocale)?.word_add ?? 0
+        await DataServices.shared.userSnapshotService.loadSnapshot(locale: baseLanguageLocale)
+        recentAddedCount = DataServices.shared.userSnapshotService.currentSnapshot(locale: baseLanguageLocale)?.word_add ?? 0
     }
 
     private func refreshRecentlyAddedCards() async {
@@ -557,9 +553,9 @@ struct VocabookView: View {
         Task {
             do {
                 let vbSetting = try await DataServices.shared.settingsService.fetchVBSetting()
-                let pageSize = vbSetting.attributes.wordsPerPage
-                let tierCards = try await DataServices.shared.flashcardService.fetchAllMyFlashcards(reviewTier: tier.rawValue)
-                let pageCount = tierCards.isEmpty ? 0 : Int(ceil(Double(tierCards.count) / Double(pageSize)))
+                let pageSize = max(1, vbSetting.attributes.wordsPerPage)
+                let tierCount = countForTier(tier)
+                let pageCount = tierCount == 0 ? 0 : Int(ceil(Double(tierCount) / Double(pageSize)))
 
                 if pageCount > 0 {
                     presentedBookModeTier = tier.rawValue

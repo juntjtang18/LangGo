@@ -2,90 +2,102 @@ import Foundation
 import Testing
 @testable import LangGo
 
-struct MyUserPointsCacheTests {
+struct UserSnapshotCacheTests {
     @Test
-    func loadStaleReturnsExpiredPayloadWhileLoadReturnsNil() async throws {
+    func loadStaleReturnsExpiredSnapshotWhileLoadReturnsNil() async throws {
         let cache = CacheService(
             memoryStore: MemoryCacheStore(),
             diskStore: DiskCacheStore(),
             indexStore: CacheIndexStore()
         )
         let locale = "test-expired-\(UUID().uuidString)"
-        let expected = MyUserPointsAttributes(
+        let expected = UserRankSnapshot(
+            id: 8,
+            userid: "60",
             record_date: "2026-04-26T09:00:00.000Z",
-            points: 75,
+            total_points: 75,
             points_add: 12,
             word_count: 30,
             word_add: 4,
             article_count: 2,
             article_add: 1,
-            group_rank_change: 1,
-            rank: 3,
-            rank_change: 1,
-            rank_text: "学习起步者"
+            level_no: 1,
+            level_change: 0,
+            level_title: "幼儿园小班",
+            group_id: 1,
+            group_no: 1,
+            group_rank: 3,
+            group_rank_title: "学习起步者",
+            group_rank_change: 1
         )
 
         defer {
-            cache.invalidate(tag: MyUserPointsCache.userPointsTag)
+            cache.invalidate(tag: UserSnapshotCache.snapshotTag)
         }
 
         cache.saveWithPolicy(
             expected,
-            key: MyUserPointsCache.userPointsKey(locale: locale),
+            key: UserSnapshotCache.snapshotKey(locale: locale),
             ttl: .seconds(0.1),
-            tags: [MyUserPointsCache.userPointsTag]
+            tags: [UserSnapshotCache.snapshotTag]
         )
         try await Task.sleep(for: .milliseconds(250))
 
-        let stale = MyUserPointsCache.loadStale(locale: locale, using: cache)
-        let valid = MyUserPointsCache.load(locale: locale, using: cache)
-        let isExpired = MyUserPointsCache.isExpired(locale: locale, using: cache)
+        let stale = UserSnapshotCache.loadStale(locale: locale, using: cache)
+        let valid = UserSnapshotCache.load(locale: locale, using: cache)
+        let isExpired = UserSnapshotCache.isExpired(locale: locale, using: cache)
 
         #expect(valid == nil)
-        #expect(stale?.points == expected.points)
+        #expect(stale?.total_points == expected.total_points)
         #expect(stale?.word_add == expected.word_add)
-        #expect(stale?.rank_text == expected.rank_text)
+        #expect(stale?.group_rank_title == expected.group_rank_title)
         #expect(isExpired)
     }
 
     @Test
-    func isExpiredIsFalseForFreshPayload() {
+    func isExpiredIsFalseForFreshSnapshot() {
         let cache = CacheService(
             memoryStore: MemoryCacheStore(),
             diskStore: DiskCacheStore(),
             indexStore: CacheIndexStore()
         )
         let locale = "test-fresh-\(UUID().uuidString)"
-        let expected = MyUserPointsAttributes(
+        let expected = UserRankSnapshot(
+            id: 8,
+            userid: "60",
             record_date: "2026-04-26T09:00:00.000Z",
-            points: 88,
+            total_points: 88,
             points_add: 6,
             word_count: 42,
             word_add: 3,
             article_count: 5,
             article_add: 1,
-            group_rank_change: 0,
-            rank: 2,
-            rank_change: 0,
-            rank_text: "学习达人"
+            level_no: 2,
+            level_change: 1,
+            level_title: "学习达人",
+            group_id: 1,
+            group_no: 1,
+            group_rank: 2,
+            group_rank_title: "学习达人",
+            group_rank_change: 0
         )
 
         defer {
-            cache.invalidate(tag: MyUserPointsCache.userPointsTag)
+            cache.invalidate(tag: UserSnapshotCache.snapshotTag)
         }
 
-        MyUserPointsCache.store(expected, locale: locale, using: cache)
+        UserSnapshotCache.store(expected, locale: locale, using: cache)
 
-        let valid = MyUserPointsCache.load(locale: locale, using: cache)
-        let stale = MyUserPointsCache.loadStale(locale: locale, using: cache)
-        let isExpired = MyUserPointsCache.isExpired(locale: locale, using: cache)
+        let valid = UserSnapshotCache.load(locale: locale, using: cache)
+        let stale = UserSnapshotCache.loadStale(locale: locale, using: cache)
+        let isExpired = UserSnapshotCache.isExpired(locale: locale, using: cache)
 
-        #expect(valid?.points == expected.points)
+        #expect(valid?.total_points == expected.total_points)
         #expect(valid?.word_add == expected.word_add)
-        #expect(valid?.rank_text == expected.rank_text)
-        #expect(stale?.points == expected.points)
+        #expect(valid?.group_rank_title == expected.group_rank_title)
+        #expect(stale?.total_points == expected.total_points)
         #expect(stale?.word_add == expected.word_add)
-        #expect(stale?.rank_text == expected.rank_text)
+        #expect(stale?.group_rank_title == expected.group_rank_title)
         #expect(isExpired == false)
     }
 }

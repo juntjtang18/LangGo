@@ -3,7 +3,7 @@ import SwiftUI
 import os
 
 // MARK: - Vocapage Loader
-// This ObservableObject class now handles loading and caching Vocapage data from the network.
+// This ObservableObject owns page-level UI state. FlashcardService owns cache/backend decisions.
 @MainActor
 class VocapageLoader: ObservableObject {
     // The service is now fetched directly from the DataServices singleton.
@@ -47,7 +47,7 @@ class VocapageLoader: ObservableObject {
             let vbSetting = try await settingsService.fetchVBSetting()
             let pageSize = vbSetting.attributes.wordsPerPage
 
-            let (fetchedFlashcards, _) = try await flashcardService.fetchFlashcards(
+            let (fetchedFlashcards, _) = try await flashcardService.fetchVocapageFlashcards(
                 page: vocapageId,
                 pageSize: pageSize,
                 dueOnly: dueWordsOnly,

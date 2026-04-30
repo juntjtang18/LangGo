@@ -46,7 +46,7 @@ class StrapiService {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local") else { throw URLError(.badURL) }
         let response: AuthResponse = try await NetworkManager.shared.post(to: url, body: credentials)
         invalidateAllUserCaches()
-        MyUserPointsCache.invalidate(using: cacheService)
+        UserSnapshotCache.invalidate(using: cacheService)
         return response
     }
 
@@ -55,7 +55,7 @@ class StrapiService {
         guard let url = URL(string: "\(Config.strapiBaseUrl)/api/auth/local/register") else { throw URLError(.badURL) }
         let response: AuthResponse = try await NetworkManager.shared.post(to: url, body: payload)
         invalidateAllUserCaches()
-        MyUserPointsCache.invalidate(using: cacheService)
+        UserSnapshotCache.invalidate(using: cacheService)
         return response
     }
 
@@ -177,49 +177,28 @@ class StrapiService {
             headers: ["X-Account-Delete-Password": currentPassword]
         )
         invalidateAllUserCaches()
-        MyUserPointsCache.invalidate(using: cacheService)
+        UserSnapshotCache.invalidate(using: cacheService)
         UserProfileCache.invalidate(using: cacheService)
     }
 
-    func fetchMyUserPoints(locale: String? = nil) async throws -> MyUserPointsAttributes? {
-        if let cachedPoints = MyUserPointsCache.load(locale: locale, using: cacheService) {
-            return cachedPoints
+    func fetchSnapshot(locale: String? = nil) async throws -> UserRankSnapshot? {
+        if let cachedSnapshot = UserSnapshotCache.load(locale: locale, using: cacheService) {
+            return cachedSnapshot
         }
 
-        logger.debug("StrapiService: Fetching current user points.")
-        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/my-user-points")
+        let userId = await MainActor.run { UserSessionManager.shared.currentUser?.id }
+        guard let userId else { return nil }
+
+        logger.debug("StrapiService: Fetching rank snapshot for user \(userId).")
+        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/rank/users/\(userId)")
         if let locale, !locale.isEmpty {
             components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
         }
         guard let url = components?.url else { throw URLError(.badURL) }
-        let response: MyUserPointsResponse = try await NetworkManager.shared.fetchDirect(from: url)
-        let attributes = response.data?.attributes
-        if let attributes {
-            MyUserPointsCache.store(attributes, locale: locale, using: cacheService)
-        }
-        return attributes
-    }
-
-    func fetchMyPointGroup(locale: String? = nil) async throws -> MyPointGroupData {
-        logger.debug("StrapiService: Fetching current user's point group.")
-        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/my-point-group")
-        if let locale, !locale.isEmpty {
-            components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
-        }
-        guard let url = components?.url else { throw URLError(.badURL) }
-        let response: MyPointGroupResponse = try await NetworkManager.shared.fetchDirect(from: url)
-        return response.data
-    }
-
-    func fetchPointGroupLeaderboard(pointGroupId: Int, locale: String? = nil) async throws -> PointGroupLeaderboardData {
-        logger.debug("StrapiService: Fetching point group leaderboard for group ID \(pointGroupId).")
-        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/point-groups/\(pointGroupId)/leaderboard")
-        if let locale, !locale.isEmpty {
-            components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
-        }
-        guard let url = components?.url else { throw URLError(.badURL) }
-        let response: PointGroupLeaderboardResponse = try await NetworkManager.shared.fetchDirect(from: url)
-        return response.data
+        let response: RankUserResponse = try await NetworkManager.shared.fetchDirect(from: url)
+        let snapshot = response.data.latest_snapshot
+        UserSnapshotCache.store(snapshot, locale: locale, using: cacheService)
+        return snapshot
     }
 
     // MARK: - Flashcard & Review

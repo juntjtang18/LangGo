@@ -657,6 +657,9 @@
     "Font Size" : {
 
     },
+    "Group member rows are not available from the current backend endpoint, so Home shows your live group, rank, and point movement here." : {
+
+    },
     "Hide Base Text" : {
 
     },
@@ -1575,6 +1578,9 @@
 
     },
     "This policy explains how LangGo uses account information, learning content, and device permissions when you use the app." : {
+
+    },
+    "This view is now backed by your latest rank snapshot from `/api/rank/users/:id`." : {
 
     },
     "This will control data refreshing behavior in a future update." : {

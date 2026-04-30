@@ -146,6 +146,47 @@ enum FlashcardCache {
         cacheService.invalidate(tags: [statisticsTag, reviewFlashcardsTag, allMyFlashcardsTag, tierFlashcardsTag, recentFlashcardsTag])
     }
 
+    static func patchAfterFlashcardReview(updatedCard: Flashcard, using cacheService: CacheService = .shared) {
+        // A review only changes one card and the aggregate statistics. Keep the large
+        // flashcard caches usable instead of deleting everything.
+        cacheService.invalidate(tags: [statisticsTag, tierFlashcardsTag])
+        patchAllMyFlashcardsAfterReview(updatedCard: updatedCard, using: cacheService)
+        patchReviewFlashcardsAfterReview(updatedCard: updatedCard, using: cacheService)
+        patchRecentFlashcardsAfterReview(updatedCard: updatedCard, using: cacheService)
+    }
+
+    private static func patchAllMyFlashcardsAfterReview(updatedCard: Flashcard, using cacheService: CacheService) {
+        guard var cards = loadAllMyFlashcards(using: cacheService) else { return }
+        guard let index = cards.firstIndex(where: { $0.id == updatedCard.id }) else { return }
+        cards[index] = updatedCard
+        storeAllMyFlashcards(cards, using: cacheService)
+    }
+
+    private static func patchReviewFlashcardsAfterReview(updatedCard: Flashcard, using cacheService: CacheService) {
+        guard var cards = loadReviewFlashcards(using: cacheService) else { return }
+        cards.removeAll { $0.id == updatedCard.id }
+        storeReviewFlashcards(cards, using: cacheService)
+    }
+
+    private static func patchRecentFlashcardsAfterReview(updatedCard: Flashcard, using cacheService: CacheService) {
+        let prefix = recentFlashcardsKeyPrefix()
+        let keys = cacheService.keys(for: recentFlashcardsTag)
+
+        for key in keys where key.hasPrefix(prefix) {
+            guard var cards = cacheService.loadIfValid(type: [Flashcard].self, from: key),
+                  let index = cards.firstIndex(where: { $0.id == updatedCard.id }) else { continue }
+
+            cards[index] = updatedCard
+            cacheService.saveWithPolicy(
+                cards,
+                key: key,
+                ttl: Policy.recentFlashcardsTTL,
+                tags: [recentFlashcardsTag]
+            )
+        }
+    }
+
+
     static func patchAfterWordAdded(
         flashcard: Flashcard,
         reviewTier: String,

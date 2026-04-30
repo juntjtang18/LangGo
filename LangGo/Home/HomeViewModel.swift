@@ -37,7 +37,7 @@ final class HomeViewModel: ObservableObject {
         let isEnabled: Bool
 
         static let empty = LeaderboardBannerState(
-            title: "No Group Yet",
+            title: "Leaderboard",
             currentUserPosition: nil,
             groupRankChange: nil,
             isEnabled: false
@@ -45,34 +45,23 @@ final class HomeViewModel: ObservableObject {
     }
 
     struct LeaderboardSheetState: Equatable {
-        let groupTitle: String
+        let title: String
+        let rankTitle: String?
         let groupNo: Int?
-        let groupMemberCount: Int
         let currentUserPosition: Int?
         let currentUserPoints: Int
         let currentUserPointsDelta: Int
         let currentUserGroupRankChange: Int
-        let members: [LeaderboardMemberState]
 
         static let empty = LeaderboardSheetState(
-            groupTitle: "Your Group",
+            title: "Leaderboard",
+            rankTitle: nil,
             groupNo: nil,
-            groupMemberCount: 0,
             currentUserPosition: nil,
             currentUserPoints: 0,
             currentUserPointsDelta: 0,
-            currentUserGroupRankChange: 0,
-            members: []
+            currentUserGroupRankChange: 0
         )
-    }
-
-    struct LeaderboardMemberState: Identifiable, Equatable {
-        let id: Int
-        let position: Int
-        let periodPoints: Int
-        let isCurrentUser: Bool
-        let displayName: String
-        let honorTitle: String?
     }
 
     struct ArticleLibraryPreviewState: Identifiable, Equatable {
@@ -98,34 +87,29 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var leaderboardSheetState = LeaderboardSheetState.empty
     @Published private(set) var articleLibraryCount: Int?
     @Published private(set) var articleLibraryPreviews: [ArticleLibraryPreviewState] = []
-    @Published private(set) var isLoadingUserPoints = false
+    @Published private(set) var isLoadingSnapshot = false
     @Published private(set) var nextFlashcardStatisticsFetchAt: Date?
 
-    private let logger = Logger(subsystem: "com.langGo.swift", category: "HomeViewModel")
-    private let userPointsService: UserPointsService
-    private let pointGroupService: PointGroupService
+    private let userSnapshotService: UserSnapshotService
     private let flashcardService: FlashcardService
     private let articleService: ArticleService
     private let localeProvider: () -> String
     private let articlePreviewPageSize: Int
 
     private var cancellables = Set<AnyCancellable>()
-    private var hasLoadedUserPoints = false
+    private var hasLoadedSnapshot = false
     private var hasLoadedFlashcardStatistics = false
-    private var hasLoadedPointGroup = false
     private var hasLoadedArticleLibrary = false
 
     init(
-        userPointsService: UserPointsService? = nil,
-        pointGroupService: PointGroupService? = nil,
+        userSnapshotService: UserSnapshotService? = nil,
         flashcardService: FlashcardService? = nil,
         articleService: ArticleService? = nil,
         articlePreviewPageSize: Int = 3,
         localeProvider: (() -> String)? = nil
     ) {
         let services = DataServices.shared
-        self.userPointsService = userPointsService ?? services.userPointsService
-        self.pointGroupService = pointGroupService ?? services.pointGroupService
+        self.userSnapshotService = userSnapshotService ?? services.userSnapshotService
         self.flashcardService = flashcardService ?? services.flashcardService
         self.articleService = articleService ?? services.articleService
         self.articlePreviewPageSize = articlePreviewPageSize
@@ -138,14 +122,15 @@ final class HomeViewModel: ObservableObject {
     }
 
     func loadIfNeeded() async {
-        await loadUserPointsIfNeeded()
+        await loadSnapshotIfNeeded()
         await loadFlashcardStatisticsIfNeeded()
-        await loadPointGroupIfNeeded()
         await loadArticleLibraryIfNeeded()
     }
 
     func handlePullToRefresh() async {
-        await refreshFlashcardStatistics()
+        await refreshFlashcardStatistics(forceRefresh: true)
+        await ensureSnapshotLoadedFromCache()
+        await refreshArticleLibrary()
     }
 
     func handleScheduledFlashcardStatisticsRefresh() async {
@@ -154,45 +139,22 @@ final class HomeViewModel: ObservableObject {
 
     func handleFlashcardsDidChange() async {
         await refreshFlashcardStatistics(forceRefresh: true)
-        await refreshPointGroup()
     }
 
     func handleSceneDidBecomeActive() async {
-        logger.debug("Home refresh trigger: scene active")
         await refreshVisibleContent()
     }
 
     func handleHomeTabSelected() async {
-        logger.debug("Home refresh trigger: tab selected")
         await refreshVisibleContent()
     }
 
-    func loadLeaderboard() async {
-        guard let pointGroupId = currentPointGroupId() else { return }
-        await pointGroupService.loadPointGroupLeaderboard(
-            pointGroupId: pointGroupId,
-            locale: currentLocale()
-        )
+    func handlePresentedFlowDismissed() async {
+        await refreshVisibleContent()
     }
 
     private func bindServices() {
-        userPointsService.$myUserPoints
-            .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.syncPublishedState()
-                }
-            }
-            .store(in: &cancellables)
-
-        pointGroupService.$myPointGroup
-            .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.syncPublishedState()
-                }
-            }
-            .store(in: &cancellables)
-
-        pointGroupService.$pointGroupLeaderboard
+        userSnapshotService.$latestSnapshot
             .sink { [weak self] _ in
                 Task { @MainActor in
                     self?.syncPublishedState()
@@ -235,38 +197,25 @@ final class HomeViewModel: ObservableObject {
 
     private func refreshVisibleContent() async {
         await refreshFlashcardStatistics()
-        await refreshUserPoints()
-        await refreshPointGroup()
+        await ensureSnapshotLoadedFromCache()
         await refreshArticleLibrary()
     }
 
-    private func loadUserPointsIfNeeded() async {
-        guard !hasLoadedUserPoints else { return }
-        hasLoadedUserPoints = true
-
-        isLoadingUserPoints = true
-        syncPublishedState()
-        defer {
-            isLoadingUserPoints = false
-            syncPublishedState()
-        }
-
-        await userPointsService.loadMyUserPoints(locale: currentLocale())
+    private func loadSnapshotIfNeeded() async {
+        guard !hasLoadedSnapshot else { return }
+        await ensureSnapshotLoadedFromCache()
     }
 
-    private func refreshUserPoints() async {
-        isLoadingUserPoints = true
+    private func ensureSnapshotLoadedFromCache() async {
+        hasLoadedSnapshot = true
+        isLoadingSnapshot = true
         syncPublishedState()
         defer {
-            isLoadingUserPoints = false
+            isLoadingSnapshot = false
             syncPublishedState()
         }
 
-        do {
-            _ = try await userPointsService.refreshMyUserPoints(locale: currentLocale())
-        } catch {
-            logger.error("Failed to fetch user points: \(error.localizedDescription, privacy: .public)")
-        }
+        await userSnapshotService.loadSnapshot(locale: currentLocale())
     }
 
     private func loadFlashcardStatisticsIfNeeded() async {
@@ -289,37 +238,14 @@ final class HomeViewModel: ObservableObject {
         await articleService.refreshUserArticles(page: 1, pageSize: articlePreviewPageSize)
     }
 
-    private func loadPointGroupIfNeeded() async {
-        guard !hasLoadedPointGroup else { return }
-        hasLoadedPointGroup = true
-        await pointGroupService.loadMyPointGroup(locale: currentLocale())
-    }
-
-    private func refreshPointGroup() async {
-        do {
-            _ = try await pointGroupService.refreshMyPointGroup(locale: currentLocale())
-        } catch {
-            logger.error("Failed to fetch point group: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
     private func syncPublishedState() {
-        let locale = currentLocale()
-        let userPoints = userPointsService.currentMyUserPoints(locale: locale)
-        let pointGroup = pointGroupService.currentMyPointGroup(locale: locale)
-        let leaderboard = resolvedLeaderboard(locale: locale, pointGroup: pointGroup)
+        let snapshot = userSnapshotService.currentSnapshot(locale: currentLocale())
 
-        rankPointsState = makeRankPointsCardState(userPoints: userPoints)
+        rankPointsState = makeRankPointsCardState(snapshot: snapshot)
         reviewCardState = makeReviewCardState(statistics: flashcardService.flashcardStatistics)
+        leaderboardBannerState = makeLeaderboardBannerState(snapshot: snapshot)
+        leaderboardSheetState = makeLeaderboardSheetState(snapshot: snapshot)
         nextFlashcardStatisticsFetchAt = flashcardService.nextFlashcardStatisticsFetchAt
-        leaderboardBannerState = makeLeaderboardBannerState(
-            userPoints: userPoints,
-            leaderboard: leaderboard
-        )
-        leaderboardSheetState = makeLeaderboardSheetState(
-            userPoints: userPoints,
-            leaderboard: leaderboard
-        )
         articleLibraryCount = articleService.userArticlesTotalCount
         articleLibraryPreviews = makeArticleLibraryPreviewStates()
     }
@@ -381,48 +307,24 @@ final class HomeViewModel: ObservableObject {
         return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
     }
 
-    private func resolvedLeaderboard(
-        locale: String,
-        pointGroup: MyPointGroupData?
-    ) -> PointGroupLeaderboardData? {
-        guard let pointGroup else { return nil }
-
-        if let pointGroupId = pointGroup.pointGroup?.id,
-           let leaderboard = pointGroupService.currentPointGroupLeaderboard(
-            pointGroupId: pointGroupId,
-            locale: locale
-           ) {
-            return leaderboard
-        }
-
-        return PointGroupLeaderboardData(
-            pointGroup: pointGroup.pointGroup,
-            currentUserPosition: pointGroup.myMembership.positionInGroup,
-            groupMemberCount: pointGroup.myMembership.groupMemberCount,
-            leaderboard: pointGroup.leaderboard
-        )
-    }
-
-    private func makeRankPointsCardState(
-        userPoints: MyUserPointsAttributes?
-    ) -> RankPointsCardState {
-        guard let userPoints else {
+    private func makeRankPointsCardState(snapshot: UserRankSnapshot?) -> RankPointsCardState {
+        guard let snapshot else {
             return RankPointsCardState(
-                rankText: isLoadingUserPoints ? "Loading..." : "Unranked",
+                rankText: isLoadingSnapshot ? "Loading..." : "Unranked",
                 points: nil,
                 pointsDelta: nil,
-                isLoading: isLoadingUserPoints
+                isLoading: isLoadingSnapshot
             )
         }
 
-        let rankText = trimmed(userPoints.rankText).flatMap { !$0.isEmpty ? $0 : nil }
-            ?? (userPoints.rank > 0 ? "#\(userPoints.rank)" : "Unranked")
+        let rankText = trimmed(snapshot.rankText).flatMap { !$0.isEmpty ? $0 : nil }
+            ?? (snapshot.group_rank > 0 ? "#\(snapshot.group_rank)" : "Unranked")
 
         return RankPointsCardState(
             rankText: rankText,
-            points: userPoints.points,
-            pointsDelta: userPoints.points_add,
-            isLoading: isLoadingUserPoints
+            points: snapshot.total_points,
+            pointsDelta: snapshot.points_add,
+            isLoading: isLoadingSnapshot
         )
     }
 
@@ -436,61 +338,48 @@ final class HomeViewModel: ObservableObject {
         )
     }
 
-    private func makeLeaderboardBannerState(
-        userPoints: MyUserPointsAttributes?,
-        leaderboard: PointGroupLeaderboardData?
-    ) -> LeaderboardBannerState {
-        let title: String
-        if let groupRankTitle = trimmed(leaderboard?.pointGroup?.groupRank?.title), !groupRankTitle.isEmpty {
-            title = groupRankTitle
-        } else {
-            title = "No Group Yet"
+    private func makeLeaderboardBannerState(snapshot: UserRankSnapshot?) -> LeaderboardBannerState {
+        guard let snapshot else {
+            return LeaderboardBannerState(
+                title: isLoadingSnapshot ? "Loading..." : "Leaderboard",
+                currentUserPosition: nil,
+                groupRankChange: nil,
+                isEnabled: false
+            )
         }
 
         return LeaderboardBannerState(
-            title: title,
-            currentUserPosition: leaderboard?.currentUserPosition,
-            groupRankChange: userPoints?.group_rank_change,
-            isEnabled: leaderboard?.pointGroup?.id != nil && !isLoadingUserPoints
+            title: leaderboardTitle(for: snapshot),
+            currentUserPosition: snapshot.group_rank > 0 ? snapshot.group_rank : nil,
+            groupRankChange: snapshot.group_rank_change == 0 ? nil : snapshot.group_rank_change,
+            isEnabled: true
         )
     }
 
-    private func makeLeaderboardSheetState(
-        userPoints: MyUserPointsAttributes?,
-        leaderboard: PointGroupLeaderboardData?
-    ) -> LeaderboardSheetState {
-        guard let leaderboard else { return .empty }
-
-        let resolvedUserPoints = userPoints ?? .empty
+    private func makeLeaderboardSheetState(snapshot: UserRankSnapshot?) -> LeaderboardSheetState {
+        guard let snapshot else { return .empty }
 
         return LeaderboardSheetState(
-            groupTitle: leaderboard.pointGroup?.groupRank?.title ?? "Your Group",
-            groupNo: leaderboard.pointGroup?.groupNo,
-            groupMemberCount: leaderboard.groupMemberCount,
-            currentUserPosition: leaderboard.currentUserPosition,
-            currentUserPoints: resolvedUserPoints.points,
-            currentUserPointsDelta: resolvedUserPoints.points_add,
-            currentUserGroupRankChange: resolvedUserPoints.group_rank_change,
-            members: leaderboard.leaderboard.map(makeLeaderboardMemberState)
+            title: leaderboardTitle(for: snapshot),
+            rankTitle: trimmed(snapshot.rankText),
+            groupNo: snapshot.group_no > 0 ? snapshot.group_no : nil,
+            currentUserPosition: snapshot.group_rank > 0 ? snapshot.group_rank : nil,
+            currentUserPoints: snapshot.total_points,
+            currentUserPointsDelta: snapshot.points_add,
+            currentUserGroupRankChange: snapshot.group_rank_change
         )
     }
 
-    private func makeLeaderboardMemberState(
-        member: PointGroupLeaderboardMember
-    ) -> LeaderboardMemberState {
-        LeaderboardMemberState(
-            id: member.id,
-            position: member.position,
-            periodPoints: member.periodPoints,
-            isCurrentUser: member.isCurrentUser,
-            displayName: member.user.username ?? member.user.email ?? "Unknown",
-            honorTitle: member.user.honorTitle?.title
-        )
-    }
+    private func leaderboardTitle(for snapshot: UserRankSnapshot) -> String {
+        if snapshot.group_no > 0 {
+            return "Group \(snapshot.group_no)"
+        }
 
-    private func currentPointGroupId() -> Int? {
-        let locale = currentLocale()
-        return pointGroupService.currentMyPointGroup(locale: locale)?.pointGroup?.id
+        if let rankText = trimmed(snapshot.rankText), !rankText.isEmpty {
+            return rankText
+        }
+
+        return "Leaderboard"
     }
 
     private func currentLocale() -> String {

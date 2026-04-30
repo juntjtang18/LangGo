@@ -5,8 +5,7 @@ final class DataServices {
     static let shared = DataServices()
 
     let authService: AuthService
-    let userPointsService: UserPointsService
-    let pointGroupService: PointGroupService
+    let userSnapshotService: UserSnapshotService
 
     let flashcardService: FlashcardService
     let wordService: WordService
@@ -20,8 +19,7 @@ final class DataServices {
 
     private init() {
         self.authService = AuthService()
-        self.userPointsService = UserPointsService()
-        self.pointGroupService = PointGroupService()
+        self.userSnapshotService = UserSnapshotService()
 
         let flashcardService = FlashcardService()
         self.flashcardService = flashcardService

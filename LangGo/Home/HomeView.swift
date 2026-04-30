@@ -106,10 +106,18 @@ struct HomeView: View {
             }
         }
         .background(Color.white.ignoresSafeArea())
-        .fullScreenCover(isPresented: $isShowingReview) {
+        .fullScreenCover(isPresented: $isShowingReview, onDismiss: {
+            Task {
+                await viewModel.handlePresentedFlowDismissed()
+            }
+        }) {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
-        .fullScreenCover(isPresented: $isShowingQuizReview) {
+        .fullScreenCover(isPresented: $isShowingQuizReview, onDismiss: {
+            Task {
+                await viewModel.handlePresentedFlowDismissed()
+            }
+        }) {
             ExamView()
         }
         .fullScreenCover(isPresented: $isShowingBookMode) {
@@ -134,8 +142,15 @@ struct HomeView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $isShowingAddWord) {
+        .fullScreenCover(isPresented: $isShowingAddWord, onDismiss: {
+            Task {
+                await viewModel.handlePresentedFlowDismissed()
+            }
+        }) {
             NewWordInputView(viewModel: flashcardViewModel)
+        }
+        .fullScreenCover(isPresented: $isShowingLeaderboard) {
+            LeaderboardSheet(state: viewModel.leaderboardSheetState)
         }
         .fullScreenCover(item: $selectedLibraryArticlePreview) { preview in
             ArticleReadingView(
@@ -163,9 +178,6 @@ struct HomeView: View {
                     selectedTab = 2
                 }
             )
-        }
-        .fullScreenCover(isPresented: $isShowingLeaderboard) {
-            LeaderboardSheet(state: viewModel.leaderboardSheetState)
         }
         .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
             Button("OK", role: .cancel) {
@@ -241,7 +253,7 @@ struct HomeView: View {
                 metrics: metrics,
                 state: viewModel.rankPointsState
             )
-                .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity)
 
             HomeLeaderboardCard(
                 metrics: metrics,
@@ -452,10 +464,6 @@ struct HomeView: View {
 
     private func openLeaderboard() {
         isShowingLeaderboard = true
-
-        Task {
-            await viewModel.loadLeaderboard()
-        }
     }
 
     private var placeholderAlertBinding: Binding<Bool> {
@@ -856,6 +864,7 @@ private struct HomeLeaderboardCard: View {
                         Image(systemName: "medal.fill")
                             .font(.system(size: metrics.summaryIconFont, weight: .bold))
                             .foregroundStyle(Color.orange)
+
                         Text(state.title)
                             .font(.system(size: metrics.summaryTitleFont, weight: .bold, design: .rounded))
                             .lineLimit(1)
@@ -877,7 +886,6 @@ private struct HomeLeaderboardCard: View {
                     .frame(height: metrics.summaryTopGap)
 
                 HStack(alignment: .lastTextBaseline, spacing: metrics.summaryValueGap) {
-                    //Spacer().frame(height:3)
                     Text(positionText)
                         .font(.system(size: metrics.summaryValueFont, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color(red: 0.22, green: 0.21, blue: 0.62))
@@ -891,16 +899,6 @@ private struct HomeLeaderboardCard: View {
                             .background(Capsule().fill(changeBackground))
                     }
                 }
-                /*
-                Spacer()
-                    .frame(height: 3)
-
-                Text("Group Position")
-                    .font(.system(size: metrics.summarySubtitleFont, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(red: 0.26, green: 0.24, blue: 0.88))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                 */
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, metrics.summaryCardHorizontalPadding)
@@ -929,7 +927,8 @@ private struct HomeLeaderboardCard: View {
         if let position = state.currentUserPosition {
             return "#\(position)"
         }
-        return "#—"
+
+        return "#-"
     }
 
     private var changeText: String? {
@@ -1059,7 +1058,8 @@ private struct LeaderboardSheet: View {
                         Text("Leaderboard")
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
-                        Text(groupSubtitle)
+
+                        Text(subtitleText)
                             .font(.system(size: 18, weight: .medium, design: .rounded))
                             .foregroundStyle(Color(red: 0.47, green: 0.49, blue: 0.57))
                     }
@@ -1082,10 +1082,10 @@ private struct LeaderboardSheet: View {
                 .padding(.top, 14)
                 .padding(.bottom, 18)
 
-                VStack(spacing: 0) {
+                VStack(spacing: 16) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(state.groupTitle)
+                            Text(state.title)
                                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                                 .foregroundStyle(Color(red: 0.53, green: 0.48, blue: 0.33))
 
@@ -1093,6 +1093,7 @@ private struct LeaderboardSheet: View {
                                 Text(formatNumber(state.currentUserPoints))
                                     .font(.system(size: 44, weight: .heavy, design: .rounded))
                                     .foregroundStyle(Color(red: 0.15, green: 0.17, blue: 0.22))
+
                                 Text(formatDelta(state.currentUserPointsDelta))
                                     .font(.system(size: 18, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
@@ -1106,6 +1107,7 @@ private struct LeaderboardSheet: View {
                                 Image(systemName: "medal.fill")
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundStyle(Color.orange)
+
                                 Text(positionText)
                                     .font(.system(size: 30, weight: .heavy, design: .rounded))
                                     .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
@@ -1130,36 +1132,49 @@ private struct LeaderboardSheet: View {
                             endPoint: .trailing
                         )
                     )
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-                    Divider()
-                        .overlay(Color(red: 0.95, green: 0.83, blue: 0.48))
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("This view is now backed by your latest rank snapshot from `/api/rank/users/:id`.")
+                            .font(.system(size: 17, weight: .medium, design: .rounded))
+                            .foregroundStyle(Color(red: 0.29, green: 0.31, blue: 0.38))
 
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            ForEach(state.members) { member in
-                                LeaderboardRow(member: member)
-                            }
-                        }
+                        Text("Group member rows are not available from the current backend endpoint, so Home shows your live group, rank, and point movement here.")
+                            .font(.system(size: 15, weight: .regular, design: .rounded))
+                            .foregroundStyle(Color(red: 0.47, green: 0.49, blue: 0.57))
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .background(Color(red: 0.97, green: 0.97, blue: 0.99))
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                    Spacer()
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
             }
             .background(Color.white)
         }
     }
 
-    private var groupSubtitle: String {
-        let memberCount = state.groupMemberCount
-        if let groupNo = state.groupNo {
-            return "Group \(groupNo) • \(memberCount) learners"
+    private var subtitleText: String {
+        if let rankTitle = state.rankTitle, let groupNo = state.groupNo {
+            return "\(rankTitle) • Group \(groupNo)"
         }
-        return "\(memberCount) learners"
+        if let rankTitle = state.rankTitle {
+            return rankTitle
+        }
+        if let groupNo = state.groupNo {
+            return "Group \(groupNo)"
+        }
+        return "Your current standing"
     }
 
     private var positionText: String {
         if let position = state.currentUserPosition {
             return "#\(position)"
         }
-        return "—"
+        return "-"
     }
 
     private var movementText: String {
@@ -1190,62 +1205,5 @@ private struct LeaderboardSheet: View {
             return Color(red: 1.00, green: 0.92, blue: 0.92)
         }
         return Color(red: 0.99, green: 0.94, blue: 0.81)
-    }
-}
-
-private struct LeaderboardRow: View {
-    let member: HomeViewModel.LeaderboardMemberState
-
-    var body: some View {
-        HStack(spacing: 12) {
-            if let medal = medalText {
-                Text(medal)
-                    .font(.system(size: 24))
-                    .frame(width: 30)
-            } else {
-                Text("\(member.position)")
-                    .font(.system(size: 17, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color(red: 0.42, green: 0.45, blue: 0.53))
-                    .frame(width: 30, height: 30)
-                    .background(Color(red: 0.96, green: 0.97, blue: 0.99))
-                    .clipShape(Circle())
-            }
-
-            Text(displayName)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(red: 0.27, green: 0.29, blue: 0.36))
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(member.isCurrentUser ? Color.orange : Color(red: 0.63, green: 0.65, blue: 0.72))
-                Text(formatNumber(member.periodPoints))
-                    .font(.system(size: 20, weight: .heavy, design: .rounded))
-                    .foregroundStyle(member.isCurrentUser ? Color(red: 0.84, green: 0.45, blue: 0.12) : Color(red: 0.33, green: 0.36, blue: 0.44))
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 18)
-        .background(member.isCurrentUser ? Color(red: 1.00, green: 0.98, blue: 0.90) : Color.white)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(member.isCurrentUser ? Color(red: 0.95, green: 0.83, blue: 0.48) : Color.black.opacity(0.06))
-                .frame(height: 1)
-        }
-    }
-
-    private var displayName: String {
-        member.displayName
-    }
-
-    private var medalText: String? {
-        switch member.position {
-        case 1: return "🥇"
-        case 2: return "🥈"
-        case 3: return "🥉"
-        default: return nil
-        }
     }
 }

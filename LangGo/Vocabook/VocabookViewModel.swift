@@ -1,5 +1,6 @@
 // LangGo/Vocabook/VocabookViewModel.swift
 
+import Combine
 import Foundation
 import os
 import SwiftUI
@@ -41,6 +42,7 @@ class VocabookViewModel: ObservableObject {
     private let settingsService = DataServices.shared.settingsService
     private let flashcardService = DataServices.shared.flashcardService
     private let wordService = DataServices.shared.wordService
+    private var cancellables = Set<AnyCancellable>()
     
     @Published var vocabook: Vocabook?
     @Published var isLoadingVocabooks = false
@@ -58,6 +60,15 @@ class VocabookViewModel: ObservableObject {
     
     // MODIFIED: The initializer now registers an observer for our custom notification.
     init() {
+        flashcardService.$flashcardStatistics
+            .compactMap { $0 }
+            .sink { [weak self] stats in
+                Task { @MainActor in
+                    self?.applyStatistics(stats)
+                }
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(refreshData),
@@ -85,16 +96,21 @@ class VocabookViewModel: ObservableObject {
     func loadStatistics() async {
         do {
             let stats = try await flashcardService.fetchFlashcardStatistics()
-            totalCards            = stats.totalCards
-            rememberedCount       = stats.remembered
-            dueForReviewCount     = stats.dueForReview
-            reviewedCount         = stats.reviewed ?? 0
-            hardToRememberCount   = stats.hardToRemember ?? 0
-            tierStats             = stats.byTier.sorted { $0.min_streak < $1.min_streak }
+            applyStatistics(stats)
         } catch {
             logger.error("loadStatistics failed: \(error.localizedDescription)")
         }
     }
+
+    private func applyStatistics(_ stats: StrapiStatistics) {
+        totalCards            = stats.totalCards
+        rememberedCount       = stats.remembered
+        dueForReviewCount     = stats.dueForReview
+        reviewedCount         = stats.reviewed ?? 0
+        hardToRememberCount   = stats.hardToRemember ?? 0
+        tierStats             = stats.byTier.sorted { $0.min_streak < $1.min_streak }
+    }
+
     @MainActor
     func deleteCardAndRefresh(cardId: Int) async {
         do {
@@ -117,63 +133,49 @@ class VocabookViewModel: ObservableObject {
     }
     // MARK: - Refactored Vocabook Loading
     
-    /// Fetches and paginates flashcards, either all cards or only those due for review.
-    /// This is now the single source of truth for the vocabook view's data.
-    /// - Parameter dueOnly: If `true`, fetches only review flashcards. Otherwise, fetches all flashcards.
+    /// Builds Book Mode page ids without loading every flashcard.
+    ///
+    /// Book Mode page content is loaded lazily by `VocapageLoader`. This method
+    /// only needs the card count, so it uses flashcard statistics instead of
+    /// `fetchAllMyFlashcards()` / `fetchAllReviewFlashcards()`. That prevents the
+    /// first Book Mode open from blocking on a full backend pagination pass.
+    /// - Parameter dueOnly: If `true`, builds page ids from due-for-review count.
+    ///   Otherwise, builds page ids from total card count.
     func loadVocabookPages(dueOnly: Bool = false) async {
         isLoadingVocabooks = true
         defer { isLoadingVocabooks = false }
 
         do {
-            // 1. Fetch the appropriate full list of cards from the network
-            let allFlashcards: [Flashcard]
-            if dueOnly {
-                allFlashcards = try await flashcardService.fetchAllReviewFlashcards()
-                logger.info("Fetched \(allFlashcards.count) due flashcards for vocabook.")
-            } else {
-                allFlashcards = try await flashcardService.fetchAllMyFlashcards()
-                 logger.info("Fetched \(allFlashcards.count) total flashcards for vocabook.")
-            }
+            async let statsTask = flashcardService.fetchFlashcardStatistics()
+            async let vbSettingTask = settingsService.fetchVBSetting()
 
-            // Keep this as the visible dataset count if you need it elsewhere,
-            // but DO NOT touch `totalCards` here (that comes from statistics).
-            self.totalFlashcards = allFlashcards.count
-            
-            // 2. Get pagination settings
-            let vbSetting = try await settingsService.fetchVBSetting()
-            let pageSize = vbSetting.attributes.wordsPerPage
-            
-            // 3. Paginate the fetched list in memory
-            guard !allFlashcards.isEmpty else {
+            let stats = try await statsTask
+            let vbSetting = try await vbSettingTask
+            let pageSize = max(1, vbSetting.attributes.wordsPerPage)
+
+            let visibleCount = dueOnly ? stats.dueForReview : stats.totalCards
+            self.totalFlashcards = visibleCount
+
+            guard visibleCount > 0 else {
                 self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
+                self.loadCycle += 1
                 return
             }
-            
-            let totalPages = Int(ceil(Double(allFlashcards.count) / Double(pageSize)))
 
-            var pages: [Vocapage] = []
-            for pageNum in 1...totalPages {
-                let startIndex = (pageNum - 1) * pageSize
-                let endIndex = min(startIndex + pageSize, allFlashcards.count)
-                
-                let pageCards = Array(allFlashcards[startIndex..<endIndex])
-                
-                var newPage = Vocapage(id: pageNum, title: "Page \(pageNum)", order: pageNum)
-                newPage.flashcards = pageCards
-                pages.append(newPage)
+            let pageCount = Int(ceil(Double(visibleCount) / Double(pageSize)))
+            let pages = (1...pageCount).map { pageNum in
+                Vocapage(id: pageNum, title: "Page \(pageNum)", order: pageNum, flashcards: nil)
             }
-            
-            let book = Vocabook(id: 1, title: "All Flashcards", vocapages: pages)
-            
-            self.vocabook = book
+
+            self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: pages)
             self.loadCycle += 1
 
+            logger.info("Prepared \(pageCount) vocabook page ids from statistics. dueOnly=\(dueOnly), count=\(visibleCount).")
         } catch {
             logger.error("loadVocabookPages(dueOnly: \(dueOnly)) failed: \(error.localizedDescription)")
             self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
         }
     }
-
     func toggleVocabookExpansion(vocabookId: Int) {
         if expandedVocabooks.contains(vocabookId) {
             expandedVocabooks.remove(vocabookId)
