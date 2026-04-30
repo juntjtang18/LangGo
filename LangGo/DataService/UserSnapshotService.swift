@@ -59,17 +59,11 @@ final class UserSnapshotService: ObservableObject {
         let locale = normalizedLocale(locale)
         loadedLocale = locale
 
-        guard let userId = UserSessionManager.shared.currentUser?.id else {
-            logger.error("Cannot refresh rank snapshot: no authenticated user.")
-            return nil
-        }
+        logger.debug("Fetching rank snapshot for current user.")
 
-        logger.debug("Fetching rank snapshot for user \(userId).")
-        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/rank/users/\(userId)")
-        if let locale, !locale.isEmpty {
-            components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/rank/me") else {
+            throw URLError(.badURL)
         }
-        guard let url = components?.url else { throw URLError(.badURL) }
 
         let response: RankUserResponse = try await networkManager.fetchDirect(from: url)
         let snapshot = response.data.latest_snapshot
