@@ -116,24 +116,12 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $isShowingBookMode) {
             NavigationStack {
-                if let bookModeConfig {
-                    VocapageHostView(
-                        allVocapageIds: bookModeConfig.allPageIds,
-                        selectedVocapageId: bookModeConfig.selectedPageId,
-                        flashcardViewModel: flashcardViewModel,
-                        isShowingDueWordsOnly: $isShowingDueWordsOnly,
-                        onFilterChange: {
-                            Task {
-                                await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
-                            }
-                        }
-                    )
-                } else {
-                    ZStack {
-                        Color(red: 0.98, green: 0.97, blue: 0.94).ignoresSafeArea()
-                        ProgressView("Loading Book...")
-                    }
-                }
+                VocapageHostView(
+                    initialPage: initialBookModePage,
+                    flashcardViewModel: flashcardViewModel,
+                    isShowingDueWordsOnly: $isShowingDueWordsOnly,
+                    onFilterChange: {}
+                )
             }
         }
         .fullScreenCover(isPresented: $isShowingAddWord, onDismiss: {
@@ -470,30 +458,16 @@ struct HomeView: View {
         )
     }
 
-    private var bookModeConfig: BookModeConfig? {
-        let allPageIds = (vocabookViewModel.vocabook?.vocapages ?? []).map(\.id).sorted()
-        guard !allPageIds.isEmpty else { return nil }
-
-        let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-        let selectedPageId = (lastViewedID != 0 && allPageIds.contains(lastViewedID)) ? lastViewedID : (allPageIds.first ?? 1)
-
-        return BookModeConfig(allPageIds: allPageIds, selectedPageId: selectedPageId)
+    private var initialBookModePage: Int {
+        max(1, UserDefaults.standard.integer(forKey: "lastViewedVocapageID"))
     }
 
     private func openBookMode() {
-        guard !isPreparingBookMode else { return }
-        isPreparingBookMode = true
-
-        Task {
-            await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
-            isPreparingBookMode = false
-
-            if bookModeConfig != nil {
-                isShowingBookMode = true
-            } else {
-                placeholderMessage = "No words are available in book mode yet."
-            }
+        guard viewModel.reviewCardState.totalCards > 0 else {
+            placeholderMessage = "No words are available in book mode yet."
+            return
         }
+        isShowingBookMode = true
     }
 
     private func openArticleScan() {
@@ -756,11 +730,6 @@ private struct HomeActionItem: Identifiable {
     let border: Color
     let textColor: Color
     let action: () -> Void
-}
-
-private struct BookModeConfig {
-    let allPageIds: [Int]
-    let selectedPageId: Int
 }
 
 private struct HomeRankPointsCard: View {

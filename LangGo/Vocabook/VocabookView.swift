@@ -73,7 +73,6 @@ struct VocabookView: View {
     @State private var recentAddedCount: Int = 0
     @State private var recentFlashcards: [Flashcard] = []
     @State private var selectedRecentCard: Flashcard?
-    @State private var presentedBookModeConfig: BookModeConfig?
     @State private var presentedBookModeTier: String?
     @State private var recentlyAddedBookModeLimit = 0
 
@@ -115,7 +114,7 @@ struct VocabookView: View {
             await loadDashboardData()
         }
         // VocabookViewModel already observes .flashcardsDidChange and refreshes
-        // vocabook pages/statistics. Do not also refresh here, or one flashcard
+        // dashboard statistics. Do not also refresh here, or one flashcard
         // review can trigger duplicate /api/flashcard-stat requests.
         .onReceive(NotificationCenter.default.publisher(for: .userSnapshotDidChange)) { _ in
             Task {
@@ -145,32 +144,19 @@ struct VocabookView: View {
             ExamView()
         }
         .fullScreenCover(isPresented: $isShowingBookMode, onDismiss: {
-            presentedBookModeConfig = nil
             presentedBookModeTier = nil
             recentlyAddedBookModeLimit = 0
         }) {
             NavigationStack {
-                if let config = bookModeConfig {
-                    VocapageHostView(
-                        allVocapageIds: config.allPageIds,
-                        selectedVocapageId: config.selectedPageId,
-                        flashcardViewModel: flashcardViewModel,
-                        isShowingDueWordsOnly: $isShowingDueWordsOnly,
-                        reviewTier: presentedBookModeTier,
-                        allowsDueFilter: presentedBookModeTier == nil && recentlyAddedBookModeLimit == 0,
-                        recentlyAddedLimit: recentlyAddedBookModeLimit,
-                        onFilterChange: {
-                            Task {
-                                await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
-                            }
-                        }
-                    )
-                } else {
-                    ZStack {
-                        Color(red: 0.98, green: 0.97, blue: 0.94).ignoresSafeArea()
-                        ProgressView("Loading Book...")
-                    }
-                }
+                VocapageHostView(
+                    initialPage: initialBookModePage,
+                    flashcardViewModel: flashcardViewModel,
+                    isShowingDueWordsOnly: $isShowingDueWordsOnly,
+                    reviewTier: presentedBookModeTier,
+                    allowsDueFilter: presentedBookModeTier == nil && recentlyAddedBookModeLimit == 0,
+                    recentlyAddedLimit: recentlyAddedBookModeLimit,
+                    onFilterChange: {}
+                )
             }
         }
         .alert("Notice", isPresented: infoAlertBinding) {
@@ -424,11 +410,9 @@ struct VocabookView: View {
     }
 
     private var isInitialLoading: Bool {
-        vocabookViewModel.isLoadingVocabooks && vocabookViewModel.vocabook?.vocapages == nil
-    }
-
-    private var bookModeConfig: BookModeConfig? {
-        presentedBookModeConfig
+        vocabookViewModel.isLoadingStatistics &&
+        vocabookViewModel.totalCards == 0 &&
+        vocabookViewModel.tierStats.isEmpty
     }
 
     private var infoAlertBinding: Binding<Bool> {
@@ -441,8 +425,7 @@ struct VocabookView: View {
     }
 
     private func loadDashboardData() async {
-        await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
-        //await vocabookViewModel.loadStatistics()
+        await vocabookViewModel.loadStatistics()
         if flashcardViewModel.reviewCards.isEmpty {
             await flashcardViewModel.prepareReviewSession()
         }
@@ -491,20 +474,13 @@ struct VocabookView: View {
 
     private func openBookMode() {
         guard !isPreparingBookMode else { return }
-        isPreparingBookMode = true
-
-        Task {
-            await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
-            isPreparingBookMode = false
-
-            if let config = defaultBookModeConfig() {
-                presentedBookModeTier = nil
-                presentedBookModeConfig = config
-                isShowingBookMode = true
-            } else {
-                infoMessage = "No words are available in book mode yet."
-            }
+        guard totalVocabularyCount > 0 else {
+            infoMessage = "No words are available in book mode yet."
+            return
         }
+        presentedBookModeTier = nil
+        recentlyAddedBookModeLimit = 0
+        isShowingBookMode = true
     }
 
     private func openRecentlyAddedBookMode() {
@@ -514,31 +490,9 @@ struct VocabookView: View {
             infoMessage = "No recently added words yet."
             return
         }
-        isPreparingBookMode = true
-
-        Task {
-            do {
-                let vbSetting = try await DataServices.shared.settingsService.fetchVBSetting()
-                let pageSize = vbSetting.attributes.wordsPerPage
-                let cards = try await DataServices.shared.flashcardService.fetchRecentlyAddedFlashcards(limit: limit)
-                let pageCount = cards.isEmpty ? 0 : Int(ceil(Double(cards.count) / Double(pageSize)))
-
-                isPreparingBookMode = false
-
-                if pageCount > 0 {
-                    recentlyAddedBookModeLimit = limit
-                    presentedBookModeTier = nil
-                    presentedBookModeConfig = BookModeConfig(allPageIds: Array(1...pageCount), selectedPageId: 1)
-                    isShowingBookMode = true
-                } else {
-                    infoMessage = "No recently added words yet."
-                }
-            } catch {
-                isPreparingBookMode = false
-                logger.error("Failed to open recently added book mode: \(error.localizedDescription, privacy: .public)")
-                infoMessage = "Failed to open recently added."
-            }
-        }
+        recentlyAddedBookModeLimit = limit
+        presentedBookModeTier = nil
+        isShowingBookMode = true
     }
 
     private func openBookMode(for tier: MemoryTier) {
@@ -548,46 +502,14 @@ struct VocabookView: View {
             return
         }
 
-        isPreparingBookMode = true
-
-        Task {
-            do {
-                let vbSetting = try await DataServices.shared.settingsService.fetchVBSetting()
-                let pageSize = max(1, vbSetting.attributes.wordsPerPage)
-                let tierCount = countForTier(tier)
-                let pageCount = tierCount == 0 ? 0 : Int(ceil(Double(tierCount) / Double(pageSize)))
-
-                if pageCount > 0 {
-                    presentedBookModeTier = tier.rawValue
-                    presentedBookModeConfig = BookModeConfig(
-                        allPageIds: Array(1...pageCount),
-                        selectedPageId: 1
-                    )
-                    isShowingBookMode = true
-                } else {
-                    infoMessage = "No words are available for \(tier.title) yet."
-                }
-            } catch {
-                logger.error("Failed to open tier book mode: \(error.localizedDescription, privacy: .public)")
-                infoMessage = "Failed to open \(tier.title)."
-            }
-
-            isPreparingBookMode = false
-        }
+        presentedBookModeTier = tier.rawValue
+        recentlyAddedBookModeLimit = 0
+        isShowingBookMode = true
     }
 
-    private func defaultBookModeConfig() -> BookModeConfig? {
-        let allPageIds = (vocabookViewModel.vocabook?.vocapages ?? []).map(\.id).sorted()
-        guard !allPageIds.isEmpty else { return nil }
-        let lastViewedID = UserDefaults.standard.integer(forKey: "lastViewedVocapageID")
-        let selectedPageId = (lastViewedID != 0 && allPageIds.contains(lastViewedID)) ? lastViewedID : (allPageIds.first ?? 1)
-        return BookModeConfig(allPageIds: allPageIds, selectedPageId: selectedPageId)
+    private var initialBookModePage: Int {
+        max(1, UserDefaults.standard.integer(forKey: "lastViewedVocapageID"))
     }
-}
-
-private struct BookModeConfig {
-    let allPageIds: [Int]
-    let selectedPageId: Int
 }
 
 private struct MemoryLevelItem: Identifiable {

@@ -108,6 +108,22 @@ final class FlashcardService: ObservableObject {
         return try await fetchAvailableReviewFlashcards(pageSize: 100)
     }
 
+    func fetchFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+        try await fetchFlashcardsPageFromNetwork(page: page, pageSize: pageSize)
+    }
+
+    func fetchFlashcardsPage(page: Int, pageSize: Int, reviewTier: String) async throws -> ([Flashcard], StrapiPagination?) {
+        try await fetchFlashcardsPageFromNetwork(page: page, pageSize: pageSize, reviewTier: reviewTier)
+    }
+
+    func fetchRecentFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+        try await fetchFlashcardsPageFromNetwork(page: page, pageSize: pageSize, sortByMostRecentCreation: true)
+    }
+
+    func fetchDueFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
+        try await fetchReviewFlashcardsPageFromNetworkDeduped(page: page, pageSize: pageSize)
+    }
+
     func fetchAvailableReviewFlashcards(pageSize: Int = 100) async throws -> [Flashcard] {
         let (cards, pagination) = try await fetchReviewFlashcardsPageFromNetworkDeduped(page: 1, pageSize: pageSize)
         storeLoadedReviewPage(cards, pagination: pagination, reset: true)

@@ -2,288 +2,175 @@ import Foundation
 import Testing
 @testable import LangGo
 
-// MARK: - Shared helpers
-
-private func makeFlashcard(id: Int, createdAt: Date? = nil) -> Flashcard {
-    Flashcard(
-        id: id,
-        createdAt: createdAt ?? Date(),
-        wordDefinition: nil,
-        lastReviewedAt: nil,
-        correctStreak: 0,
-        wrongStreak: 0,
-        isRemembered: false,
-        reviewTire: nil
-    )
-}
-
-private func makeVBSetting(wordsPerPage: Int) -> VBSetting {
-    VBSetting(
-        id: 1,
-        attributes: VBSettingAttributes(wordsPerPage: wordsPerPage, interval1: 1, interval2: 3, interval3: 7)
-    )
-}
-
-// MARK: - 1. Cache key format
-//
-// These tests are pure — no side effects, no shared state.
-// They guard against key renames that would silently break cache routing.
-
-struct FlashcardCacheKeyFormatTests {
-
-    @Test
-    func recentFlashcardsKeyEmbedssLimit() {
-        #expect(FlashcardCache.recentFlashcardsKey(limit: 5)  == "recentFlashcards.limit.5")
-        #expect(FlashcardCache.recentFlashcardsKey(limit: 20) == "recentFlashcards.limit.20")
-    }
-
-    @Test
-    func allMyFlashcardsKeyIsStable() {
-        #expect(FlashcardCache.allMyFlashcardsKey() == "allMyFlashcards")
-    }
-
-    @Test
-    func tierFlashcardsKeyEmbedsTier() {
-        #expect(FlashcardCache.tierFlashcardsKey(reviewTier: "new")     == "allMyFlashcards.tier.new")
-        #expect(FlashcardCache.tierFlashcardsKey(reviewTier: "monthly") == "allMyFlashcards.tier.monthly")
-    }
-
-    @Test
-    func recentKeyAndAllKeyAreDistinct() {
-        #expect(FlashcardCache.recentFlashcardsKey(limit: 5) != FlashcardCache.allMyFlashcardsKey())
-    }
-
-    @Test
-    func differentRecentLimitsDifferentKeys() {
-        #expect(FlashcardCache.recentFlashcardsKey(limit: 5) != FlashcardCache.recentFlashcardsKey(limit: 10))
-    }
-}
-
-// MARK: - 2. FlashcardService routing
-//
-// Seeds CacheService.shared with disjoint ID sets for each data source,
-// then asserts that fetchFlashcards routes to the right set based on recentlyAddedLimit / reviewTier.
-//
-// .serialized prevents the tests within this suite from running concurrently and
-// stomping each other's shared-cache writes.  IDs 1-10 / 101-103 / 201-204 are
-// deliberately far apart so a cross-path read would produce a clearly wrong result.
-
 @Suite(.serialized)
-struct FlashcardServiceRoutingTests {
+struct VocapageViewModelPagingTests {
 
-    // Unique limit avoids collisions with other suites that also use the shared cache.
-    private let testRecentLimit = 73
-
-    private let allWordsCards = (1...10).map  { makeFlashcard(id: $0) }
-    private let recentCards   = (101...103).map { makeFlashcard(id: $0) }
-    private let newTierCards  = (201...204).map { makeFlashcard(id: $0) }
-
-    private func seedCaches() {
-        FlashcardCache.storeAllMyFlashcards(allWordsCards)
-        FlashcardCache.storeRecentFlashcards(recentCards, limit: testRecentLimit)
-        FlashcardCache.storeTierFlashcards(newTierCards, reviewTier: "new")
-    }
-
-    private func clearCaches() {
-        CacheService.shared.delete(key: FlashcardCache.allMyFlashcardsKey())
-        CacheService.shared.delete(key: FlashcardCache.recentFlashcardsKey(limit: testRecentLimit))
-        CacheService.shared.delete(key: FlashcardCache.tierFlashcardsKey(reviewTier: "new"))
-    }
-
-    // recentlyAddedLimit > 0  →  returns the recently-added cache slot
-    @Test
-    func recentlyAddedLimitRoutesToRecentCache() async throws {
-        seedCaches()
-        defer { clearCaches() }
-
-        let (cards, _) = try await FlashcardService().fetchFlashcards(
-            page: 1, pageSize: 100, recentlyAddedLimit: testRecentLimit
-        )
-        #expect(cards.map(\.id).sorted() == recentCards.map(\.id).sorted())
-    }
-
-    // recentlyAddedLimit == 0  →  returns the all-my-flashcards cache slot
-    @Test
-    func zeroLimitRoutesToAllMyFlashcardsCache() async throws {
-        seedCaches()
-        defer { clearCaches() }
-
-        let (cards, _) = try await FlashcardService().fetchFlashcards(
-            page: 1, pageSize: 100, recentlyAddedLimit: 0
-        )
-        #expect(cards.map(\.id).sorted() == allWordsCards.map(\.id).sorted())
-    }
-
-    // reviewTier != nil with zero limit  →  returns the tier cache slot (not disrupted by refactor)
-    @Test
-    func reviewTierRoutesToTierCache() async throws {
-        seedCaches()
-        defer { clearCaches() }
-
-        let (cards, _) = try await FlashcardService().fetchFlashcards(
-            page: 1, pageSize: 100, reviewTier: "new", recentlyAddedLimit: 0
-        )
-        #expect(cards.map(\.id).sorted() == newTierCards.map(\.id).sorted())
-    }
-
-    // Result for recentlyAddedLimit > 0 must not contain any all-words card IDs.
-    @Test
-    func recentlyAddedResultDoesNotContainAllWordsIds() async throws {
-        seedCaches()
-        defer { clearCaches() }
-
-        let (cards, _) = try await FlashcardService().fetchFlashcards(
-            page: 1, pageSize: 100, recentlyAddedLimit: testRecentLimit
-        )
-        let returnedIds = Set(cards.map(\.id))
-        let allWordIds  = Set(allWordsCards.map(\.id))
-        #expect(returnedIds.isDisjoint(with: allWordIds))
-    }
-
-    // 7 recently-added cards with pageSize 5  →  page 1 = 5 cards, page 2 = 2 cards, no overlap.
-    @Test
-    func recentlyAddedPaginatesIntoCorrectPages() async throws {
-        let limit    = 74  // distinct from testRecentLimit
-        let allCards = (501...507).map { makeFlashcard(id: $0) }
-        FlashcardCache.storeRecentFlashcards(allCards, limit: limit)
-        defer { CacheService.shared.delete(key: FlashcardCache.recentFlashcardsKey(limit: limit)) }
-
-        let pageSize = 5
-        let service  = FlashcardService()
-
-        let (page1, pagination1) = try await service.fetchFlashcards(
-            page: 1, pageSize: pageSize, recentlyAddedLimit: limit
-        )
-        let (page2, pagination2) = try await service.fetchFlashcards(
-            page: 2, pageSize: pageSize, recentlyAddedLimit: limit
-        )
-
-        #expect(page1.count == 5)
-        #expect(page2.count == 2)
-        #expect(pagination1?.total == 7)
-        #expect(pagination2?.pageCount == 2)
-        #expect(Set(page1.map(\.id)).isDisjoint(with: Set(page2.map(\.id))))
-    }
-}
-
-// MARK: - 3. VocapageLoader cache slot isolation
-//
-// Loads pages via VocapageLoader (which calls FlashcardService + SettingsService internally)
-// with different recentlyAddedLimit values and verifies the in-memory page dictionaries
-// are keyed separately — meaning a page loaded for limit=83 cannot be returned by
-// a page(recentlyAddedLimit:0) query, and vice-versa.
-//
-// Seeding "vbSettings" + "vbSettingsTimestamp" bypasses the SettingsService network call.
-
-@Suite(.serialized)
-struct VocapageLoaderCacheIsolationTests {
-
-    private let recentLimit = 83                                      // distinct from service-routing suite
-    private let recentCards = (301...305).map { makeFlashcard(id: $0) } // 5 cards
-    private let allCards    = (401...420).map { makeFlashcard(id: $0) } // 20 cards
-
-    private func seedSettings(wordsPerPage: Int = 10) {
-        CacheService.shared.save(makeVBSetting(wordsPerPage: wordsPerPage), key: "vbSettings")
-        UserDefaults.standard.set(Date(), forKey: "vbSettingsTimestamp")
-    }
-
-    private func clearSettings() {
-        CacheService.shared.delete(key: "vbSettings")
-        UserDefaults.standard.removeObject(forKey: "vbSettingsTimestamp")
-    }
-
-    private func seedFlashcardCaches() {
-        FlashcardCache.storeRecentFlashcards(recentCards, limit: recentLimit)
-        FlashcardCache.storeAllMyFlashcards(allCards)
-    }
-
-    private func clearFlashcardCaches() {
-        CacheService.shared.delete(key: FlashcardCache.recentFlashcardsKey(limit: recentLimit))
-        CacheService.shared.delete(key: FlashcardCache.allMyFlashcardsKey())
-    }
-
-    // A page loaded with recentlyAddedLimit > 0 must NOT be returned
-    // when the caller queries with recentlyAddedLimit == 0.
     @Test @MainActor
-    func pageForRecentlyAddedLimitIsInvisibleToZeroLimitAccessor() async throws {
-        seedSettings()
-        seedFlashcardCaches()
-        defer { clearSettings(); clearFlashcardCaches() }
+    func loadInitialPageUsesAllFlashcardsEndpoint() async {
+        MockVocapageAPI.install()
+        defer { MockVocapageAPI.uninstall() }
 
-        let loader = VocapageLoader()
-        await loader.loadPage(withId: 1, dueWordsOnly: false, reviewTier: nil, recentlyAddedLimit: recentLimit)
-
-        let recentPage = loader.page(id: 1, dueOnly: false, reviewTier: nil, recentlyAddedLimit: recentLimit)
-        let allPage    = loader.page(id: 1, dueOnly: false, reviewTier: nil, recentlyAddedLimit: 0)
-
-        #expect(recentPage != nil, "Should find the page loaded with recentlyAddedLimit")
-        #expect(allPage == nil,    "Zero-limit accessor must not see a recentlyAddedLimit page")
-    }
-
-    // A page loaded with recentlyAddedLimit == 0 must NOT be returned
-    // when the caller queries with recentlyAddedLimit > 0.
-    @Test @MainActor
-    func pageForZeroLimitIsInvisibleToRecentlyAddedAccessor() async throws {
-        seedSettings()
-        seedFlashcardCaches()
-        defer { clearSettings(); clearFlashcardCaches() }
-
-        let loader = VocapageLoader()
-        await loader.loadPage(withId: 1, dueWordsOnly: false, reviewTier: nil, recentlyAddedLimit: 0)
-
-        let allPage    = loader.page(id: 1, dueOnly: false, reviewTier: nil, recentlyAddedLimit: 0)
-        let recentPage = loader.page(id: 1, dueOnly: false, reviewTier: nil, recentlyAddedLimit: recentLimit)
-
-        #expect(allPage != nil,    "Should find the page loaded with zero limit")
-        #expect(recentPage == nil, "Non-zero-limit accessor must not see a zero-limit page")
-    }
-
-    // A recentlyAddedLimit page must contain exactly the recently-added cards, not the all-words cards.
-    @Test @MainActor
-    func recentlyAddedPageContainsOnlyRecentCards() async throws {
-        seedSettings(wordsPerPage: 20)
-        seedFlashcardCaches()
-        defer { clearSettings(); clearFlashcardCaches() }
-
-        let loader = VocapageLoader()
-        await loader.loadPage(withId: 1, dueWordsOnly: false, reviewTier: nil, recentlyAddedLimit: recentLimit)
-
-        let page      = loader.page(id: 1, dueOnly: false, reviewTier: nil, recentlyAddedLimit: recentLimit)
-        let loadedIds = Set(page?.flashcards?.map(\.id) ?? [])
-        let expectedIds = Set(recentCards.map(\.id))
-
-        #expect(!loadedIds.isEmpty)
-        #expect(loadedIds == expectedIds)
-        #expect(loadedIds.isDisjoint(with: Set(allCards.map(\.id))))
-    }
-
-    // Two different recentlyAddedLimit values must occupy separate cache slots
-    // even when loaded into the same loader instance.
-    @Test @MainActor
-    func differentLimitsOccupySeparateCacheSlots() async throws {
-        let limit5  = 85
-        let limit10 = 86
-        let cards5  = (601...605).map { makeFlashcard(id: $0) }
-        let cards10 = (701...710).map { makeFlashcard(id: $0) }
-
-        seedSettings(wordsPerPage: 20)
-        FlashcardCache.storeRecentFlashcards(cards5,  limit: limit5)
-        FlashcardCache.storeRecentFlashcards(cards10, limit: limit10)
-        defer {
-            clearSettings()
-            CacheService.shared.delete(key: FlashcardCache.recentFlashcardsKey(limit: limit5))
-            CacheService.shared.delete(key: FlashcardCache.recentFlashcardsKey(limit: limit10))
+        MockVocapageAPI.handler = { request in
+            #expect(request.url?.path == "/api/flashcards/mine")
+            return .json(200, Self.flashcardsPageJSON(ids: [11, 12], page: 1, pageSize: 20, pageCount: 3, total: 45))
         }
 
-        let loader = VocapageLoader()
-        await loader.loadPage(withId: 1, dueWordsOnly: false, reviewTier: nil, recentlyAddedLimit: limit5)
-        await loader.loadPage(withId: 1, dueWordsOnly: false, reviewTier: nil, recentlyAddedLimit: limit10)
+        let viewModel = VocapageViewModel(initialPage: 1)
+        await viewModel.loadInitialPage()
 
-        let ids5  = Set(loader.page(id: 1, dueOnly: false, reviewTier: nil, recentlyAddedLimit: limit5)?.flashcards?.map(\.id) ?? [])
-        let ids10 = Set(loader.page(id: 1, dueOnly: false, reviewTier: nil, recentlyAddedLimit: limit10)?.flashcards?.map(\.id) ?? [])
+        #expect(viewModel.currentPage == 1)
+        #expect(viewModel.totalPages == 3)
+        #expect(viewModel.currentPageCards.map(\.id) == [11, 12])
+    }
 
-        #expect(ids5  == Set(cards5.map(\.id)))
-        #expect(ids10 == Set(cards10.map(\.id)))
-        #expect(ids5.isDisjoint(with: ids10))
+    @Test @MainActor
+    func loadInitialPageUsesDueEndpointWhenDueOnlyEnabled() async {
+        MockVocapageAPI.install()
+        defer { MockVocapageAPI.uninstall() }
+
+        MockVocapageAPI.handler = { request in
+            #expect(request.url?.path == "/api/review-flashcards")
+            return .json(200, Self.flashcardsPageJSON(ids: [21], page: 1, pageSize: 20, pageCount: 2, total: 21))
+        }
+
+        let viewModel = VocapageViewModel(initialPage: 1, dueOnly: true)
+        await viewModel.loadInitialPage()
+
+        #expect(viewModel.currentPage == 1)
+        #expect(viewModel.totalPages == 2)
+        #expect(viewModel.currentPageCards.map(\.id) == [21])
+    }
+
+    @Test @MainActor
+    func goNextAndGoPreviousUpdateCurrentPage() async {
+        MockVocapageAPI.install()
+        defer { MockVocapageAPI.uninstall() }
+
+        MockVocapageAPI.handler = { request in
+            let page = URLComponents(url: try #require(request.url), resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "pagination[page]" })?
+                .value
+                .flatMap(Int.init) ?? 1
+
+            switch page {
+            case 1:
+                return .json(200, Self.flashcardsPageJSON(ids: [31, 32], page: 1, pageSize: 20, pageCount: 2, total: 40))
+            case 2:
+                return .json(200, Self.flashcardsPageJSON(ids: [41, 42], page: 2, pageSize: 20, pageCount: 2, total: 40))
+            default:
+                throw URLError(.badURL)
+            }
+        }
+
+        let viewModel = VocapageViewModel(initialPage: 1)
+        await viewModel.loadInitialPage()
+        let movedNext = await viewModel.goNext()
+        let movedPrevious = await viewModel.goPrevious()
+
+        #expect(movedNext)
+        #expect(movedPrevious)
+        #expect(viewModel.currentPage == 1)
+        #expect(viewModel.currentPageCards.map(\.id) == [31, 32])
+    }
+
+    @Test @MainActor
+    func loadPageGuardsPastEndByReloadingLastPage() async {
+        MockVocapageAPI.install()
+        defer { MockVocapageAPI.uninstall() }
+
+        MockVocapageAPI.handler = { request in
+            let page = URLComponents(url: try #require(request.url), resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "pagination[page]" })?
+                .value
+                .flatMap(Int.init) ?? 1
+
+            if page == 5 {
+                return .json(200, Self.flashcardsPageJSON(ids: [], page: 5, pageSize: 20, pageCount: 2, total: 40))
+            }
+            if page == 2 {
+                return .json(200, Self.flashcardsPageJSON(ids: [51, 52], page: 2, pageSize: 20, pageCount: 2, total: 40))
+            }
+            throw URLError(.badURL)
+        }
+
+        let viewModel = VocapageViewModel(initialPage: 5)
+        await viewModel.loadInitialPage()
+
+        #expect(viewModel.currentPage == 2)
+        #expect(viewModel.totalPages == 2)
+        #expect(viewModel.currentPageCards.map(\.id) == [51, 52])
+    }
+
+    private static func flashcardsPageJSON(ids: [Int], page: Int, pageSize: Int, pageCount: Int, total: Int) -> String {
+        let cards = ids.map(cardJSON).joined(separator: ",")
+        return """
+        {"data":[\(cards)],"meta":{"pagination":{"page":\(page),"pageSize":\(pageSize),"pageCount":\(pageCount),"total":\(total)}}}
+        """
+    }
+
+    private static func cardJSON(id: Int) -> String {
+        """
+        {"id":\(id),"attributes":{"createdAt":"2026-05-01T05:51:56.204Z","updatedAt":"2026-05-01T05:51:56.204Z","last_reviewed_at":null,"is_remembered":false,"correct_streak":0,"wrong_streak":0,"word_definition":{"data":{"id":\(3000 + id),"attributes":{"base_text":"Base \(id)","word":{"data":{"id":\(4000 + id),"attributes":{"target_text":"Target \(id)"}}},"part_of_speech":{"data":{"id":1,"attributes":{"name":"noun"}}}}}},"review_tire":{"data":null}}}
+        """
+    }
+}
+
+private enum MockVocapageAPI {
+    struct Response {
+        let statusCode: Int
+        let body: Data
+
+        static func json(_ statusCode: Int, _ string: String) -> Response {
+            Response(statusCode: statusCode, body: Data(string.utf8))
+        }
+    }
+
+    static var handler: ((URLRequest) async throws -> Response)?
+
+    static func install() {
+        URLProtocol.registerClass(MockURLProtocol.self)
+    }
+
+    static func uninstall() {
+        handler = nil
+        URLProtocol.unregisterClass(MockURLProtocol.self)
+    }
+
+    final class MockURLProtocol: URLProtocol {
+        override class func canInit(with request: URLRequest) -> Bool {
+            request.url?.host == "localhost" && request.url?.port == 1338
+        }
+
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+            request
+        }
+
+        override func startLoading() {
+            guard let handler = MockVocapageAPI.handler else {
+                client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+                return
+            }
+
+            Task {
+                do {
+                    let response = try await handler(request)
+                    let httpResponse = HTTPURLResponse(
+                        url: request.url!,
+                        statusCode: response.statusCode,
+                        httpVersion: nil,
+                        headerFields: ["Content-Type": "application/json"]
+                    )!
+                    client?.urlProtocol(self, didReceive: httpResponse, cacheStoragePolicy: .notAllowed)
+                    client?.urlProtocol(self, didLoad: response.body)
+                    client?.urlProtocolDidFinishLoading(self)
+                } catch {
+                    client?.urlProtocol(self, didFailWithError: error)
+                }
+            }
+        }
+
+        override func stopLoading() {}
     }
 }

@@ -117,30 +117,28 @@ struct FilterMenuView: View {
 }
 
 struct PageNavigationControls: View {
-    @Binding var currentPageIndex: Int
-    let pageCount: Int
+    let currentPage: Int
+    let totalPages: Int
+    let onPrevious: () -> Void
+    let onNext: () -> Void
 
     var body: some View {
         HStack {
-            Button(action: {
-                withAnimation { currentPageIndex = max(0, currentPageIndex - 1) }
-            }) {
+            Button(action: onPrevious) {
                 Image(systemName: "chevron.left")
             }
             .buttonStyle(PageNavigationButtonStyle())
-            .opacity(currentPageIndex > 0 ? 1.0 : 0.0)
-            .disabled(currentPageIndex <= 0)
+            .opacity(currentPage > 1 ? 1.0 : 0.0)
+            .disabled(currentPage <= 1)
 
             Spacer()
 
-            Button(action: {
-                withAnimation { currentPageIndex = min(pageCount - 1, currentPageIndex + 1) }
-            }) {
+            Button(action: onNext) {
                 Image(systemName: "chevron.right")
             }
             .buttonStyle(PageNavigationButtonStyle())
-            .opacity(currentPageIndex < pageCount - 1 ? 1.0 : 0.0)
-            .disabled(currentPageIndex >= pageCount - 1)
+            .opacity(currentPage < totalPages ? 1.0 : 0.0)
+            .disabled(currentPage >= totalPages)
         }
         .padding(.horizontal)
     }
@@ -246,34 +244,19 @@ struct VocapageActionButtons: View {
 }
 
 struct VocapagePagingView: View {
-    @Binding var currentPageIndex: Int
-    let allVocapageIds: [Int]
-    @ObservedObject var loader: VocapageLoader
+    let vocapage: Vocapage?
     @Binding var showBaseText: Bool
     let highlightIndex: Int
-    let isShowingDueWordsOnly: Bool
-    let reviewTier: String?
-    let recentlyAddedLimit: Int
     let onSelectCard: (Flashcard) -> Void
 
     var body: some View {
-        TabView(selection: $currentPageIndex) {
-            ForEach(allVocapageIds.indices, id: \.self) { index in
-                VocapageView(
-                    vocapage: loader.page(id: allVocapageIds[index], dueOnly: isShowingDueWordsOnly, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit),
-                    showBaseText: $showBaseText,
-                    highlightIndex: highlightIndex,
-                    onLoad: {
-                        Task {
-                            await loader.loadPage(withId: allVocapageIds[index], dueWordsOnly: isShowingDueWordsOnly, reviewTier: reviewTier, recentlyAddedLimit: recentlyAddedLimit)
-                        }
-                    },
-                    onSelectCard: onSelectCard
-                )
-                .tag(index)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
+        VocapageView(
+            vocapage: vocapage,
+            showBaseText: $showBaseText,
+            highlightIndex: highlightIndex,
+            onLoad: {},
+            onSelectCard: onSelectCard
+        )
     }
 }
 

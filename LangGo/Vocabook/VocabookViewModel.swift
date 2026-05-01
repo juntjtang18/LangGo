@@ -38,18 +38,12 @@ struct Vocapage: Identifiable {
 class VocabookViewModel: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "VocabookViewModel")
     
-    // The service is now fetched directly from the DataServices singleton.
-    private let settingsService = DataServices.shared.settingsService
     private let flashcardService = DataServices.shared.flashcardService
     private let wordService = DataServices.shared.wordService
     private var cancellables = Set<AnyCancellable>()
     
-    @Published var vocabook: Vocabook?
-    @Published var isLoadingVocabooks = false
+    @Published var isLoadingStatistics = false
     @Published var expandedVocabooks: Set<Int> = []
-    @Published var loadCycle: Int = 0
-    
-    @Published var totalFlashcards: Int = 0
     @Published var totalPages: Int = 1
     @Published var totalCards: Int = 0
     @Published var rememberedCount: Int = 0
@@ -86,14 +80,14 @@ class VocabookViewModel: ObservableObject {
     @objc private func refreshData() {
         logger.info("📢 Received notification that flashcards changed. Refreshing data...")
         Task {
-            // Check user's current filter setting to refresh the view correctly.
-            let dueOnly = UserDefaults.standard.bool(forKey: "isShowingDueWordsOnly")
-            await loadVocabookPages(dueOnly: dueOnly)
             await loadStatistics()
         }
     }
     
     func loadStatistics() async {
+        isLoadingStatistics = true
+        defer { isLoadingStatistics = false }
+
         do {
             let stats = try await flashcardService.fetchFlashcardStatistics()
             applyStatistics(stats)
@@ -114,68 +108,13 @@ class VocabookViewModel: ObservableObject {
     @MainActor
     func deleteCardAndRefresh(cardId: Int) async {
         do {
-            // The service deletes the card and invalidates the cache
             try await flashcardService.deleteFlashcard(cardId: cardId)
-            
-            // Reload the pages with the current filter setting.
-            // This will fetch fresh data because the cache is now stale.
-            // This effectively "reconstructs" the vocapage as requested.
-            let dueOnly = UserDefaults.standard.bool(forKey: "isShowingDueWordsOnly")
-            await loadVocabookPages(dueOnly: dueOnly)
-            
-            // Also refresh the statistics panel
             await loadStatistics()
-            
         } catch {
-            // Handle the error appropriately, e.g., show an error message to the user
             logger.error("Failed to delete card and refresh: \(error.localizedDescription)")
         }
     }
-    // MARK: - Refactored Vocabook Loading
-    
-    /// Builds Book Mode page ids without loading every flashcard.
-    ///
-    /// Book Mode page content is loaded lazily by `VocapageLoader`. This method
-    /// only needs the card count, so it uses flashcard statistics instead of
-    /// `fetchAllMyFlashcards()` / `fetchAllReviewFlashcards()`. That prevents the
-    /// first Book Mode open from blocking on a full backend pagination pass.
-    /// - Parameter dueOnly: If `true`, builds page ids from due-for-review count.
-    ///   Otherwise, builds page ids from total card count.
-    func loadVocabookPages(dueOnly: Bool = false) async {
-        isLoadingVocabooks = true
-        defer { isLoadingVocabooks = false }
 
-        do {
-            async let statsTask = flashcardService.fetchFlashcardStatistics()
-            async let vbSettingTask = settingsService.fetchVBSetting()
-
-            let stats = try await statsTask
-            let vbSetting = try await vbSettingTask
-            let pageSize = max(1, vbSetting.attributes.wordsPerPage)
-
-            let visibleCount = dueOnly ? stats.dueForReview : stats.totalCards
-            self.totalFlashcards = visibleCount
-
-            guard visibleCount > 0 else {
-                self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
-                self.loadCycle += 1
-                return
-            }
-
-            let pageCount = Int(ceil(Double(visibleCount) / Double(pageSize)))
-            let pages = (1...pageCount).map { pageNum in
-                Vocapage(id: pageNum, title: "Page \(pageNum)", order: pageNum, flashcards: nil)
-            }
-
-            self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: pages)
-            self.loadCycle += 1
-
-            logger.info("Prepared \(pageCount) vocabook page ids from statistics. dueOnly=\(dueOnly), count=\(visibleCount).")
-        } catch {
-            logger.error("loadVocabookPages(dueOnly: \(dueOnly)) failed: \(error.localizedDescription)")
-            self.vocabook = Vocabook(id: 1, title: "All Flashcards", vocapages: [])
-        }
-    }
     func toggleVocabookExpansion(vocabookId: Int) {
         if expandedVocabooks.contains(vocabookId) {
             expandedVocabooks.remove(vocabookId)

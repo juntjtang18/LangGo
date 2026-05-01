@@ -49,7 +49,7 @@ struct LearnView: View {
         }
         .background(Color(.systemGroupedBackground))
         .task {
-            await viewModel.loadVocabookPages()
+            await viewModel.loadStatistics()
         }
     }
 }
