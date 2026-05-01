@@ -51,6 +51,7 @@ struct FlashcardReviewView: View {
     @State private var showBadge = false
     @State private var isSubmittingFinalCard = false
     @State private var isWaitingForMoreReviewCards = false
+    @State private var previousReviewCardCount = 0
 
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled = false
     @State private var isRepeating = false
@@ -181,6 +182,7 @@ struct FlashcardReviewView: View {
                         repeatInterval = max(0.4, TimeInterval(vb.attributes.interval1))
                     }
                     await viewModel.prepareReviewSession()
+                    previousReviewCardCount = viewModel.reviewCards.count
                 }
             }
             // 2. ADDED: Overlay for the progress view
@@ -229,10 +231,26 @@ struct FlashcardReviewView: View {
             }
         }
         .onChange(of: viewModel.reviewCards.count) { newCount in
-            guard isWaitingForMoreReviewCards, currentIndex < newCount - 1 else { return }
-            isWaitingForMoreReviewCards = false
-            isFlipped = false
-            currentIndex += 1
+            let oldCount = previousReviewCardCount
+            previousReviewCardCount = newCount
+
+            if isWaitingForMoreReviewCards, currentIndex < newCount - 1 {
+                isWaitingForMoreReviewCards = false
+                isFlipped = false
+                currentIndex += 1
+                return
+            }
+
+            if newCount < oldCount, currentIndex > 0 {
+                currentIndex = max(0, currentIndex - (oldCount - newCount))
+            } else if newCount > 0, currentIndex >= newCount {
+                currentIndex = newCount - 1
+            }
+        }
+        .onChange(of: currentIndex) { newIndex in
+            Task {
+                await viewModel.loadMoreReviewCardsIfNeeded(currentIndex: newIndex)
+            }
         }
     }
 

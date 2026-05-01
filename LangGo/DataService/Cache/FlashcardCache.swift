@@ -1,6 +1,13 @@
 import Foundation
 
 enum FlashcardCache {
+    struct ReviewFlashcardsState: Codable {
+        let nextPage: Int?
+        let pageSize: Int
+        let pageCount: Int
+        let total: Int
+    }
+
     private enum Policy {
         static let allMyFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
         static let tierFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
@@ -59,6 +66,10 @@ enum FlashcardCache {
         scopedKey("reviewFlashcards")
     }
 
+    static func reviewFlashcardsStateKey() -> String {
+        scopedKey("reviewFlashcardsState")
+    }
+
     static func allMyFlashcardsKey() -> String {
         scopedKey("allMyFlashcards")
     }
@@ -88,6 +99,10 @@ enum FlashcardCache {
         )
     }
 
+    static func invalidateStatistics(using cacheService: CacheService = .shared) {
+        cacheService.invalidate(tags: [statisticsTag])
+    }
+
     static func loadReviewFlashcards(using cacheService: CacheService = .shared) -> [Flashcard]? {
         cacheService.load(type: [Flashcard].self, from: reviewFlashcardsKey())
     }
@@ -96,6 +111,19 @@ enum FlashcardCache {
         cacheService.saveWithPolicy(
             cards,
             key: reviewFlashcardsKey(),
+            ttl: nil,
+            tags: [reviewFlashcardsTag]
+        )
+    }
+
+    static func loadReviewFlashcardsState(using cacheService: CacheService = .shared) -> ReviewFlashcardsState? {
+        cacheService.load(type: ReviewFlashcardsState.self, from: reviewFlashcardsStateKey())
+    }
+
+    static func storeReviewFlashcardsState(_ state: ReviewFlashcardsState, using cacheService: CacheService = .shared) {
+        cacheService.saveWithPolicy(
+            state,
+            key: reviewFlashcardsStateKey(),
             ttl: nil,
             tags: [reviewFlashcardsTag]
         )
@@ -168,6 +196,19 @@ enum FlashcardCache {
         guard var cards = loadReviewFlashcards(using: cacheService) else { return }
         cards.removeAll { $0.id == updatedCard.id }
         storeReviewFlashcards(cards, using: cacheService)
+
+        if let state = loadReviewFlashcardsState(using: cacheService) {
+            let adjustedTotal = max(cards.count, state.total - 1)
+            storeReviewFlashcardsState(
+                ReviewFlashcardsState(
+                    nextPage: state.nextPage,
+                    pageSize: state.pageSize,
+                    pageCount: state.pageCount,
+                    total: adjustedTotal
+                ),
+                using: cacheService
+            )
+        }
     }
 
     private static func patchRecentFlashcardsAfterReview(updatedCard: Flashcard, using cacheService: CacheService) {

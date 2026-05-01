@@ -188,6 +188,9 @@ struct HomeView: View {
             await viewModel.loadIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .flashcardsDidChange)) { _ in
+            guard selectedTab == 0 else { return }
+            guard scenePhase == .active else { return }
+
             Task {
                 await viewModel.handleFlashcardsDidChange()
             }

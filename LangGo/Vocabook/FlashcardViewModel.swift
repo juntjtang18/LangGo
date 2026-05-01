@@ -23,7 +23,7 @@ class FlashcardViewModel: ObservableObject {
         flashcardService.$reviewFlashcards
             .receive(on: DispatchQueue.main)
             .sink { [weak self] cards in
-                self?.mergeReviewCards(cards)
+                self?.syncReviewCards(cards)
             }
             .store(in: &cancellables)
 
@@ -59,8 +59,8 @@ class FlashcardViewModel: ObservableObject {
         resetReviewSessionState()
 
         do {
-            let availableCards = try await flashcardService.fetchAvailableReviewFlashcards(pageSize: 100)
-            mergeReviewCards(availableCards)
+            let availableCards = try await flashcardService.fetchAvailableReviewFlashcards(pageSize: 20)
+            syncReviewCards(availableCards)
             logger.info("prepareReviewSession: Loaded \(self.reviewCards.count) available cards for review.")
         } catch {
             logger.error("Could not prepare review session. Error: \(error.localizedDescription)")
@@ -68,10 +68,6 @@ class FlashcardViewModel: ObservableObject {
         }
 
         isLoadingReviewCards = false
-
-        // The service owns the shared full-load task. This reuses an existing
-        // autoload if ExamView or another review mode already started one.
-        flashcardService.ensureReviewFlashcardsFullyLoaded(pageSize: 100)
     }
 
     private func resetReviewSessionState() {
@@ -79,17 +75,20 @@ class FlashcardViewModel: ObservableObject {
         reviewCardIds.removeAll()
     }
 
-    private func mergeReviewCards(_ cards: [Flashcard]) {
-        guard !cards.isEmpty else { return }
-
+    private func syncReviewCards(_ cards: [Flashcard]) {
         let sortedCards = cards.sorted {
             ($0.lastReviewedAt ?? .distantPast) < ($1.lastReviewedAt ?? .distantPast)
         }
+        reviewCards = sortedCards
+        reviewCardIds = Set(sortedCards.map(\.id))
+    }
 
-        let newCards = sortedCards.filter { reviewCardIds.insert($0.id).inserted }
-        if !newCards.isEmpty {
-            reviewCards.append(contentsOf: newCards)
-        }
+    func loadMoreReviewCardsIfNeeded(currentIndex: Int, threshold: Int = 5) async {
+        await flashcardService.loadMoreReviewFlashcardsIfNeeded(
+            currentIndex: currentIndex,
+            pageSize: 100,
+            threshold: threshold
+        )
     }
 
     // Keep the old optimistic path

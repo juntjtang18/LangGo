@@ -72,18 +72,13 @@ class ExamViewModel: ObservableObject {
         }
 
         isLoading = false
-
-        // The service owns one shared background task. If another review mode
-        // already started it, this call reuses that task instead of starting a
-        // second loader.
-        flashcardService.ensureReviewFlashcardsFullyLoaded(pageSize: pageSize)
-
     }
 
     func loadMoreIfNeeded() async {
-        // Kept for older ExamView callers. Loading more is service-owned now;
-        // the ViewModel only merges newly published cards from FlashcardService.
-        flashcardService.ensureReviewFlashcardsFullyLoaded(pageSize: pageSize)
+        await flashcardService.loadMoreReviewFlashcardsIfNeeded(
+            currentIndex: currentCardIndex,
+            pageSize: pageSize
+        )
     }
 
     private func loadFirstPage() async {
@@ -108,11 +103,10 @@ class ExamViewModel: ObservableObject {
     private func mergeReviewFlashcards(_ cards: [Flashcard]) {
         guard !cards.isEmpty else { return }
         appendExamReadyCards(cards)
-        hasMorePages = flashcardService.isLoadingAllReviewFlashcards
     }
 
     private func appendExamReadyCards(_ cards: [Flashcard]) {
-        let examReadyCards = cards.filter(isExamReady)
+        let examReadyCards = cards.filter(hasAnyExamOptions)
         let newCards = examReadyCards.filter { loadedCardIds.insert($0.id).inserted }
 
         if !newCards.isEmpty {
@@ -120,25 +114,35 @@ class ExamViewModel: ObservableObject {
         }
     }
 
-    private func isExamReady(_ card: Flashcard) -> Bool {
+    private func hasAnyExamOptions(_ card: Flashcard) -> Bool {
         guard let def = card.wordDefinition?.attributes else { return false }
-        let hasExamBase = def.examBase?.isEmpty == false
-        let hasExamTarget = def.examTarget?.isEmpty == false
-        return hasExamBase && hasExamTarget
+        let hasExamBase = !(def.examBase?.isEmpty ?? true)
+        let hasExamTarget = !(def.examTarget?.isEmpty ?? true)
+        return hasExamBase || hasExamTarget
     }
 
     var questionText: String? {
         guard let card = currentCard else { return nil }
-        return direction == .baseToTarget ? card.frontContent : card.backContent
+        switch resolvedDirection(for: card) {
+        case .baseToTarget:
+            return card.frontContent
+        case .targetToBase:
+            return card.backContent
+        case nil:
+            return nil
+        }
     }
 
     var examOptions: [ExamOption]? {
         guard let def = currentCard?.wordDefinition?.attributes else { return nil }
 
-        if direction == .baseToTarget {
+        switch resolvedDirection(for: currentCard) {
+        case .baseToTarget:
             return def.examTarget
-        } else {
+        case .targetToBase:
             return def.examBase
+        case nil:
+            return nil
         }
     }
 
@@ -157,21 +161,32 @@ class ExamViewModel: ObservableObject {
         Task {
             do {
                 _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
-                print("Successfully submitted review for card \(card.id) with result: \(result.rawValue)")
+                removeReviewedCard(card.id)
             } catch {
                 print("Error submitting review from ExamView: \(error.localizedDescription)")
-            }
-        }
-
-        if option.isCorrect == true {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                self.goToNextCard()
             }
         }
     }
 
     func swapDirection() {
-        direction = (direction == .baseToTarget) ? .targetToBase : .baseToTarget
+        guard let card = currentCard,
+              let def = card.wordDefinition?.attributes else {
+            direction = (direction == .baseToTarget) ? .targetToBase : .baseToTarget
+            resetForNewCard()
+            return
+        }
+
+        let hasExamBase = !(def.examBase?.isEmpty ?? true)
+        let hasExamTarget = !(def.examTarget?.isEmpty ?? true)
+
+        if hasExamBase && hasExamTarget {
+            direction = (direction == .baseToTarget) ? .targetToBase : .baseToTarget
+        } else if hasExamTarget {
+            direction = .baseToTarget
+        } else if hasExamBase {
+            direction = .targetToBase
+        }
+
         resetForNewCard()
     }
 
@@ -179,6 +194,9 @@ class ExamViewModel: ObservableObject {
         guard canGoNext else { return }
         currentCardIndex += 1
         resetForNewCard()
+        Task {
+            await loadMoreIfNeeded()
+        }
     }
 
     func goToPreviousCard() {
@@ -191,5 +209,47 @@ class ExamViewModel: ObservableObject {
     private func resetForNewCard() {
         selectedOption = nil
         isAnswerSubmitted = false
+
+        if let resolvedDirection = resolvedDirection(for: currentCard) {
+            direction = resolvedDirection
+        }
+    }
+
+    private func resolvedDirection(for card: Flashcard?) -> ExamDirection? {
+        guard let def = card?.wordDefinition?.attributes else { return nil }
+
+        let hasExamBase = !(def.examBase?.isEmpty ?? true)
+        let hasExamTarget = !(def.examTarget?.isEmpty ?? true)
+
+        switch (hasExamBase, hasExamTarget) {
+        case (true, true):
+            return direction
+        case (false, true):
+            return .baseToTarget
+        case (true, false):
+            return .targetToBase
+        case (false, false):
+            return nil
+        }
+    }
+
+    private func removeReviewedCard(_ cardId: Int) {
+        let originalCount = flashcards.count
+        flashcards.removeAll { $0.id == cardId }
+        loadedCardIds.remove(cardId)
+
+        guard flashcards.count != originalCount else { return }
+
+        if flashcards.isEmpty {
+            currentCardIndex = 0
+        } else if currentCardIndex >= flashcards.count {
+            currentCardIndex = flashcards.count - 1
+        }
+
+        resetForNewCard()
+
+        Task {
+            await loadMoreIfNeeded()
+        }
     }
 }
