@@ -10,7 +10,13 @@ final class ArticleService: ObservableObject {
         let pageSize: Int
     }
 
+    private enum Policy {
+        static let sharedLibraryPage = 1
+        static let sharedLibraryPageSize = 10
+    }
+
     @Published private(set) var userArticlePages: [UserArticlesPageKey: StrapiListResponse<StrapiUserArticle>] = [:]
+    @Published private(set) var userArticles: [StrapiUserArticle] = []
     @Published private(set) var userArticlesTotalCount: Int?
     @Published private(set) var isLoadingUserArticles = false
     @Published private(set) var articlesErrorMessage: String?
@@ -21,6 +27,8 @@ final class ArticleService: ObservableObject {
     private let cacheService: CacheService
     private let articleTagService: ArticleTagService
     private var cachedCurrentUserID: Int?
+    private var userArticlesPageTasks: [UserArticlesPageKey: Task<StrapiListResponse<StrapiUserArticle>, Error>] = [:]
+    private var activeUserArticlesRequestCount = 0
 
     init(
         networkManager: NetworkManager = .shared,
@@ -44,6 +52,22 @@ final class ArticleService: ObservableObject {
 
     func currentUserArticlesPage(page: Int, pageSize: Int) -> StrapiListResponse<StrapiUserArticle>? {
         userArticlePages[UserArticlesPageKey(page: page, pageSize: pageSize)]
+    }
+
+    func loadSharedUserArticlesIfNeeded() async {
+        _ = try? await fetchUserArticles(
+            page: Policy.sharedLibraryPage,
+            pageSize: Policy.sharedLibraryPageSize,
+            forceRefresh: false
+        )
+    }
+
+    func refreshSharedUserArticles() async {
+        _ = try? await fetchUserArticles(
+            page: Policy.sharedLibraryPage,
+            pageSize: Policy.sharedLibraryPageSize,
+            forceRefresh: true
+        )
     }
 
     func loadUserArticlesPageIfNeeded(page: Int, pageSize: Int) async {
@@ -103,13 +127,6 @@ final class ArticleService: ObservableObject {
         let currentUserID = try await currentUserID()
         let pageKey = UserArticlesPageKey(page: page, pageSize: pageSize)
 
-        isLoadingUserArticles = true
-        articlesErrorMessage = nil
-
-        defer {
-            isLoadingUserArticles = false
-        }
-
         if !forceRefresh && !isRefreshModeEnabled {
             if let staleResponse = ArticleCache.loadUserArticlesPageStale(
                 userID: currentUserID,
@@ -132,12 +149,32 @@ final class ArticleService: ObservableObject {
             }
         }
 
-        do {
-            let response = try await fetchUserArticlesPageFromNetwork(
+        if let existingTask = userArticlesPageTasks[pageKey] {
+            logger.debug("Joining existing user articles task for page \(page) size \(pageSize).")
+            return try await existingTask.value
+        }
+
+        activeUserArticlesRequestCount += 1
+        isLoadingUserArticles = true
+        articlesErrorMessage = nil
+
+        let task = Task { [weak self] () throws -> StrapiListResponse<StrapiUserArticle> in
+            guard let self else { throw CancellationError() }
+            return try await self.fetchUserArticlesPageFromNetwork(
                 userID: currentUserID,
                 page: page,
                 pageSize: pageSize
             )
+        }
+        userArticlesPageTasks[pageKey] = task
+        defer {
+            userArticlesPageTasks[pageKey] = nil
+            activeUserArticlesRequestCount = max(activeUserArticlesRequestCount - 1, 0)
+            isLoadingUserArticles = activeUserArticlesRequestCount > 0
+        }
+
+        do {
+            let response = try await task.value
             ArticleCache.storeUserArticlesPage(
                 response,
                 userID: currentUserID,
@@ -148,6 +185,24 @@ final class ArticleService: ObservableObject {
             publishUserArticlesPage(response, key: pageKey)
             return response
         } catch {
+            let isCancelled = Task.isCancelled || (error as? URLError)?.code == .cancelled
+
+            if isCancelled {
+                logger.debug("User article fetch cancelled; falling back to stale cache if available.")
+
+                if let staleResponse = ArticleCache.loadUserArticlesPageStale(
+                    userID: currentUserID,
+                    page: page,
+                    pageSize: pageSize,
+                    using: cacheService
+                ) {
+                    publishUserArticlesPage(staleResponse, key: pageKey)
+                    return staleResponse
+                }
+
+                throw error
+            }
+
             logger.error("Failed to fetch user articles: \(error.localizedDescription, privacy: .public)")
             articlesErrorMessage = error.localizedDescription
 
@@ -157,6 +212,7 @@ final class ArticleService: ObservableObject {
                 pageSize: pageSize,
                 using: cacheService
             ) {
+                publishUserArticlesPage(staleResponse, key: pageKey)
                 return staleResponse
             }
 
@@ -409,7 +465,7 @@ final class ArticleService: ObservableObject {
         key: UserArticlesPageKey
     ) {
         userArticlePages[key] = response
-        syncUserArticlesTotalCount()
+        syncPublishedUserArticles()
     }
 
     private func publishPatchedUserArticle(_ article: StrapiUserArticle, prependToFirstPage: Bool) {
@@ -444,7 +500,7 @@ final class ArticleService: ObservableObject {
             )
         }
 
-        syncUserArticlesTotalCount()
+        syncPublishedUserArticles()
     }
 
     private func publishRemovedUserArticle(_ articleId: Int) {
@@ -470,10 +526,22 @@ final class ArticleService: ObservableObject {
             )
         }
 
-        syncUserArticlesTotalCount()
+        syncPublishedUserArticles()
     }
 
-    private func syncUserArticlesTotalCount() {
+    private func syncPublishedUserArticles() {
+        let sortedKeys = userArticlePages.keys.sorted { lhs, rhs in
+            if lhs.page == rhs.page {
+                return lhs.pageSize > rhs.pageSize
+            }
+            return lhs.page < rhs.page
+        }
+
+        var seenArticleIDs = Set<Int>()
+        userArticles = sortedKeys
+            .flatMap { userArticlePages[$0]?.data ?? [] }
+            .filter { seenArticleIDs.insert($0.id).inserted }
+
         if let totalFromPagination = userArticlePages.values
             .compactMap({ $0.meta?.pagination?.total })
             .max() {
@@ -512,8 +580,13 @@ final class ArticleService: ObservableObject {
         guard cachedCurrentUserID != userID else { return }
 
         cachedCurrentUserID = userID
+        userArticlesPageTasks.values.forEach { $0.cancel() }
+        userArticlesPageTasks.removeAll()
+        activeUserArticlesRequestCount = 0
         userArticlePages = [:]
+        userArticles = []
         userArticlesTotalCount = nil
+        isLoadingUserArticles = false
         articlesErrorMessage = nil
     }
 }

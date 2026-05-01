@@ -442,19 +442,19 @@ struct VocabookView: View {
 
     private func loadDashboardData() async {
         await vocabookViewModel.loadVocabookPages(dueOnly: isShowingDueWordsOnly)
-        await vocabookViewModel.loadStatistics()
+        //await vocabookViewModel.loadStatistics()
         if flashcardViewModel.reviewCards.isEmpty {
             await flashcardViewModel.prepareReviewSession()
         }
 
-        await refreshRecentAddedCount()
+        await syncRecentAddedCount()
         await refreshRecentlyAddedCards()
     }
 
     private var baseLanguageLocale: String {
         UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
     }
-
+    /*
     private func refreshRecentAddedCount() async {
         do {
             let snapshot = try await DataServices.shared.userSnapshotService.refreshSnapshot(locale: baseLanguageLocale)
@@ -464,7 +464,7 @@ struct VocabookView: View {
             recentAddedCount = 0
         }
     }
-
+     */
     private func syncRecentAddedCount() async {
         await DataServices.shared.userSnapshotService.loadSnapshot(locale: baseLanguageLocale)
         recentAddedCount = DataServices.shared.userSnapshotService.currentSnapshot(locale: baseLanguageLocale)?.word_add ?? 0

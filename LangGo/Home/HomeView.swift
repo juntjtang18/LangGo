@@ -107,16 +107,10 @@ struct HomeView: View {
         }
         .background(Color.white.ignoresSafeArea())
         .fullScreenCover(isPresented: $isShowingReview, onDismiss: {
-            Task {
-                await viewModel.handlePresentedFlowDismissed()
-            }
         }) {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isShowingQuizReview, onDismiss: {
-            Task {
-                await viewModel.handlePresentedFlowDismissed()
-            }
         }) {
             ExamView()
         }
@@ -143,9 +137,6 @@ struct HomeView: View {
             }
         }
         .fullScreenCover(isPresented: $isShowingAddWord, onDismiss: {
-            Task {
-                await viewModel.handlePresentedFlowDismissed()
-            }
         }) {
             NewWordInputView(viewModel: flashcardViewModel)
         }
@@ -213,18 +204,6 @@ struct HomeView: View {
             guard scenePhase == .active else { return }
 
             await viewModel.handleScheduledFlashcardStatisticsRefresh()
-        }
-        .onChange(of: scenePhase) { newPhase in
-            guard newPhase == .active else { return }
-            Task {
-                await viewModel.handleSceneDidBecomeActive()
-            }
-        }
-        .onChange(of: selectedTab) { newTab in
-            guard newTab == 0 else { return }
-            Task {
-                await viewModel.handleHomeTabSelected()
-            }
         }
     }
 

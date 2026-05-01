@@ -2,8 +2,6 @@ import Foundation
 
 enum FlashcardCache {
     private enum Policy {
-        static let statisticsTTL: CacheService.CacheTTL = .seconds(1)
-        static let reviewFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
         static let allMyFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
         static let tierFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
         static let recentFlashcardsTTL: CacheService.CacheTTL = .seconds(5 * 60)
@@ -78,27 +76,27 @@ enum FlashcardCache {
     }
 
     static func loadStatistics(using cacheService: CacheService = .shared) -> StrapiStatistics? {
-        cacheService.loadIfValid(type: StrapiStatistics.self, from: statisticsKey())
+        cacheService.load(type: StrapiStatistics.self, from: statisticsKey())
     }
 
     static func storeStatistics(_ statistics: StrapiStatistics, using cacheService: CacheService = .shared) {
         cacheService.saveWithPolicy(
             statistics,
             key: statisticsKey(),
-            ttl: Policy.statisticsTTL,
+            ttl: nil,
             tags: [statisticsTag]
         )
     }
 
     static func loadReviewFlashcards(using cacheService: CacheService = .shared) -> [Flashcard]? {
-        cacheService.loadIfValid(type: [Flashcard].self, from: reviewFlashcardsKey())
+        cacheService.load(type: [Flashcard].self, from: reviewFlashcardsKey())
     }
 
     static func storeReviewFlashcards(_ cards: [Flashcard], using cacheService: CacheService = .shared) {
         cacheService.saveWithPolicy(
             cards,
             key: reviewFlashcardsKey(),
-            ttl: Policy.reviewFlashcardsTTL,
+            ttl: nil,
             tags: [reviewFlashcardsTag]
         )
     }
@@ -144,6 +142,10 @@ enum FlashcardCache {
 
     static func invalidateAfterFlashcardWrite(using cacheService: CacheService = .shared) {
         cacheService.invalidate(tags: [statisticsTag, reviewFlashcardsTag, allMyFlashcardsTag, tierFlashcardsTag, recentFlashcardsTag])
+    }
+
+    static func invalidateDueReviewCaches(using cacheService: CacheService = .shared) {
+        cacheService.invalidate(tags: [statisticsTag, reviewFlashcardsTag])
     }
 
     static func patchAfterFlashcardReview(updatedCard: Flashcard, using cacheService: CacheService = .shared) {

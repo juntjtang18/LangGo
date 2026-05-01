@@ -94,25 +94,21 @@ final class HomeViewModel: ObservableObject {
     private let flashcardService: FlashcardService
     private let articleService: ArticleService
     private let localeProvider: () -> String
-    private let articlePreviewPageSize: Int
 
     private var cancellables = Set<AnyCancellable>()
     private var hasLoadedSnapshot = false
     private var hasLoadedFlashcardStatistics = false
     private var hasLoadedArticleLibrary = false
-
     init(
         userSnapshotService: UserSnapshotService? = nil,
         flashcardService: FlashcardService? = nil,
         articleService: ArticleService? = nil,
-        articlePreviewPageSize: Int = 3,
         localeProvider: (() -> String)? = nil
     ) {
         let services = DataServices.shared
         self.userSnapshotService = userSnapshotService ?? services.userSnapshotService
         self.flashcardService = flashcardService ?? services.flashcardService
         self.articleService = articleService ?? services.articleService
-        self.articlePreviewPageSize = articlePreviewPageSize
         self.localeProvider = localeProvider ?? {
             UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
         }
@@ -122,15 +118,17 @@ final class HomeViewModel: ObservableObject {
     }
 
     func loadIfNeeded() async {
-        await loadSnapshotIfNeeded()
-        await loadFlashcardStatisticsIfNeeded()
-        await loadArticleLibraryIfNeeded()
+        async let snapshotTask: Void = loadSnapshotIfNeeded()
+        async let flashcardStatisticsTask: Void = loadFlashcardStatisticsIfNeeded()
+        async let articleLibraryTask: Void = loadArticleLibraryIfNeeded()
+        _ = await (snapshotTask, flashcardStatisticsTask, articleLibraryTask)
     }
 
     func handlePullToRefresh() async {
-        await refreshFlashcardStatistics(forceRefresh: true)
-        await ensureSnapshotLoadedFromCache()
-        await refreshArticleLibrary()
+        async let snapshotTask: Void = refreshSnapshot()
+        async let flashcardStatisticsTask: Void = refreshFlashcardStatistics(forceRefresh: true)
+        async let articleLibraryTask: Void = articleService.refreshSharedUserArticles()
+        _ = await (snapshotTask, flashcardStatisticsTask, articleLibraryTask)
     }
 
     func handleScheduledFlashcardStatisticsRefresh() async {
@@ -142,15 +140,12 @@ final class HomeViewModel: ObservableObject {
     }
 
     func handleSceneDidBecomeActive() async {
-        await refreshVisibleContent()
     }
 
     func handleHomeTabSelected() async {
-        await refreshVisibleContent()
     }
 
     func handlePresentedFlowDismissed() async {
-        await refreshVisibleContent()
     }
 
     private func bindServices() {
@@ -186,19 +181,13 @@ final class HomeViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        articleService.$userArticlePages
+        articleService.$userArticles
             .sink { [weak self] _ in
                 Task { @MainActor in
                     self?.syncPublishedState()
                 }
             }
             .store(in: &cancellables)
-    }
-
-    private func refreshVisibleContent() async {
-        await refreshFlashcardStatistics()
-        await ensureSnapshotLoadedFromCache()
-        await refreshArticleLibrary()
     }
 
     private func loadSnapshotIfNeeded() async {
@@ -218,24 +207,38 @@ final class HomeViewModel: ObservableObject {
         await userSnapshotService.loadSnapshot(locale: currentLocale())
     }
 
+    private func refreshSnapshot() async {
+        hasLoadedSnapshot = true
+        isLoadingSnapshot = true
+        syncPublishedState()
+        defer {
+            isLoadingSnapshot = false
+            syncPublishedState()
+        }
+
+        do {
+            _ = try await userSnapshotService.refreshSnapshot(locale: currentLocale())
+        } catch {
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                return
+            }
+        }
+    }
+
     private func loadFlashcardStatisticsIfNeeded() async {
         guard !hasLoadedFlashcardStatistics else { return }
         hasLoadedFlashcardStatistics = true
         await flashcardService.loadStatisticsIfNeeded()
     }
 
-    private func refreshFlashcardStatistics(forceRefresh: Bool = false) async {
-        await flashcardService.refreshStatistics(forceRefresh: forceRefresh)
-    }
-
     private func loadArticleLibraryIfNeeded() async {
         guard !hasLoadedArticleLibrary else { return }
         hasLoadedArticleLibrary = true
-        await articleService.loadUserArticlesPageIfNeeded(page: 1, pageSize: articlePreviewPageSize)
+        await articleService.loadSharedUserArticlesIfNeeded()
     }
-
-    private func refreshArticleLibrary() async {
-        await articleService.refreshUserArticles(page: 1, pageSize: articlePreviewPageSize)
+    
+    private func refreshFlashcardStatistics(forceRefresh: Bool = false) async {
+        await flashcardService.refreshStatistics(forceRefresh: forceRefresh)
     }
 
     private func syncPublishedState() {
@@ -251,21 +254,9 @@ final class HomeViewModel: ObservableObject {
     }
 
     private func makeArticleLibraryPreviewStates() -> [ArticleLibraryPreviewState] {
-        guard let response = resolvedArticlePreviewResponse() else { return [] }
-
-        return (response.data ?? [])
-            .prefix(articlePreviewPageSize)
+        articleService.userArticles
+            .prefix(3)
             .map(makeArticleLibraryPreviewState)
-    }
-
-    private func resolvedArticlePreviewResponse() -> StrapiListResponse<StrapiUserArticle>? {
-        articleService.userArticlePages
-            .filter { $0.key.page == 1 }
-            .sorted { lhs, rhs in
-                lhs.key.pageSize > rhs.key.pageSize
-            }
-            .first?
-            .value
     }
 
     private func makeArticleLibraryPreviewState(from article: StrapiUserArticle) -> ArticleLibraryPreviewState {

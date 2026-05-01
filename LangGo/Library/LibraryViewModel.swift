@@ -72,7 +72,7 @@ final class LibraryViewModel: ObservableObject {
         }
 
         async let tagsTask: Void = articleTagService.loadArticleTagsIfNeeded(usedOnly: true)
-        async let articlesTask: Void = articleService.loadUserArticlesPageIfNeeded(page: 1, pageSize: articlePageSize)
+        async let articlesTask: Void = articleService.loadSharedUserArticlesIfNeeded()
 
         _ = await (tagsTask, articlesTask)
     }

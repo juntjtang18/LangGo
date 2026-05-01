@@ -32,9 +32,16 @@ final class FlashcardService: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardService")
     private let cacheService = CacheService.shared
     private let networkManager = NetworkManager.shared
-    private let dateFormatter = ISO8601DateFormatter()
-    private let flashcardStatisticsMinimumFetchInterval: TimeInterval = 2
-    private var lastFlashcardStatisticsNetworkFetchAt: Date?
+    private let nextFetchAtFormatterWithFractionalSeconds = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private let nextFetchAtFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
     private var reviewFlashcardNetworkPageBuffer: [Int: [Flashcard]] = [:]
     private var reviewFlashcardNetworkPagination: StrapiPagination?
     private var reviewFlashcardNetworkPagePaginations: [Int: StrapiPagination] = [:]
@@ -44,16 +51,24 @@ final class FlashcardService: ObservableObject {
     private var reviewFlashcardNetworkExpectedPageCount: Int?
     private var reviewFlashcardNetworkExpectedTotal: Int?
     private var reviewFlashcardNetworkOwnerUserId: Int?
+    private var flashcardStatisticsTask: Task<StrapiStatistics, Error>?
 
     private var currentUserId: Int? {
         let userId = UserDefaults.standard.integer(forKey: "userId")
         return userId > 0 ? userId : nil
     }
     private let reviewFlashcardStateLock = NSLock()
+    private let statisticsStateLock = NSLock()
 
     private func withReviewFlashcardStateLock<T>(_ work: () throws -> T) rethrows -> T {
         reviewFlashcardStateLock.lock()
         defer { reviewFlashcardStateLock.unlock() }
+        return try work()
+    }
+
+    private func withStatisticsStateLock<T>(_ work: () throws -> T) rethrows -> T {
+        statisticsStateLock.lock()
+        defer { statisticsStateLock.unlock() }
         return try work()
     }
 
@@ -63,14 +78,7 @@ final class FlashcardService: ObservableObject {
 
     func loadStatisticsIfNeeded() async {
         await setStatisticsErrorMessage(nil)
-
-        if let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
-            logger.debug("✅ Returning flashcard statistics from cache.")
-            await publishStatistics(cachedStats)
-            return
-        }
-
-        await refreshStatistics(forceRefresh: false)
+        _ = try? await fetchFlashcardStatistics(forceRefresh: false)
     }
 
     func refreshStatistics(forceRefresh: Bool = false) async {
@@ -98,29 +106,7 @@ final class FlashcardService: ObservableObject {
         await setStatisticsErrorMessage(nil)
 
         do {
-            if !forceRefresh,
-               !isRefreshModeEnabled,
-               let lastFetch = lastFlashcardStatisticsNetworkFetchAt,
-               Date().timeIntervalSince(lastFetch) < flashcardStatisticsMinimumFetchInterval,
-               let cachedStats = FlashcardCache.loadStatistics(using: cacheService) {
-                logger.debug("✅ Returning flashcard statistics from cache due to short repeat-fetch guard.")
-                await publishStatistics(cachedStats)
-                await setStatisticsLoading(false)
-                return cachedStats
-            }
-
-            logger.debug("Fetching flashcard statistics from network.")
-            guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else {
-                throw URLError(.badURL)
-            }
-
-            let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
-            let stats = resp.data
-            lastFlashcardStatisticsNetworkFetchAt = Date()
-
-            FlashcardCache.storeStatistics(stats, using: cacheService)
-            logger.debug("💾 Saved fetched statistics to cache.")
-            await publishStatistics(stats)
+            let stats = try await resolveFlashcardStatistics(forceRefresh: forceRefresh)
             await setStatisticsLoading(false)
             return stats
         } catch {
@@ -148,18 +134,18 @@ final class FlashcardService: ObservableObject {
     /// `fetchAllReviewFlashcardsFromNetworkAndCommit` after every expected backend
     /// page has been loaded.
     func fetchAvailableReviewFlashcards(pageSize: Int = 100) async throws -> [Flashcard] {
-        if !isRefreshModeEnabled,
-           let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
-            logger.debug("✅ Review cache is FRESH. Returning \(cached.count) cards.")
-            await publishReviewFlashcards(cached)
-            return cached
-        }
-
         let available = await currentAvailableReviewFlashcards()
         if isReviewFlashcardsFullLoadRunning(), !available.isEmpty {
             logger.debug("Review full-load is running. Returning \(available.count) available review cards immediately.")
             await publishReviewFlashcards(available)
             return available
+        }
+
+        if try await canReusePersistedDueReviewCaches(),
+           let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
+            logger.debug("✅ Review cache is FRESH. Returning \(cached.count) cards.")
+            await publishReviewFlashcards(cached)
+            return cached
         }
 
         logger.debug("Review cache is STALE. Fetching first review page and starting/reusing background full-load.")
@@ -304,6 +290,10 @@ final class FlashcardService: ObservableObject {
             reviewFlashcardPageTasks.removeAll()
             resetReviewFlashcardNetworkBufferLocked()
         }
+        withStatisticsStateLock {
+            flashcardStatisticsTask?.cancel()
+            flashcardStatisticsTask = nil
+        }
         Task {
             await publishReviewFlashcards([])
             await setReviewFlashcardsFullLoadActive(false)
@@ -324,8 +314,6 @@ final class FlashcardService: ObservableObject {
             reviewFlashcardPageTasks.removeAll()
             resetReviewFlashcardNetworkBufferLocked()
         }
-
-        lastFlashcardStatisticsNetworkFetchAt = nil
 
         Task { @MainActor in
             self.flashcards = []
@@ -492,7 +480,7 @@ final class FlashcardService: ObservableObject {
     }
 
     func ensureReviewFlashcardsFullyLoaded(pageSize firstPageSize: Int = 100) {
-        if !isRefreshModeEnabled,
+        if canReusePersistedDueReviewCachesWithoutFetchingStatistics(),
            let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
             Task { await publishReviewFlashcards(cached) }
             return
@@ -619,16 +607,16 @@ final class FlashcardService: ObservableObject {
     }
 
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
-        if !isRefreshModeEnabled,
+        if let bufferedPage = bufferedReviewFlashcardsPage(page: page) {
+            logger.debug("Review cache is STALE, but page \(page) is already loaded in memory. Returning buffered page.")
+            return bufferedPage
+        }
+
+        if try await canReusePersistedDueReviewCaches(),
            let cached = FlashcardCache.loadReviewFlashcards(using: cacheService) {
             logger.debug("Review cache is FRESH. Returning review page \(page) from cache.")
             await publishReviewFlashcards(cached)
             return pageSlice(from: cached, page: page, pageSize: pageSize)
-        }
-
-        if let bufferedPage = bufferedReviewFlashcardsPage(page: page) {
-            logger.debug("Review cache is STALE, but page \(page) is already loaded in memory. Returning buffered page.")
-            return bufferedPage
         }
 
         logger.debug("Review cache is STALE. Fetching review page \(page) from network or shared page task.")
@@ -918,19 +906,130 @@ final class FlashcardService: ObservableObject {
         }
     }
 
+    private func resolveFlashcardStatistics(forceRefresh: Bool) async throws -> StrapiStatistics {
+        if !forceRefresh,
+           !isRefreshModeEnabled,
+           let cachedStats = FlashcardCache.loadStatistics(using: cacheService),
+           !isDueReviewCacheExpired(statistics: cachedStats) {
+            logger.debug("✅ Returning flashcard statistics from due-review cache gate.")
+            await publishStatistics(cachedStats)
+            return cachedStats
+        }
+
+        if !forceRefresh {
+            invalidateDueReviewCachesIfNeeded()
+        }
+
+        return try await fetchFlashcardStatisticsFromNetworkDeduped()
+    }
+
+    private func fetchFlashcardStatisticsFromNetworkDeduped() async throws -> StrapiStatistics {
+        if let existingTask = withStatisticsStateLock({ flashcardStatisticsTask }) {
+            logger.debug("Joining existing flashcard statistics network task.")
+            return try await existingTask.value
+        }
+
+        let task = Task { [weak self] () throws -> StrapiStatistics in
+            guard let self else { throw CancellationError() }
+            return try await self.fetchFlashcardStatisticsFromNetwork()
+        }
+
+        let taskState = withStatisticsStateLock { () -> (task: Task<StrapiStatistics, Error>, didStore: Bool) in
+            if let existingTask = flashcardStatisticsTask {
+                return (existingTask, false)
+            }
+
+            flashcardStatisticsTask = task
+            return (task, true)
+        }
+
+        defer {
+            if taskState.didStore {
+                withStatisticsStateLock {
+                    flashcardStatisticsTask = nil
+                }
+            }
+        }
+
+        return try await taskState.task.value
+    }
+
+    private func fetchFlashcardStatisticsFromNetwork() async throws -> StrapiStatistics {
+        logger.debug("Fetching flashcard statistics from network.")
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else {
+            throw URLError(.badURL)
+        }
+
+        let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
+        let stats = resp.data
+
+        if isDueReviewCacheExpired(statistics: stats) {
+            FlashcardCache.invalidateDueReviewCaches(using: cacheService)
+            logger.debug("Due-review cache gate is expired from fetched statistics. Persistent due caches invalidated.")
+        } else {
+            FlashcardCache.storeStatistics(stats, using: cacheService)
+            logger.debug("💾 Saved fetched statistics to cache.")
+        }
+
+        await publishStatistics(stats)
+        return stats
+    }
+
+    private func canReusePersistedDueReviewCaches() async throws -> Bool {
+        guard !isRefreshModeEnabled else { return false }
+
+        let statistics = try await resolveFlashcardStatistics(forceRefresh: false)
+        let isExpired = isDueReviewCacheExpired(statistics: statistics)
+        if isExpired {
+            FlashcardCache.invalidateDueReviewCaches(using: cacheService)
+        }
+        return !isExpired
+    }
+
+    private func canReusePersistedDueReviewCachesWithoutFetchingStatistics() -> Bool {
+        guard !isRefreshModeEnabled else { return false }
+
+        guard let statistics = FlashcardCache.loadStatistics(using: cacheService) else {
+            return false
+        }
+
+        let isExpired = isDueReviewCacheExpired(statistics: statistics)
+        if isExpired {
+            FlashcardCache.invalidateDueReviewCaches(using: cacheService)
+        }
+        return !isExpired
+    }
+
+    private func invalidateDueReviewCachesIfNeeded() {
+        guard let cachedStatistics = FlashcardCache.loadStatistics(using: cacheService) else { return }
+        guard isDueReviewCacheExpired(statistics: cachedStatistics) else { return }
+
+        FlashcardCache.invalidateDueReviewCaches(using: cacheService)
+        logger.debug("Due-review cache gate expired. Invalidated statistics and review flashcard caches.")
+    }
+
+    private func isDueReviewCacheExpired(statistics: StrapiStatistics?) -> Bool {
+        guard let statistics,
+              let nextFetchAt = parseDueReviewNextFetchAt(statistics.nextFetchAt) else {
+            return true
+        }
+
+        return nextFetchAt <= Date()
+    }
+
+    private func parseDueReviewNextFetchAt(_ value: String?) -> Date? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else {
+            return nil
+        }
+
+        return nextFetchAtFormatterWithFractionalSeconds.date(from: value)
+            ?? nextFetchAtFormatter.date(from: value)
+    }
+
     private func nextFlashcardStatisticsFetchDate(from statistics: StrapiStatistics?) -> Date? {
-        guard let statistics else {
-            return nil
-        }
-
-        guard statistics.dueForReview == 0 else {
-            return nil
-        }
-
-        guard let nextFetchAt = statistics.nextFetchAt else {
-            return nil
-        }
-
-        return dateFormatter.date(from: nextFetchAt)
+        guard let statistics else { return nil }
+        guard let nextFetchAt = parseDueReviewNextFetchAt(statistics.nextFetchAt) else { return nil }
+        return nextFetchAt > Date() ? nextFetchAt : nil
     }
 }

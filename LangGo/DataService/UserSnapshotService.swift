@@ -17,6 +17,7 @@ final class UserSnapshotService: ObservableObject {
     private let networkManager: NetworkManager
     private let cacheService: CacheService
     private var loadedLocale: String?
+    private var snapshotTasks: [String: Task<UserRankSnapshot?, Error>] = [:]
 
     init(
         networkManager: NetworkManager = .shared,
@@ -43,13 +44,20 @@ final class UserSnapshotService: ObservableObject {
         }
 
         guard latestSnapshot == nil || UserSnapshotCache.isExpired(locale: locale, using: cacheService) else {
+            logger.debug("loadSnapshot fresh cache is valid; skip network locale=\(locale ?? "nil", privacy: .public)")
             return
         }
 
         do {
             _ = try await refreshSnapshot(locale: locale)
         } catch {
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                logger.debug("Rank snapshot refresh cancelled; keeping cached snapshot.")
+                return
+            }
+
             logger.error("Failed to load rank snapshot: \(error.localizedDescription, privacy: .public)")
+
         }
     }
 
@@ -58,17 +66,26 @@ final class UserSnapshotService: ObservableObject {
     func refreshSnapshot(locale: String? = nil) async throws -> UserRankSnapshot? {
         let locale = normalizedLocale(locale)
         loadedLocale = locale
+        let taskKey = snapshotTaskKey(locale)
 
-        logger.debug("Fetching rank snapshot for current user.")
-
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/rank/me") else {
-            throw URLError(.badURL)
+        if let existingTask = snapshotTasks[taskKey] {
+            logger.debug("Joining existing rank snapshot task for locale \(taskKey, privacy: .public).")
+            return try await existingTask.value
         }
 
-        let response: RankUserResponse = try await networkManager.fetchDirect(from: url)
-        let snapshot = response.data.latest_snapshot
+        let task = Task { [weak self] () throws -> UserRankSnapshot? in
+            guard let self else { throw CancellationError() }
+            return try await self.fetchSnapshotFromNetwork(locale: locale)
+        }
+        snapshotTasks[taskKey] = task
+        defer { snapshotTasks[taskKey] = nil }
 
-        UserSnapshotCache.store(snapshot, locale: locale, using: cacheService)
+        let snapshot = try await task.value
+        if let snapshot {
+            UserSnapshotCache.store(snapshot, locale: locale, using: cacheService)
+        } else {
+            UserSnapshotCache.invalidate(using: cacheService)
+        }
         latestSnapshot = snapshot
         return snapshot
     }
@@ -83,5 +100,23 @@ final class UserSnapshotService: ObservableObject {
     private func normalizedLocale(_ locale: String?) -> String? {
         guard let locale, !locale.isEmpty else { return nil }
         return locale
+    }
+
+    private func snapshotTaskKey(_ locale: String?) -> String {
+        locale ?? "default"
+    }
+
+    private func fetchSnapshotFromNetwork(locale: String?) async throws -> UserRankSnapshot? {
+        logger.debug("Fetching rank snapshot for current user.")
+
+        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/rank/me")
+        if let locale {
+            components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
+        }
+
+        guard let url = components?.url else { throw URLError(.badURL) }
+
+        let response: RankUserResponse = try await networkManager.fetchDirect(from: url)
+        return response.data.latest_snapshot
     }
 }
