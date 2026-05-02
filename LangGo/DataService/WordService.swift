@@ -53,7 +53,7 @@ class WordService {
                     using: self.cacheService
                 )
 
-                self.flashcardService.notifyFlashcardsDidChange()
+                await self.flashcardService.handleFlashcardAdded(flashcard)
             }
         )
     }

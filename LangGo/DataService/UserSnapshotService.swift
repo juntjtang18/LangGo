@@ -90,6 +90,11 @@ final class UserSnapshotService: ObservableObject {
         return snapshot
     }
 
+    @discardableResult
+    func refreshUserSnapshot(locale: String? = nil) async throws -> UserRankSnapshot? {
+        try await refreshSnapshot(locale: locale)
+    }
+
     func invalidateSnapshot(locale: String? = nil) {
         UserSnapshotCache.invalidate(using: cacheService)
         if normalizedLocale(locale) == normalizedLocale(loadedLocale) || locale == nil {

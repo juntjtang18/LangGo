@@ -88,17 +88,15 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var articleLibraryCount: Int?
     @Published private(set) var articleLibraryPreviews: [ArticleLibraryPreviewState] = []
     @Published private(set) var isLoadingSnapshot = false
-    @Published private(set) var nextFlashcardStatisticsFetchAt: Date?
 
     private let userSnapshotService: UserSnapshotService
     private let flashcardService: FlashcardService
     private let articleService: ArticleService
     private let localeProvider: () -> String
+    private let logger = Logger(subsystem: "com.langGo.swift", category: "HomeViewModel")
 
     private var cancellables = Set<AnyCancellable>()
-    private var hasLoadedSnapshot = false
-    private var hasLoadedFlashcardStatistics = false
-    private var hasLoadedArticleLibrary = false
+
     init(
         userSnapshotService: UserSnapshotService? = nil,
         flashcardService: FlashcardService? = nil,
@@ -117,86 +115,68 @@ final class HomeViewModel: ObservableObject {
         syncPublishedState()
     }
 
-    func loadIfNeeded() async {
-        async let snapshotTask: Void = loadSnapshotIfNeeded()
-        async let flashcardStatisticsTask: Void = loadFlashcardStatisticsIfNeeded()
-        async let articleLibraryTask: Void = loadArticleLibraryIfNeeded()
-        _ = await (snapshotTask, flashcardStatisticsTask, articleLibraryTask)
+    func load() async {
+        async let snapshotTask: Void = loadSnapshot()
+        async let flashcardStatTask: Void = flashcardService.loadStatisticsIfNeeded()
+        async let articleTask: Void = articleService.loadSharedUserArticlesIfNeeded()
+        _ = await (snapshotTask, flashcardStatTask, articleTask)
     }
 
-    func handlePullToRefresh() async {
-        async let snapshotTask: Void = refreshSnapshot()
-        async let flashcardStatisticsTask: Void = refreshFlashcardStatistics(forceRefresh: true)
-        async let articleLibraryTask: Void = articleService.refreshSharedUserArticles()
-        _ = await (snapshotTask, flashcardStatisticsTask, articleLibraryTask)
-    }
-
-    func handleScheduledFlashcardStatisticsRefresh() async {
-        await refreshFlashcardStatistics(forceRefresh: true)
-    }
-
-    func handleFlashcardsDidChange() async {
-        await refreshFlashcardStatistics(forceRefresh: true)
-    }
-
-    func handleSceneDidBecomeActive() async {
-    }
-
-    func handleHomeTabSelected() async {
-    }
-
-    func handlePresentedFlowDismissed() async {
+    func refresh() async {
+        async let snapshotTask: Void = refreshUserSnapshot()
+        async let flashcardStatTask: Void = flashcardService.refreshFlashcardStat()
+        async let articleTask: Void = articleService.refreshArticleState()
+        _ = await (snapshotTask, flashcardStatTask, articleTask)
     }
 
     private func bindServices() {
         userSnapshotService.$latestSnapshot
             .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.syncPublishedState()
-                }
+                self?.syncPublishedState()
             }
             .store(in: &cancellables)
 
         flashcardService.$flashcardStatistics
             .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.syncPublishedState()
-                }
-            }
-            .store(in: &cancellables)
-
-        flashcardService.$nextFlashcardStatisticsFetchAt
-            .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.syncPublishedState()
-                }
+                self?.syncPublishedState()
             }
             .store(in: &cancellables)
 
         articleService.$userArticlesTotalCount
             .sink { [weak self] _ in
-                Task { @MainActor in
-                    self?.syncPublishedState()
-                }
+                self?.syncPublishedState()
             }
             .store(in: &cancellables)
 
         articleService.$userArticles
             .sink { [weak self] _ in
+                self?.syncPublishedState()
+            }
+            .store(in: &cancellables)
+
+        flashcardService.$flashcardStatChanged
+            .dropFirst()
+            .sink { [weak self] changeToken in
+                guard let self else { return }
                 Task { @MainActor in
-                    self?.syncPublishedState()
+                    await self.handleFlashcardStatChanged(changeToken: changeToken)
+                }
+            }
+            .store(in: &cancellables)
+
+        articleService.$articleChanged
+            .dropFirst()
+            .sink { [weak self] changeToken in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.logger.debug("reacting to articleChanged token=\(changeToken, privacy: .public)")
+                    await self.articleService.refreshArticleState()
                 }
             }
             .store(in: &cancellables)
     }
 
-    private func loadSnapshotIfNeeded() async {
-        guard !hasLoadedSnapshot else { return }
-        await ensureSnapshotLoadedFromCache()
-    }
-
-    private func ensureSnapshotLoadedFromCache() async {
-        hasLoadedSnapshot = true
+    private func loadSnapshot() async {
         isLoadingSnapshot = true
         syncPublishedState()
         defer {
@@ -207,8 +187,7 @@ final class HomeViewModel: ObservableObject {
         await userSnapshotService.loadSnapshot(locale: currentLocale())
     }
 
-    private func refreshSnapshot() async {
-        hasLoadedSnapshot = true
+    private func refreshUserSnapshot() async {
         isLoadingSnapshot = true
         syncPublishedState()
         defer {
@@ -217,38 +196,28 @@ final class HomeViewModel: ObservableObject {
         }
 
         do {
-            _ = try await userSnapshotService.refreshSnapshot(locale: currentLocale())
+            _ = try await userSnapshotService.refreshUserSnapshot(locale: currentLocale())
         } catch {
             if Task.isCancelled || (error as? URLError)?.code == .cancelled {
                 return
             }
+            logger.error("refreshUserSnapshot failed locale=\(self.currentLocale(), privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    private func loadFlashcardStatisticsIfNeeded() async {
-        guard !hasLoadedFlashcardStatistics else { return }
-        hasLoadedFlashcardStatistics = true
-        await flashcardService.loadStatisticsIfNeeded()
-    }
-
-    private func loadArticleLibraryIfNeeded() async {
-        guard !hasLoadedArticleLibrary else { return }
-        hasLoadedArticleLibrary = true
-        await articleService.loadSharedUserArticlesIfNeeded()
-    }
-    
-    private func refreshFlashcardStatistics(forceRefresh: Bool = false) async {
-        await flashcardService.refreshStatistics(forceRefresh: forceRefresh)
+    private func handleFlashcardStatChanged(changeToken: Int) async {
+        logger.debug("reacting to flashcardStatChanged token=\(changeToken, privacy: .public)")
+        async let statTask: Void = flashcardService.refreshFlashcardStat()
+        async let snapshotTask: Void = refreshUserSnapshot()
+        _ = await (statTask, snapshotTask)
     }
 
     private func syncPublishedState() {
         let snapshot = userSnapshotService.currentSnapshot(locale: currentLocale())
-
         rankPointsState = makeRankPointsCardState(snapshot: snapshot)
         reviewCardState = makeReviewCardState(statistics: flashcardService.flashcardStatistics)
         leaderboardBannerState = makeLeaderboardBannerState(snapshot: snapshot)
         leaderboardSheetState = makeLeaderboardSheetState(snapshot: snapshot)
-        nextFlashcardStatisticsFetchAt = flashcardService.nextFlashcardStatisticsFetchAt
         articleLibraryCount = articleService.userArticlesTotalCount
         articleLibraryPreviews = makeArticleLibraryPreviewStates()
     }

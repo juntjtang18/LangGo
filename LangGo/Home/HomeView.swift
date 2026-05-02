@@ -3,7 +3,6 @@ import AVFoundation
 
 struct HomeView: View {
     @Binding var selectedTab: Int
-    @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var flashcardViewModel = FlashcardViewModel()
     @StateObject private var vocabookViewModel = VocabookViewModel()
@@ -102,7 +101,7 @@ struct HomeView: View {
             }
             .background(Color.white)
             .refreshable {
-                await viewModel.handlePullToRefresh()
+                await viewModel.refresh()
             }
         }
         .background(Color.white.ignoresSafeArea())
@@ -173,28 +172,7 @@ struct HomeView: View {
             Text(placeholderMessage ?? "")
         }
         .task {
-            await viewModel.loadIfNeeded()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .flashcardsDidChange)) { _ in
-            guard selectedTab == 0 else { return }
-            guard scenePhase == .active else { return }
-
-            Task {
-                await viewModel.handleFlashcardsDidChange()
-            }
-        }
-        .task(id: viewModel.nextFlashcardStatisticsFetchAt) {
-            guard let nextFetchAt = viewModel.nextFlashcardStatisticsFetchAt else { return }
-
-            let delay = nextFetchAt.timeIntervalSinceNow
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            }
-
-            guard !Task.isCancelled else { return }
-            guard scenePhase == .active else { return }
-
-            await viewModel.handleScheduledFlashcardStatisticsRefresh()
+            await viewModel.load()
         }
     }
 
@@ -262,8 +240,8 @@ struct HomeView: View {
             }
 
             VStack(spacing: metrics.reviewRowsGap) {
-                ReviewStatusRow(label: "Due", value: formatNumber(viewModel.reviewCardState.dueForReview), icon: nil, metrics: metrics)
-                ReviewStatusRow(label: "Remembered", value: formatNumber(viewModel.reviewCardState.remembered), icon: nil, metrics: metrics)
+                ReviewStatusRow(label: "Due Words", value: formatNumber(viewModel.reviewCardState.dueForReview), icon: nil, metrics: metrics)
+                //ReviewStatusRow(label: "Remembered", value: formatNumber(viewModel.reviewCardState.remembered), icon: nil, metrics: metrics)
             }
             .padding(.horizontal, metrics.reviewPanelHorizontalPadding)
             .padding(.vertical, metrics.reviewPanelVerticalPadding)
@@ -673,15 +651,15 @@ private struct HomeMetrics {
         reviewContentGap = sy(16)
         reviewTitleGap = sy(2)
         reviewLabelFont = min(sx(20), sy(20))
-        reviewCountFont = min(sx(32), sy(32))
+        reviewCountFont = min(sx(20), sy(20))
         reviewIconCircle = sx(38)
         reviewIconFont = min(sx(20), sy(20))
         reviewPanelHorizontalPadding = sx(14)
         reviewPanelVerticalPadding = sy(12)
         reviewPanelCornerRadius = sx(10)
         reviewRowsGap = sy(10)
-        reviewRowFont = min(sx(20), sy(20))
-        reviewRowIconFont = min(sx(20), sy(20))
+        reviewRowFont = min(sx(26), sy(26))
+        reviewRowIconFont = min(sx(26), sy(26))
         reviewButtonTopSpacing = sy(10)
         reviewButtonHeight = sy(58)
         reviewButtonCornerRadius = sx(10)

@@ -23,6 +23,7 @@ final class FlashcardService: ObservableObject {
     @Published private(set) var reviewFlashcards: [Flashcard] = []
     @Published private(set) var isLoadingAllReviewFlashcards = false
     @Published private(set) var flashcardStatistics: StrapiStatistics?
+    @Published private(set) var flashcardStatChanged: Int = 0
     @Published private(set) var nextFlashcardStatisticsFetchAt: Date?
     @Published private(set) var isLoadingFlashcards = false
     @Published private(set) var flashcardsErrorMessage: String?
@@ -68,6 +69,10 @@ final class FlashcardService: ObservableObject {
     }
 
     func refreshStatistics(forceRefresh: Bool = false) async {
+        _ = try? await fetchFlashcardStatistics()
+    }
+
+    func refreshFlashcardStat() async {
         _ = try? await fetchFlashcardStatistics()
     }
 
@@ -142,6 +147,7 @@ final class FlashcardService: ObservableObject {
 
         let updatedCard = transformStrapiCard(updatedStrapiCard)
         await patchInMemoryStateAfterFlashcardReview(updatedCard)
+        await publishFlashcardStatChanged()
         return updatedCard
     }
     
@@ -306,6 +312,17 @@ final class FlashcardService: ObservableObject {
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .flashcardsDidChange, object: nil)
         }
+    }
+
+    func handleFlashcardAdded(_ flashcard: Flashcard) async {
+        await MainActor.run {
+            if let existingIndex = self.flashcards.firstIndex(where: { $0.id == flashcard.id }) {
+                self.flashcards[existingIndex] = flashcard
+            } else {
+                self.flashcards.insert(flashcard, at: 0)
+            }
+        }
+        await publishFlashcardStatChanged()
     }
     
     private func getOrFetchAllMyFlashcards() async throws -> [Flashcard] {
@@ -607,6 +624,14 @@ final class FlashcardService: ObservableObject {
             self.flashcardStatistics = statistics
             self.nextFlashcardStatisticsFetchAt = nil
         }
+    }
+
+    private func publishFlashcardStatChanged() async {
+        await MainActor.run {
+            self.flashcardStatChanged += 1
+        }
+        logger.debug("flashcardStatChanged published token=\(self.flashcardStatChanged, privacy: .public)")
+        notifyFlashcardsDidChange()
     }
 
     private func setFlashcardsLoading(_ isLoading: Bool) async {

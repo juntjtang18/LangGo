@@ -18,6 +18,7 @@ final class ArticleService: ObservableObject {
     @Published private(set) var userArticlePages: [UserArticlesPageKey: StrapiListResponse<StrapiUserArticle>] = [:]
     @Published private(set) var userArticles: [StrapiUserArticle] = []
     @Published private(set) var userArticlesTotalCount: Int?
+    @Published private(set) var articleChanged: Int = 0
     @Published private(set) var isLoadingUserArticles = false
     @Published private(set) var articlesErrorMessage: String?
 
@@ -68,6 +69,10 @@ final class ArticleService: ObservableObject {
             pageSize: Policy.sharedLibraryPageSize,
             forceRefresh: true
         )
+    }
+
+    func refreshArticleState() async {
+        await refreshSharedUserArticles()
     }
 
     func loadUserArticlesPageIfNeeded(page: Int, pageSize: Int) async {
@@ -313,6 +318,8 @@ final class ArticleService: ObservableObject {
                     using: self.cacheService
                 )
                 self.publishPatchedUserArticle(createdArticle, prependToFirstPage: true)
+                self.articleChanged += 1
+                self.logger.debug("articleChanged published token=\(self.articleChanged, privacy: .public) articleId=\(createdArticle.id, privacy: .public)")
                 await self.articleTagService.refreshLoadedTagCollectionsAfterArticleWrite()
             }
         )
