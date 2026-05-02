@@ -120,6 +120,7 @@ final class HomeViewModel: ObservableObject {
         async let flashcardStatTask: Void = flashcardService.loadStatisticsIfNeeded()
         async let articleTask: Void = articleService.loadSharedUserArticlesIfNeeded()
         _ = await (snapshotTask, flashcardStatTask, articleTask)
+        syncPublishedState()
     }
 
     func refresh() async {
@@ -127,6 +128,7 @@ final class HomeViewModel: ObservableObject {
         async let flashcardStatTask: Void = flashcardService.refreshFlashcardStat()
         async let articleTask: Void = articleService.refreshArticleState()
         _ = await (snapshotTask, flashcardStatTask, articleTask)
+        syncPublishedState()
     }
 
     private func bindServices() {

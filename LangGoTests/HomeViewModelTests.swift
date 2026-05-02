@@ -47,6 +47,34 @@ struct HomeViewModelTests {
     }
 
     @Test @MainActor
+    func loadPublishesReviewCardStateWhenStatsFinishAfterSnapshot() async throws {
+        MockHomeAPI.install()
+        defer { MockHomeAPI.uninstall() }
+
+        MockHomeAPI.handler = { request in
+            let path = request.url?.path ?? ""
+
+            switch (request.httpMethod ?? "GET", path) {
+            case ("GET", "/api/flashcard-stat"):
+                try await Task.sleep(nanoseconds: 250_000_000)
+                return .json(200, Self.flashcardStatsJSON(totalCards: 39, dueForReview: 24, remembered: 7))
+            case ("GET", "/api/rank/me"):
+                return .json(200, Self.rankSnapshotJSON(points: 120, pointsDelta: 9, groupRank: 3))
+            case ("GET", "/api/user-articles"):
+                return .json(200, Self.userArticlesPageJSON(ids: [501], total: 1))
+            default:
+                throw URLError(.unsupportedURL)
+            }
+        }
+
+        let homeViewModel = Self.makeHomeViewModel()
+        await homeViewModel.load()
+
+        #expect(homeViewModel.reviewCardState.totalCards == 39)
+        #expect(homeViewModel.reviewCardState.dueForReview == 24)
+    }
+
+    @Test @MainActor
     func flashcardReviewChangeRefreshesStatAndSnapshot() async throws {
         MockHomeAPI.install()
         defer { MockHomeAPI.uninstall() }
