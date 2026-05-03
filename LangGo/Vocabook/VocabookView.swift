@@ -230,9 +230,17 @@ struct VocabookView: View {
                     .minimumScaleFactor(0.8)
             }
 
-            Text("Your complete vocabulary library")
-                .font(.system(size: metrics.heroSubtitleFont, weight: .light, design: .rounded))
-                .foregroundStyle(.white.opacity(0.92))
+            HStack(alignment: .lastTextBaseline, spacing: metrics.compactSpacing) {
+                Text("\(dueWordsCount) Due Words")
+                    .font(.system(size: metrics.heroSubNumberFont, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                    .minimumScaleFactor(0.7)
+
+            }
+
+            //Text("Your complete vocabulary library")
+            //    .font(.system(size: metrics.heroSubtitleFont, weight: .light, design: .rounded))
+            //    .foregroundStyle(.white.opacity(0.92))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(metrics.cardPadding)
@@ -375,6 +383,10 @@ struct VocabookView: View {
 
     private var totalVocabularyCount: Int {
         vocabookViewModel.totalCards
+    }
+
+    private var dueWordsCount: Int {
+        vocabookViewModel.dueForReviewCount
     }
 
     private var newAddedWordsText: String {
@@ -595,7 +607,7 @@ private struct VocabookMetrics {
         bodyFont = scaled(26)
         linkFont = scaled(26)
         smallLabelFont = scaled(22)
-        heroNumberFont = scaled(36)
+        heroNumberFont = scaled(32)
         heroSubNumberFont = scaled(26)
         heroSubtitleFont = scaled(20)
 

@@ -128,7 +128,7 @@ struct HomeView: View {
             NewWordInputView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isShowingLeaderboard) {
-            LeaderboardSheet(state: viewModel.leaderboardSheetState)
+            AscentLeaderboardSheet()
         }
         .fullScreenCover(item: $selectedLibraryArticlePreview) { preview in
             ArticleReadingView(

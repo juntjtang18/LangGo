@@ -33,19 +33,6 @@ struct AscentView: View {
         .init(emoji: "🏆", title: "Month Master", subtitle: "30-day streak", accent: Color(red: 0.91, green: 0.88, blue: 0.75), isDimmed: true)
     ]
 
-    private let leaderboardEntries: [AscentLeaderboardEntry] = [
-        .init(rank: 1, name: "Sarah Chen", score: "5,234", medal: "🥇", isCurrentUser: false),
-        .init(rank: 2, name: "Mike Johnson", score: "4,892", medal: "🥈", isCurrentUser: false),
-        .init(rank: 3, name: "Emma Davis", score: "4,156", medal: "🥉", isCurrentUser: false),
-        .init(rank: 4, name: "Alex Kim", score: "3,721", medal: nil, isCurrentUser: false),
-        .init(rank: 5, name: "Lisa Wang", score: "3,298", medal: nil, isCurrentUser: false),
-        .init(rank: 6, name: "David Park", score: "3,102", medal: nil, isCurrentUser: false),
-        .init(rank: 7, name: "Maria Garcia", score: "2,956", medal: nil, isCurrentUser: false),
-        .init(rank: 8, name: "You", score: "2,847", medal: nil, isCurrentUser: true),
-        .init(rank: 9, name: "James Wilson", score: "2,734", medal: nil, isCurrentUser: false),
-        .init(rank: 10, name: "Nina Patel", score: "2,621", medal: nil, isCurrentUser: false)
-    ]
-
     var body: some View {
         GeometryReader { proxy in
             let metrics = AscentMetrics(screenSize: proxy.size)
@@ -65,7 +52,7 @@ struct AscentView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .fullScreenCover(isPresented: $isShowingLeaderboard) {
-            AscentLeaderboardSheet(entries: leaderboardEntries)
+            AscentLeaderboardSheet()
         }
     }
 
@@ -241,16 +228,6 @@ private struct AscentAchievement: Identifiable {
     let subtitle: String
     let accent: Color
     let isDimmed: Bool
-}
-
-private struct AscentLeaderboardEntry: Identifiable {
-    let rank: Int
-    let name: String
-    let score: String
-    let medal: String?
-    let isCurrentUser: Bool
-
-    var id: Int { rank }
 }
 
 private struct AscentMetrics {
@@ -474,151 +451,6 @@ private func resolvedMediaURL(from rawURL: String?) -> URL? {
         return URL(string: rawURL)
     }
     return URL(string: "\(Config.strapiBaseUrl)\(rawURL)")
-}
-
-private struct AscentLeaderboardSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let entries: [AscentLeaderboardEntry]
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Leaderboard")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
-                        Text("1,243 learners")
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                            .foregroundStyle(Color(red: 0.47, green: 0.49, blue: 0.57))
-                    }
-
-                    Spacer()
-
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Color(red: 0.48, green: 0.49, blue: 0.58))
-                            .frame(width: 36, height: 36)
-                            .background(Color(red: 0.97, green: 0.97, blue: 0.99))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
-                .padding(.bottom, 18)
-
-                VStack(spacing: 0) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Your Score")
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Color(red: 0.53, green: 0.48, blue: 0.33))
-
-                            HStack(alignment: .lastTextBaseline, spacing: 8) {
-                                Text("2,847")
-                                    .font(.system(size: 42, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(Color(red: 0.15, green: 0.17, blue: 0.22))
-                                Text("+124")
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
-                            }
-                        }
-
-                        Spacer()
-
-                        VStack(alignment: .trailing, spacing: 10) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "medal.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(Color.orange)
-                                Text("#8")
-                                    .font(.system(size: 28, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
-                            }
-
-                            Text("Up 4 spots")
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .background(Capsule().fill(Color(red: 0.89, green: 1.00, blue: 0.90)))
-                        }
-                    }
-                    .padding(20)
-                    .background(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 1.00, green: 0.97, blue: 0.91),
-                                Color(red: 1.00, green: 0.96, blue: 0.86)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-
-                    Divider()
-                        .overlay(Color(red: 0.95, green: 0.83, blue: 0.48))
-
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: 0) {
-                            ForEach(entries) { entry in
-                                AscentLeaderboardRow(entry: entry)
-                            }
-                        }
-                    }
-                }
-            }
-            .background(Color.white)
-        }
-    }
-}
-
-private struct AscentLeaderboardRow: View {
-    let entry: AscentLeaderboardEntry
-
-    var body: some View {
-        HStack(spacing: 12) {
-            if let medal = entry.medal {
-                Text(medal)
-                    .font(.system(size: 22))
-                    .frame(width: 30)
-            } else {
-                Text("\(entry.rank)")
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color(red: 0.42, green: 0.45, blue: 0.53))
-                    .frame(width: 30, height: 30)
-                    .background(Color(red: 0.96, green: 0.97, blue: 0.99))
-                    .clipShape(Circle())
-            }
-
-            Text(entry.name)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(red: 0.27, green: 0.29, blue: 0.36))
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(entry.isCurrentUser ? Color.orange : Color(red: 0.63, green: 0.65, blue: 0.72))
-                Text(entry.score)
-                    .font(.system(size: 18, weight: .heavy, design: .rounded))
-                    .foregroundStyle(entry.isCurrentUser ? Color(red: 0.84, green: 0.45, blue: 0.12) : Color(red: 0.33, green: 0.36, blue: 0.44))
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 18)
-        .background(entry.isCurrentUser ? Color(red: 1.00, green: 0.98, blue: 0.90) : Color.white)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(entry.isCurrentUser ? Color(red: 0.95, green: 0.83, blue: 0.48) : Color.black.opacity(0.06))
-                .frame(height: 1)
-        }
-    }
 }
 
 #Preview {
