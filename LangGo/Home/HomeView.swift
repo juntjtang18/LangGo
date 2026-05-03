@@ -1064,11 +1064,11 @@ private struct LeaderboardSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("This view is now backed by your latest rank snapshot from `/api/rank/users/:id`.")
+                        Text("This view is now backed by your group leaderboard.")
                             .font(.system(size: 17, weight: .medium, design: .rounded))
                             .foregroundStyle(Color(red: 0.29, green: 0.31, blue: 0.38))
 
-                        Text("Group member rows are not available from the current backend endpoint, so Home shows your live group, rank, and point movement here.")
+                        Text("Period points are shown for the members currently in your group.")
                             .font(.system(size: 15, weight: .regular, design: .rounded))
                             .foregroundStyle(Color(red: 0.47, green: 0.49, blue: 0.57))
                     }
@@ -1076,6 +1076,14 @@ private struct LeaderboardSheet: View {
                     .padding(20)
                     .background(Color(red: 0.97, green: 0.97, blue: 0.99))
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                    if !state.members.isEmpty {
+                        VStack(spacing: 10) {
+                            ForEach(state.members) { member in
+                                LeaderboardMemberRow(member: member)
+                            }
+                        }
+                    }
 
                     Spacer()
                 }
@@ -1134,5 +1142,40 @@ private struct LeaderboardSheet: View {
             return Color(red: 1.00, green: 0.92, blue: 0.92)
         }
         return Color(red: 0.99, green: 0.94, blue: 0.81)
+    }
+}
+
+private struct LeaderboardMemberRow: View {
+    let member: HomeViewModel.LeaderboardSheetState.MemberState
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("#\(member.orderInGroup)")
+                .font(.system(size: 18, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 0.22, green: 0.21, blue: 0.62))
+                .frame(width: 42, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(member.username)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
+
+                if member.isCurrentUser {
+                    Text("You")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.95, green: 0.57, blue: 0.11))
+                }
+            }
+
+            Spacer()
+
+            Text(formatNumber(member.periodPoints))
+                .font(.system(size: 20, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(member.isCurrentUser ? Color(red: 1.00, green: 0.97, blue: 0.91) : Color(red: 0.97, green: 0.97, blue: 0.99))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

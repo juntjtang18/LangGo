@@ -28,7 +28,9 @@ struct UserSnapshotCacheTests {
             group_no: 1,
             group_rank: 3,
             group_rank_title: "学习起步者",
-            group_rank_change: 1
+            group_rank_change: 1,
+            period_points: 20,
+            period_points_change: 2
         )
 
         defer {
@@ -79,7 +81,9 @@ struct UserSnapshotCacheTests {
             group_no: 1,
             group_rank: 2,
             group_rank_title: "学习达人",
-            group_rank_change: 0
+            group_rank_change: 0,
+            period_points: 12,
+            period_points_change: 0
         )
 
         defer {
@@ -99,5 +103,21 @@ struct UserSnapshotCacheTests {
         #expect(stale?.word_add == expected.word_add)
         #expect(stale?.group_rank_title == expected.group_rank_title)
         #expect(isExpired == false)
+    }
+
+    @Test
+    func decodesSnapshotWhenRecordDateIsNullAndPeriodFieldsExist() throws {
+        let json = """
+        {"data":{"latest_snapshot":{"id":14,"userid":"60","record_date":null,"total_points":5,"points_add":5,"word_count":0,"word_add":0,"article_count":0,"article_add":0,"level_no":1,"level_change":0,"level_title":"Kindgarden I","group_id":1,"group_no":1,"group_rank":1,"group_rank_title":"Starter","group_rank_change":0,"period_points":9,"period_points_change":0}}}
+        """
+
+        let decoder = JSONDecoder()
+        let response = try decoder.decode(RankUserResponse.self, from: Data(json.utf8))
+
+        #expect(response.data.latest_snapshot.record_date == nil)
+        #expect(response.data.latest_snapshot.level_title == "Kindgarden I")
+        #expect(response.data.latest_snapshot.period_points == 9)
+        #expect(response.data.latest_snapshot.period_points_change == 0)
+        #expect(response.data.latest_snapshot.rankText == "Kindgarden I")
     }
 }

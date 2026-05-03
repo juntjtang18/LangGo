@@ -73,7 +73,9 @@ enum UserSnapshotCache {
                     group_no: existing.group_no,
                     group_rank: existing.group_rank,
                     group_rank_title: existing.group_rank_title,
-                    group_rank_change: existing.group_rank_change
+                    group_rank_change: existing.group_rank_change,
+                    period_points: existing.period_points,
+                    period_points_change: existing.period_points_change
                 )
             }
         }

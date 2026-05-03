@@ -20,6 +20,9 @@ struct HomeViewModelTests {
             case ("GET", "/api/rank/me"):
                 await counters.increment("rank-me")
                 return .json(200, Self.rankSnapshotJSON(points: 120, pointsDelta: 9, groupRank: 3))
+            case ("GET", "/api/myleaderboard"):
+                await counters.increment("myleaderboard")
+                return .json(200, Self.myLeaderboardJSON(orderInGroup: 1, periodPoints: 9))
             case ("GET", "/api/user-articles"):
                 await counters.increment("user-articles")
                 return .json(200, Self.userArticlesPageJSON(ids: [501], total: 1))
@@ -39,10 +42,14 @@ struct HomeViewModelTests {
 
         #expect(homeViewModel.reviewCardState.dueForReview == 24)
         #expect(homeViewModel.rankPointsState.pointsDelta == 9)
+        #expect(homeViewModel.rankPointsState.rankText == "Kindgarden I")
+        #expect(homeViewModel.leaderboardBannerState.title == "Group 1")
+        #expect(homeViewModel.leaderboardBannerState.currentUserPosition == 1)
         #expect(homeViewModel.articleLibraryCount == 1)
         #expect(homeViewModel.articleLibraryPreviews.first?.backendId == 501)
         #expect(await counters.value(for: "flashcard-stat") == 1)
         #expect(await counters.value(for: "rank-me") == 1)
+        #expect(await counters.value(for: "myleaderboard") == 1)
         #expect(await counters.value(for: "user-articles") == 1)
     }
 
@@ -60,6 +67,8 @@ struct HomeViewModelTests {
                 return .json(200, Self.flashcardStatsJSON(totalCards: 39, dueForReview: 24, remembered: 7))
             case ("GET", "/api/rank/me"):
                 return .json(200, Self.rankSnapshotJSON(points: 120, pointsDelta: 9, groupRank: 3))
+            case ("GET", "/api/myleaderboard"):
+                return .json(200, Self.myLeaderboardJSON(orderInGroup: 1, periodPoints: 9))
             case ("GET", "/api/user-articles"):
                 return .json(200, Self.userArticlesPageJSON(ids: [501], total: 1))
             default:
@@ -93,6 +102,9 @@ struct HomeViewModelTests {
             case ("GET", "/api/rank/me"):
                 await counters.increment("rank-me")
                 return .json(200, Self.rankSnapshotJSON(points: 131, pointsDelta: 10, groupRank: 2))
+            case ("GET", "/api/myleaderboard"):
+                await counters.increment("myleaderboard")
+                return .json(200, Self.myLeaderboardJSON(orderInGroup: 1, periodPoints: 9))
             default:
                 throw URLError(.unsupportedURL)
             }
@@ -103,6 +115,7 @@ struct HomeViewModelTests {
             userSnapshotService: services.snapshotService,
             flashcardService: services.flashcardService,
             articleService: services.articleService,
+            rankService: services.rankService,
             localeProvider: { "en" }
         )
 
@@ -116,6 +129,7 @@ struct HomeViewModelTests {
         #expect(await counters.value(for: "review-post") == 1)
         #expect(await counters.value(for: "flashcard-stat") == 1)
         #expect(await counters.value(for: "rank-me") == 1)
+        #expect(await counters.value(for: "myleaderboard") == 1)
     }
 
     @Test @MainActor
@@ -147,6 +161,7 @@ struct HomeViewModelTests {
             userSnapshotService: services.snapshotService,
             flashcardService: services.flashcardService,
             articleService: services.articleService,
+            rankService: services.rankService,
             localeProvider: { "en" }
         )
 
@@ -175,12 +190,13 @@ struct HomeViewModelTests {
             userSnapshotService: services.snapshotService,
             flashcardService: services.flashcardService,
             articleService: services.articleService,
+            rankService: services.rankService,
             localeProvider: { "en" }
         )
     }
 
     @MainActor
-    private static func makeServices() -> (flashcardService: FlashcardService, articleService: ArticleService, snapshotService: UserSnapshotService) {
+    private static func makeServices() -> (flashcardService: FlashcardService, articleService: ArticleService, snapshotService: UserSnapshotService, rankService: RankService) {
         UserDefaults.standard.set(true, forKey: "isRefreshModeEnabled")
         UserDefaults.standard.set(60, forKey: "userId")
 
@@ -188,7 +204,8 @@ struct HomeViewModelTests {
         snapshotService.invalidateSnapshot(locale: "en")
         let flashcardService = FlashcardService()
         let articleService = ArticleService()
-        return (flashcardService, articleService, snapshotService)
+        let rankService = RankService()
+        return (flashcardService, articleService, snapshotService, rankService)
     }
 
     private static func eventually(
@@ -215,7 +232,13 @@ struct HomeViewModelTests {
 
     private static func rankSnapshotJSON(points: Int, pointsDelta: Int, groupRank: Int) -> String {
         """
-        {"data":{"latest_snapshot":{"id":1,"userid":"60","record_date":"2026-05-01","total_points":\(points),"points_add":\(pointsDelta),"word_count":39,"word_add":1,"article_count":0,"article_add":0,"level_no":1,"level_change":0,"level_title":"Starter","group_id":1,"group_no":1,"group_rank":\(groupRank),"group_rank_title":"Top Learner","group_rank_change":1}}}
+        {"data":{"latest_snapshot":{"id":1,"userid":"60","record_date":null,"total_points":\(points),"points_add":\(pointsDelta),"word_count":39,"word_add":1,"article_count":0,"article_add":0,"level_no":1,"level_change":0,"level_title":"Kindgarden I","group_id":1,"group_no":1,"group_rank":\(groupRank),"group_rank_title":"Top Learner","group_rank_change":1,"period_points":9,"period_points_change":0}}}
+        """
+    }
+
+    private static func myLeaderboardJSON(orderInGroup: Int, periodPoints: Int) -> String {
+        """
+        {"data":{"group":{"group_id":1,"group_no":1,"group_rank":1,"group_rank_title":"Starter","member_count":1},"members":[{"userid":"60","username":"chinese2","period_points":\(periodPoints),"order_in_group":\(orderInGroup)}]}}
         """
     }
 

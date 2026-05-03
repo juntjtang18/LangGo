@@ -333,10 +333,39 @@ struct RankUserData: Codable {
     let latest_snapshot: UserRankSnapshot
 }
 
+struct MyLeaderboardResponse: Codable {
+    let data: MyLeaderboardData
+}
+
+struct MyLeaderboardData: Codable {
+    let group: MyLeaderboardGroup
+    let members: [MyLeaderboardMember]
+}
+
+struct MyLeaderboardGroup: Codable, Equatable {
+    let group_id: Int
+    let group_no: Int
+    let group_rank: Int
+    let group_rank_title: String
+    let member_count: Int
+}
+
+struct MyLeaderboardMember: Codable, Equatable, Identifiable {
+    let userid: String
+    let username: String
+    let period_points: Int
+    let order_in_group: Int
+
+    var id: String { userid }
+    var isCurrentUser: Bool {
+        String(UserDefaults.standard.integer(forKey: "userId")) == userid
+    }
+}
+
 struct UserRankSnapshot: Codable {
     let id: Int
     let userid: String
-    let record_date: String
+    let record_date: String?
     let total_points: Int
     let points_add: Int
     let word_count: Int
@@ -351,15 +380,22 @@ struct UserRankSnapshot: Codable {
     let group_rank: Int
     let group_rank_title: String
     let group_rank_change: Int
+    let period_points: Int?
+    let period_points_change: Int?
 
-    var rankText: String? { group_rank_title.isEmpty ? nil : group_rank_title }
+    var rankText: String? {
+        if !level_title.isEmpty {
+            return level_title
+        }
+        return group_rank_title.isEmpty ? nil : group_rank_title
+    }
 }
 
 extension UserRankSnapshot {
     static let empty = UserRankSnapshot(
         id: 0,
         userid: "",
-        record_date: "",
+        record_date: nil,
         total_points: 0,
         points_add: 0,
         word_count: 0,
@@ -373,7 +409,9 @@ extension UserRankSnapshot {
         group_no: 0,
         group_rank: 0,
         group_rank_title: "",
-        group_rank_change: 0
+        group_rank_change: 0,
+        period_points: nil,
+        period_points_change: nil
     )
 }
 

@@ -45,6 +45,14 @@ final class HomeViewModel: ObservableObject {
     }
 
     struct LeaderboardSheetState: Equatable {
+        struct MemberState: Identifiable, Equatable {
+            let id: String
+            let username: String
+            let periodPoints: Int
+            let orderInGroup: Int
+            let isCurrentUser: Bool
+        }
+
         let title: String
         let rankTitle: String?
         let groupNo: Int?
@@ -52,6 +60,7 @@ final class HomeViewModel: ObservableObject {
         let currentUserPoints: Int
         let currentUserPointsDelta: Int
         let currentUserGroupRankChange: Int
+        let members: [MemberState]
 
         static let empty = LeaderboardSheetState(
             title: "Leaderboard",
@@ -60,7 +69,8 @@ final class HomeViewModel: ObservableObject {
             currentUserPosition: nil,
             currentUserPoints: 0,
             currentUserPointsDelta: 0,
-            currentUserGroupRankChange: 0
+            currentUserGroupRankChange: 0,
+            members: []
         )
     }
 
@@ -92,21 +102,25 @@ final class HomeViewModel: ObservableObject {
     private let userSnapshotService: UserSnapshotService
     private let flashcardService: FlashcardService
     private let articleService: ArticleService
+    private let rankService: RankService
     private let localeProvider: () -> String
     private let logger = Logger(subsystem: "com.langGo.swift", category: "HomeViewModel")
 
     private var cancellables = Set<AnyCancellable>()
+    private var latestLeaderboard: MyLeaderboardData?
 
     init(
         userSnapshotService: UserSnapshotService? = nil,
         flashcardService: FlashcardService? = nil,
         articleService: ArticleService? = nil,
+        rankService: RankService? = nil,
         localeProvider: (() -> String)? = nil
     ) {
         let services = DataServices.shared
         self.userSnapshotService = userSnapshotService ?? services.userSnapshotService
         self.flashcardService = flashcardService ?? services.flashcardService
         self.articleService = articleService ?? services.articleService
+        self.rankService = rankService ?? services.rankService
         self.localeProvider = localeProvider ?? {
             UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
         }
@@ -119,7 +133,8 @@ final class HomeViewModel: ObservableObject {
         async let snapshotTask: Void = loadSnapshot()
         async let flashcardStatTask: Void = flashcardService.loadStatisticsIfNeeded()
         async let articleTask: Void = articleService.loadSharedUserArticlesIfNeeded()
-        _ = await (snapshotTask, flashcardStatTask, articleTask)
+        async let leaderboardTask: Void = loadLeaderboard()
+        _ = await (snapshotTask, flashcardStatTask, articleTask, leaderboardTask)
         syncPublishedState()
     }
 
@@ -127,7 +142,8 @@ final class HomeViewModel: ObservableObject {
         async let snapshotTask: Void = refreshUserSnapshot()
         async let flashcardStatTask: Void = flashcardService.refreshFlashcardStat()
         async let articleTask: Void = articleService.refreshArticleState()
-        _ = await (snapshotTask, flashcardStatTask, articleTask)
+        async let leaderboardTask: Void = refreshLeaderboard()
+        _ = await (snapshotTask, flashcardStatTask, articleTask, leaderboardTask)
         syncPublishedState()
     }
 
@@ -211,17 +227,34 @@ final class HomeViewModel: ObservableObject {
         logger.debug("reacting to flashcardStatChanged token=\(changeToken, privacy: .public)")
         async let statTask: Void = flashcardService.refreshFlashcardStat()
         async let snapshotTask: Void = refreshUserSnapshot()
-        _ = await (statTask, snapshotTask)
+        async let leaderboardTask: Void = refreshLeaderboard()
+        _ = await (statTask, snapshotTask, leaderboardTask)
     }
 
     private func syncPublishedState() {
         let snapshot = userSnapshotService.currentSnapshot(locale: currentLocale())
         rankPointsState = makeRankPointsCardState(snapshot: snapshot)
         reviewCardState = makeReviewCardState(statistics: flashcardService.flashcardStatistics)
-        leaderboardBannerState = makeLeaderboardBannerState(snapshot: snapshot)
-        leaderboardSheetState = makeLeaderboardSheetState(snapshot: snapshot)
+        leaderboardBannerState = makeLeaderboardBannerState(leaderboard: latestLeaderboard)
+        leaderboardSheetState = makeLeaderboardSheetState(leaderboard: latestLeaderboard)
         articleLibraryCount = articleService.userArticlesTotalCount
         articleLibraryPreviews = makeArticleLibraryPreviewStates()
+    }
+
+    private func loadLeaderboard() async {
+        do {
+            latestLeaderboard = try await rankService.fetchMyLeaderboard()
+        } catch {
+            logger.error("loadLeaderboard failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func refreshLeaderboard() async {
+        do {
+            latestLeaderboard = try await rankService.fetchMyLeaderboard()
+        } catch {
+            logger.error("refreshLeaderboard failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func makeArticleLibraryPreviewStates() -> [ArticleLibraryPreviewState] {
@@ -279,7 +312,8 @@ final class HomeViewModel: ObservableObject {
             )
         }
 
-        let rankText = trimmed(snapshot.rankText).flatMap { !$0.isEmpty ? $0 : nil }
+        let rankText = trimmed(snapshot.level_title).flatMap { !$0.isEmpty ? $0 : nil }
+            ?? trimmed(snapshot.rankText).flatMap { !$0.isEmpty ? $0 : nil }
             ?? (snapshot.group_rank > 0 ? "#\(snapshot.group_rank)" : "Unranked")
 
         return RankPointsCardState(
@@ -300,8 +334,8 @@ final class HomeViewModel: ObservableObject {
         )
     }
 
-    private func makeLeaderboardBannerState(snapshot: UserRankSnapshot?) -> LeaderboardBannerState {
-        guard let snapshot else {
+    private func makeLeaderboardBannerState(leaderboard: MyLeaderboardData?) -> LeaderboardBannerState {
+        guard let leaderboard else {
             return LeaderboardBannerState(
                 title: isLoadingSnapshot ? "Loading..." : "Leaderboard",
                 currentUserPosition: nil,
@@ -311,36 +345,44 @@ final class HomeViewModel: ObservableObject {
         }
 
         return LeaderboardBannerState(
-            title: leaderboardTitle(for: snapshot),
-            currentUserPosition: snapshot.group_rank > 0 ? snapshot.group_rank : nil,
-            groupRankChange: snapshot.group_rank_change == 0 ? nil : snapshot.group_rank_change,
-            isEnabled: true
+            title: leaderboardTitle(for: leaderboard.group),
+            currentUserPosition: leaderboard.members.first(where: { $0.isCurrentUser })?.order_in_group ?? normalizedPosition(leaderboard.group.group_rank),
+            groupRankChange: nil,
+            isEnabled: leaderboard.group.member_count > 0
         )
     }
 
-    private func makeLeaderboardSheetState(snapshot: UserRankSnapshot?) -> LeaderboardSheetState {
-        guard let snapshot else { return .empty }
+    private func makeLeaderboardSheetState(leaderboard: MyLeaderboardData?) -> LeaderboardSheetState {
+        guard let leaderboard else { return .empty }
+
+        let members = leaderboard.members.map { member in
+            LeaderboardSheetState.MemberState(
+                id: member.userid,
+                username: member.username,
+                periodPoints: member.period_points,
+                orderInGroup: member.order_in_group,
+                isCurrentUser: member.isCurrentUser
+            )
+        }
+
+        let currentMember = members.first(where: { $0.isCurrentUser })
 
         return LeaderboardSheetState(
-            title: leaderboardTitle(for: snapshot),
-            rankTitle: trimmed(snapshot.rankText),
-            groupNo: snapshot.group_no > 0 ? snapshot.group_no : nil,
-            currentUserPosition: snapshot.group_rank > 0 ? snapshot.group_rank : nil,
-            currentUserPoints: snapshot.total_points,
-            currentUserPointsDelta: snapshot.points_add,
-            currentUserGroupRankChange: snapshot.group_rank_change
+            title: leaderboardTitle(for: leaderboard.group),
+            rankTitle: trimmed(leaderboard.group.group_rank_title),
+            groupNo: normalizedPosition(leaderboard.group.group_no),
+            currentUserPosition: currentMember?.orderInGroup ?? normalizedPosition(leaderboard.group.group_rank),
+            currentUserPoints: currentMember?.periodPoints ?? 0,
+            currentUserPointsDelta: 0,
+            currentUserGroupRankChange: 0,
+            members: members
         )
     }
 
-    private func leaderboardTitle(for snapshot: UserRankSnapshot) -> String {
-        if snapshot.group_no > 0 {
-            return "Group \(snapshot.group_no)"
+    private func leaderboardTitle(for group: MyLeaderboardGroup) -> String {
+        if group.group_no > 0 {
+            return "Group \(group.group_no)"
         }
-
-        if let rankText = trimmed(snapshot.rankText), !rankText.isEmpty {
-            return rankText
-        }
-
         return "Leaderboard"
     }
 
@@ -351,5 +393,10 @@ final class HomeViewModel: ObservableObject {
 
     private func trimmed(_ value: String?) -> String? {
         value?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func normalizedPosition(_ value: Int?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return value
     }
 }
