@@ -138,7 +138,7 @@ struct AscentLeaderboardSheet: View {
                 VStack(spacing: 0) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Your Score")
+                            Text("Your Score in this Semester")
                                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                                 .foregroundStyle(Color(red: 0.53, green: 0.48, blue: 0.33))
 

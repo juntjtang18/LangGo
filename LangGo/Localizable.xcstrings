@@ -13,9 +13,6 @@
     "#%lld" : {
 
     },
-    "#8" : {
-
-    },
     "%@ " : {
 
     },
@@ -97,9 +94,6 @@
 
     },
     "⚠️ Warning" : {
-
-    },
-    "2,847" : {
 
     },
     "ACHIEVEMENTS" : {
@@ -1706,9 +1700,6 @@
     "Unlock with Premium" : {
 
     },
-    "Up 4" : {
-
-    },
     "Update Password" : {
 
     },
@@ -1932,7 +1923,7 @@
     "Your latest words will appear here." : {
 
     },
-    "Your Score" : {
+    "Your Score in this Semester" : {
 
     }
   },

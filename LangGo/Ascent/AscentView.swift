@@ -1,5 +1,54 @@
 import SwiftUI
 
+@MainActor
+final class AscentViewModel: ObservableObject {
+    @Published private(set) var totalPointsText = "0"
+    @Published private(set) var groupOrderText = "#-"
+
+    private let rankService: RankService
+    private let userSnapshotService: UserSnapshotService
+    private let localeProvider: () -> String
+
+    init(
+        rankService: RankService? = nil,
+        userSnapshotService: UserSnapshotService? = nil,
+        localeProvider: (() -> String)? = nil
+    ) {
+        let services = DataServices.shared
+        self.rankService = rankService ?? services.rankService
+        self.userSnapshotService = userSnapshotService ?? services.userSnapshotService
+        self.localeProvider = localeProvider ?? {
+            UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
+        }
+    }
+
+    func load() async {
+        async let snapshotTask = userSnapshotService.loadSnapshot(locale: currentLocale())
+        async let leaderboardTask = rankService.fetchMyLeaderboard()
+
+        _ = await snapshotTask
+        let leaderboard = try? await leaderboardTask
+        let snapshot = userSnapshotService.currentSnapshot(locale: currentLocale())
+
+        totalPointsText = formatNumber(snapshot?.total_points ?? 0)
+        if let currentMember = leaderboard?.members.first(where: { $0.isCurrentUser }) {
+            groupOrderText = "#\(currentMember.order_in_group)"
+        } else {
+            groupOrderText = "#-"
+        }
+    }
+
+    private func currentLocale() -> String {
+        localeProvider()
+    }
+
+    private func formatNumber(_ value: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+}
+
 struct AscentTabView: View {
     let onShowProfile: () -> Void
 
@@ -15,6 +64,7 @@ struct AscentTabView: View {
 struct AscentView: View {
     let onShowProfile: () -> Void
     @StateObject private var userSession = UserSessionManager.shared
+    @StateObject private var viewModel: AscentViewModel
     @State private var isShowingLeaderboard = false
 
     private let statCards: [AscentStatCard] = [
@@ -32,6 +82,15 @@ struct AscentView: View {
         .init(emoji: "⭐", title: "Rising Star", subtitle: "Reach top 10", accent: Color(red: 1.00, green: 0.76, blue: 0.20), isDimmed: false),
         .init(emoji: "🏆", title: "Month Master", subtitle: "30-day streak", accent: Color(red: 0.91, green: 0.88, blue: 0.75), isDimmed: true)
     ]
+
+    @MainActor
+    init(
+        onShowProfile: @escaping () -> Void,
+        viewModel: AscentViewModel? = nil
+    ) {
+        self.onShowProfile = onShowProfile
+        self._viewModel = StateObject(wrappedValue: viewModel ?? AscentViewModel())
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -54,11 +113,17 @@ struct AscentView: View {
         .fullScreenCover(isPresented: $isShowingLeaderboard) {
             AscentLeaderboardSheet()
         }
+        .task {
+            await viewModel.load()
+        }
     }
 
     private func hero(metrics: AscentMetrics) -> some View {
         VStack(alignment: .leading, spacing: metrics.heroSpacing) {
-            HStack(alignment: .top) {
+            profileButton(metrics: metrics)
+                .frame(maxWidth: .infinity)
+
+            VStack(alignment: .leading, spacing: metrics.heroSpacing) {
                 VStack(alignment: .leading, spacing: metrics.textTightSpacing) {
                     Text("Ascent")
                         .font(.system(size: metrics.titleFont, weight: .bold, design: .rounded))
@@ -69,90 +134,91 @@ struct AscentView: View {
                         .foregroundStyle(.white.opacity(0.92))
                 }
 
-                Spacer(minLength: metrics.compactSpacing)
+                VStack(alignment: .leading, spacing: metrics.cardInnerSpacing) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: metrics.textTightSpacing) {
+                            Text("Total Points")
+                                .font(.system(size: metrics.pointsLabelFont, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.92))
 
-                Button {
-                    onShowProfile()
-                } label: {
-                    VStack(spacing: metrics.profileButtonSpacing) {
-                        AscentProfileAvatarView(
-                            imageURL: resolvedMediaURL(from: userSession.currentUser?.user_profile?.avatar_img?.data?.attributes.url),
-                            initials: profileInitials,
-                            metrics: metrics
-                        )
+                            Text(viewModel.totalPointsText)
+                                .font(.system(size: metrics.pointsFont, weight: .heavy, design: .rounded))
+                                .foregroundStyle(.white)
+                        }
 
-                        Text("Profile")
-                            .font(.system(size: metrics.profileLabelFont, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                        Spacer(minLength: metrics.compactSpacing)
+
+                        VStack(alignment: .trailing, spacing: metrics.badgeSpacing) {
+                            Spacer()
+                            Text(viewModel.groupOrderText)
+                                .font(.system(size: metrics.rankFont, weight: .heavy, design: .rounded))
+                                .foregroundStyle(.white)
+                            /*
+                            Text("Up 4")
+                                .font(.system(size: metrics.rankBadgeFont, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, metrics.rankBadgeHorizontalPadding)
+                                .padding(.vertical, metrics.rankBadgeVerticalPadding)
+                                .background(Capsule().fill(Color(red: 0.07, green: 0.70, blue: 0.29)))
+                             */
+                        }
                     }
-                    .frame(minWidth: metrics.profileTapWidth, minHeight: metrics.profileTapHeight)
-                    .padding(.top, metrics.heroIconTopPadding)
-                    .contentShape(Rectangle())
+
+                    Button {
+                        isShowingLeaderboard = true
+                    } label: {
+                        Text("View Leaderboard")
+                            .font(.system(size: metrics.leaderboardButtonFont, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.28, green: 0.25, blue: 0.98))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, metrics.leaderboardButtonVerticalPadding)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: metrics.innerCornerRadius, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(metrics.pointsCardPadding)
+                .background(Color.white.opacity(0.10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
             }
-
-            VStack(alignment: .leading, spacing: metrics.cardInnerSpacing) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: metrics.textTightSpacing) {
-                        Text("Total Points")
-                            .font(.system(size: metrics.pointsLabelFont, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.92))
-
-                        Text("2,847")
-                            .font(.system(size: metrics.pointsFont, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
-                    }
-
-                    Spacer(minLength: metrics.compactSpacing)
-
-                    VStack(alignment: .trailing, spacing: metrics.badgeSpacing) {
-                        Text("#8")
-                            .font(.system(size: metrics.rankFont, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
-
-                        Text("Up 4")
-                            .font(.system(size: metrics.rankBadgeFont, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, metrics.rankBadgeHorizontalPadding)
-                            .padding(.vertical, metrics.rankBadgeVerticalPadding)
-                            .background(Capsule().fill(Color(red: 0.07, green: 0.70, blue: 0.29)))
-                    }
-                }
-
-                Button {
-                    isShowingLeaderboard = true
-                } label: {
-                    Text("View Leaderboard")
-                        .font(.system(size: metrics.leaderboardButtonFont, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color(red: 0.28, green: 0.25, blue: 0.98))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, metrics.leaderboardButtonVerticalPadding)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: metrics.innerCornerRadius, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(metrics.pointsCardPadding)
-            .background(Color.white.opacity(0.10))
-            .overlay(
-                RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+            .padding(metrics.heroPadding)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.34, green: 0.34, blue: 0.98),
+                        Color(red: 0.63, green: 0.12, blue: 0.93)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             )
-            .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: metrics.heroCornerRadius, style: .continuous))
         }
-        .padding(metrics.heroPadding)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.34, green: 0.34, blue: 0.98),
-                    Color(red: 0.63, green: 0.12, blue: 0.93)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: metrics.heroCornerRadius, style: .continuous))
+    }
+
+    private func profileButton(metrics: AscentMetrics) -> some View {
+        Button {
+            onShowProfile()
+        } label: {
+            VStack(spacing: metrics.profileButtonSpacing) {
+                AscentProfileAvatarView(
+                    imageURL: resolvedMediaURL(from: userSession.currentUser?.user_profile?.avatar_img?.data?.attributes.url),
+                    initials: profileInitials,
+                    metrics: metrics
+                )
+
+                Text("Profile")
+                    .font(.system(size: metrics.profileLabelFont, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.20))
+            }
+            .frame(minWidth: metrics.profileTapWidth, minHeight: metrics.profileTapHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func statsGrid(metrics: AscentMetrics) -> some View {
@@ -304,7 +370,7 @@ private struct AscentMetrics {
         rankFont = scaled(28)
         rankBadgeFont = scaled(18.5)
         leaderboardButtonFont = scaled(22)
-        profileInitialsFont = scaled(22)
+        profileInitialsFont = scaled(44)
         profileLabelFont = scaled(18.5)
         sectionLabelFont = scaled(19.5)
         viewAllFont = scaled(19.5)
@@ -318,11 +384,11 @@ private struct AscentMetrics {
         heroPadding = scaled(16)
         heroCornerRadius = scaled(18)
         heroSpacing = scaled(14)
-        heroIconTopPadding = scaled(1)
         profileButtonSpacing = scaled(6)
-        profileButtonSize = scaled(50)
-        profileTapWidth = scaled(78)
-        profileTapHeight = scaled(74)
+        heroIconTopPadding = scaled(1)
+        profileButtonSize = scaled(100)
+        profileTapWidth = scaled(120)
+        profileTapHeight = scaled(138)
         pointsCardPadding = scaled(12)
         cardCornerRadius = scaled(16)
         innerCornerRadius = scaled(10)
