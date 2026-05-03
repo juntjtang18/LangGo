@@ -18,6 +18,20 @@ struct RankServiceTests {
         #expect(response.data.members.first?.period_points == 9)
     }
 
+    @Test
+    func decodesMyLeaderboardResponseWithNullUsername() throws {
+        let response = try JSONDecoder().decode(
+            MyLeaderboardResponse.self,
+            from: Data(Self.myLeaderboardJSONWithNullUsername.utf8)
+        )
+
+        #expect(response.data.group.member_count == 2)
+        #expect(response.data.members.count == 2)
+        #expect(response.data.members[0].username == "chinese2")
+        #expect(response.data.members[1].username == nil)
+        #expect(response.data.members[1].userid == "7")
+    }
+
     @Test @MainActor
     func fetchMyLeaderboardReturnsParsedData() async throws {
         MockRankAPI.install()
@@ -79,6 +93,34 @@ struct RankServiceTests {
             "username": "chinese2",
             "period_points": 9,
             "order_in_group": 1
+          }
+        ]
+      }
+    }
+    """
+
+    private static let myLeaderboardJSONWithNullUsername = """
+    {
+      "data": {
+        "group": {
+          "group_id": 1,
+          "group_no": 1,
+          "group_rank": 1,
+          "group_rank_title": "Starter",
+          "member_count": 2
+        },
+        "members": [
+          {
+            "userid": "60",
+            "username": "chinese2",
+            "period_points": 9,
+            "order_in_group": 1
+          },
+          {
+            "userid": "7",
+            "username": null,
+            "period_points": 0,
+            "order_in_group": 2
           }
         ]
       }

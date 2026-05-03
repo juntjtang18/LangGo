@@ -358,7 +358,7 @@ final class HomeViewModel: ObservableObject {
         let members = leaderboard.members.map { member in
             LeaderboardSheetState.MemberState(
                 id: member.userid,
-                username: member.username,
+                username: displayName(for: member),
                 periodPoints: member.period_points,
                 orderInGroup: member.order_in_group,
                 isCurrentUser: member.isCurrentUser
@@ -398,5 +398,16 @@ final class HomeViewModel: ObservableObject {
     private func normalizedPosition(_ value: Int?) -> Int? {
         guard let value, value > 0 else { return nil }
         return value
+    }
+
+    private func displayName(for member: MyLeaderboardMember) -> String {
+        let trimmedName = member.username?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedName, !trimmedName.isEmpty {
+            return trimmedName
+        }
+        if member.isCurrentUser {
+            return "You"
+        }
+        return "User \(member.userid)"
     }
 }

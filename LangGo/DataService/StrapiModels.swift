@@ -352,7 +352,7 @@ struct MyLeaderboardGroup: Codable, Equatable {
 
 struct MyLeaderboardMember: Codable, Equatable, Identifiable {
     let userid: String
-    let username: String
+    let username: String?
     let period_points: Int
     let order_in_group: Int
 

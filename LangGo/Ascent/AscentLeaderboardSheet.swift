@@ -59,7 +59,7 @@ final class AscentLeaderboardViewModel: ObservableObject {
         entries = (leaderboard?.members ?? []).map { member in
             Entry(
                 rank: member.order_in_group,
-                name: member.isCurrentUser ? "You" : member.username,
+                name: displayName(for: member),
                 score: formatNumber(member.period_points),
                 medal: medal(for: member.order_in_group),
                 isCurrentUser: member.isCurrentUser
@@ -91,6 +91,16 @@ final class AscentLeaderboardViewModel: ObservableObject {
             return nil
         }
         return value
+    }
+
+    private func displayName(for member: MyLeaderboardMember) -> String {
+        if member.isCurrentUser {
+            return "You"
+        }
+        if let username = trimmed(member.username) {
+            return username
+        }
+        return "User \(member.userid)"
     }
 
     private func currentLocale() -> String {
