@@ -15,22 +15,28 @@ final class AscentLeaderboardViewModel: ObservableObject {
     @Published private(set) var totalPeriodPointsText = "0"
     @Published private(set) var periodPointsAddText = "+0"
     @Published private(set) var groupOrderText = "#-"
+    @Published private(set) var groupRankTitleText = "-"
     @Published private(set) var entries: [Entry] = []
 
     private let rankService: RankService
     private let userSnapshotService: UserSnapshotService
+    private let localeProvider: () -> String
 
     init(
         rankService: RankService? = nil,
-        userSnapshotService: UserSnapshotService? = nil
+        userSnapshotService: UserSnapshotService? = nil,
+        localeProvider: (() -> String)? = nil
     ) {
         let services = DataServices.shared
         self.rankService = rankService ?? services.rankService
         self.userSnapshotService = userSnapshotService ?? services.userSnapshotService
+        self.localeProvider = localeProvider ?? {
+            UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
+        }
     }
 
     func load() async {
-        async let snapshotTask = userSnapshotService.refreshUserSnapshot()
+        async let snapshotTask = userSnapshotService.refreshUserSnapshot(locale: currentLocale())
         async let leaderboardTask = rankService.fetchMyLeaderboard()
 
         let snapshot = try? await snapshotTask
@@ -42,6 +48,7 @@ final class AscentLeaderboardViewModel: ObservableObject {
     private func apply(snapshot: UserRankSnapshot?, leaderboard: MyLeaderboardData?) {
         totalPeriodPointsText = formatNumber(snapshot?.period_points ?? 0)
         periodPointsAddText = formatDelta(snapshot?.period_points_change ?? 0)
+        groupRankTitleText = trimmed(snapshot?.group_rank_title) ?? "-"
 
         if let currentMember = leaderboard?.members.first(where: { $0.isCurrentUser }) {
             groupOrderText = "#\(currentMember.order_in_group)"
@@ -77,6 +84,17 @@ final class AscentLeaderboardViewModel: ObservableObject {
 
     private func formatDelta(_ value: Int) -> String {
         value >= 0 ? "+\(value)" : "\(value)"
+    }
+
+    private func trimmed(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    private func currentLocale() -> String {
+        localeProvider()
     }
 }
 
@@ -137,6 +155,14 @@ struct AscentLeaderboardSheet: View {
                         Spacer()
 
                         VStack(alignment: .trailing, spacing: 10) {
+                            
+                            Text(viewModel.groupRankTitleText)
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(Color(red: 0.89, green: 1.00, blue: 0.90)))
+                             
                             HStack(spacing: 6) {
                                 Image(systemName: "medal.fill")
                                     .font(.system(size: 14, weight: .bold))
@@ -146,12 +172,6 @@ struct AscentLeaderboardSheet: View {
                                     .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
                             }
 
-                            Text("Up 4 spots")
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color(red: 0.10, green: 0.67, blue: 0.30))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .background(Capsule().fill(Color(red: 0.89, green: 1.00, blue: 0.90)))
                         }
                     }
                     .padding(20)

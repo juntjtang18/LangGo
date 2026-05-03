@@ -183,6 +183,51 @@ struct HomeViewModelTests {
         #expect(await counters.value(for: "article-list") == 1)
     }
 
+    @Test @MainActor
+    func ascentLeaderboardRefreshKeepsHomeSnapshotLocaleAligned() async throws {
+        MockHomeAPI.install()
+        defer { MockHomeAPI.uninstall() }
+
+        MockHomeAPI.handler = { request in
+            let path = request.url?.path ?? ""
+
+            switch (request.httpMethod ?? "GET", path) {
+            case ("GET", "/api/flashcard-stat"):
+                return .json(200, Self.flashcardStatsJSON(totalCards: 39, dueForReview: 24, remembered: 7))
+            case ("GET", "/api/rank/me"):
+                return .json(200, Self.rankSnapshotJSON(points: 120, pointsDelta: 9, groupRank: 3))
+            case ("GET", "/api/myleaderboard"):
+                return .json(200, Self.myLeaderboardJSON(orderInGroup: 1, periodPoints: 9))
+            case ("GET", "/api/user-articles"):
+                return .json(200, Self.userArticlesPageJSON(ids: [501], total: 1))
+            default:
+                throw URLError(.unsupportedURL)
+            }
+        }
+
+        let services = Self.makeServices()
+        let homeViewModel = HomeViewModel(
+            userSnapshotService: services.snapshotService,
+            flashcardService: services.flashcardService,
+            articleService: services.articleService,
+            rankService: services.rankService,
+            localeProvider: { "en" }
+        )
+
+        await homeViewModel.load()
+        #expect(homeViewModel.rankPointsState.rankText == "Kindgarden I")
+
+        let ascentViewModel = AscentLeaderboardViewModel(
+            rankService: services.rankService,
+            userSnapshotService: services.snapshotService,
+            localeProvider: { "en" }
+        )
+        await ascentViewModel.load()
+
+        #expect(homeViewModel.rankPointsState.rankText == "Kindgarden I")
+        #expect(homeViewModel.rankPointsState.points == 120)
+    }
+
     @MainActor
     private static func makeHomeViewModel() -> HomeViewModel {
         let services = makeServices()
