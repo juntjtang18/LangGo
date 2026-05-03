@@ -39,6 +39,30 @@ struct RankServiceTests {
         #expect(leaderboard.members.first?.order_in_group == 1)
     }
 
+    @Test @MainActor
+    func concurrentFetchesJoinSingleNetworkRequest() async throws {
+        MockRankAPI.install()
+        defer { MockRankAPI.uninstall() }
+
+        let counter = RankRequestCounter()
+        MockRankAPI.handler = { request in
+            #expect(request.url?.path == "/api/myleaderboard")
+            await counter.increment()
+            try await Task.sleep(nanoseconds: 200_000_000)
+            return .json(200, Self.myLeaderboardJSON)
+        }
+
+        let service = RankService()
+
+        async let first = service.fetchMyLeaderboard()
+        async let second = service.fetchMyLeaderboard()
+        let (firstResult, secondResult) = try await (first, second)
+
+        #expect(firstResult.group.group_no == 1)
+        #expect(secondResult.group.group_no == 1)
+        #expect(await counter.value() == 1)
+    }
+
     private static let myLeaderboardJSON = """
     {
       "data": {
@@ -60,6 +84,18 @@ struct RankServiceTests {
       }
     }
     """
+}
+
+private actor RankRequestCounter {
+    private var count = 0
+
+    func increment() {
+        count += 1
+    }
+
+    func value() -> Int {
+        count
+    }
 }
 
 private enum MockRankAPI {

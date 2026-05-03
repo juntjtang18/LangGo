@@ -10,6 +10,9 @@
     "(%@)" : {
 
     },
+    "#%lld" : {
+
+    },
     "#8" : {
 
     },
@@ -657,9 +660,6 @@
     "Font Size" : {
 
     },
-    "Group member rows are not available from the current backend endpoint, so Home shows your live group, rank, and point movement here." : {
-
-    },
     "Hide Base Text" : {
 
     },
@@ -1085,6 +1085,9 @@
       }
     },
     "Pause" : {
+
+    },
+    "Period points are shown for the members currently in your group." : {
 
     },
     "Play" : {
@@ -1577,7 +1580,7 @@
     "This policy explains how LangGo uses account information, learning content, and device permissions when you use the app." : {
 
     },
-    "This view is now backed by your latest rank snapshot from `/api/rank/users/:id`." : {
+    "This view is now backed by your group leaderboard." : {
 
     },
     "This will control data refreshing behavior in a future update." : {
@@ -1918,6 +1921,9 @@
       }
     },
     "Yes, help me remember better" : {
+
+    },
+    "You" : {
 
     },
     "You have no words due for review." : {

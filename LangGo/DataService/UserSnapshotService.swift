@@ -112,14 +112,12 @@ final class UserSnapshotService: ObservableObject {
     }
 
     private func fetchSnapshotFromNetwork(locale: String?) async throws -> UserRankSnapshot? {
+        _ = locale
         logger.debug("Fetching rank snapshot for current user.")
 
-        var components = URLComponents(string: "\(Config.strapiBaseUrl)/api/rank/me")
-        if let locale {
-            components?.queryItems = [URLQueryItem(name: "locale", value: locale)]
+        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/rank/me") else {
+            throw URLError(.badURL)
         }
-
-        guard let url = components?.url else { throw URLError(.badURL) }
 
         let response: RankUserResponse = try await networkManager.fetchDirect(from: url)
         return response.data.latest_snapshot
