@@ -413,13 +413,7 @@ private struct AscentProfileAvatarView: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white, Color.white.opacity(0.92)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(backgroundFill)
                 .frame(width: metrics.profileButtonSize, height: metrics.profileButtonSize)
 
             if let imageURL {
@@ -429,12 +423,31 @@ private struct AscentProfileAvatarView: View {
             } else {
                 Text(initials)
                     .font(.system(size: metrics.profileInitialsFont, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color(red: 0.36, green: 0.24, blue: 0.94))
+                    .foregroundStyle(Color.white)
             }
         }
         .overlay(
             Circle()
                 .stroke(Color.white.opacity(0.40), lineWidth: 1)
+        )
+    }
+
+    private var backgroundFill: LinearGradient {
+        if imageURL != nil {
+            return LinearGradient(
+                colors: [Color.white, Color.white.opacity(0.92)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+
+        return LinearGradient(
+            colors: [
+                Color(red: 0.72, green: 0.06, blue: 0.98),
+                Color(red: 0.28, green: 0.22, blue: 0.94)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
     }
 }
