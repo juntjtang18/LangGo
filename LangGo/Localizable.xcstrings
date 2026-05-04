@@ -134,6 +134,9 @@
         }
       }
     },
+    "Add Your First Article" : {
+
+    },
     "Adding..." : {
       "localizations" : {
         "hi" : {
@@ -909,6 +912,9 @@
     "No article content is available yet." : {
 
     },
+    "No Articles Yet" : {
+
+    },
     "No cards available for an exam at this time." : {
 
     },
@@ -1477,6 +1483,9 @@
 
     },
     "Standard Voices" : {
+
+    },
+    "Start building your reading library. Add\narticles to learn new words in context." : {
 
     },
     "Start Card Review" : {

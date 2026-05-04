@@ -298,14 +298,16 @@ struct HomeView: View {
 
                 Spacer()
 
-                Button {
-                    selectedTab = 2
-                } label: {
-                    Text(articleLibraryLinkTitle)
-                        .font(.system(size: metrics.libraryLinkFont, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color(red: 0.34, green: 0.27, blue: 0.98))
+                if !viewModel.articleLibraryPreviews.isEmpty {
+                    Button {
+                        selectedTab = 2
+                    } label: {
+                        Text(articleLibraryLinkTitle)
+                            .font(.system(size: metrics.libraryLinkFont, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.34, green: 0.27, blue: 0.98))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
 
             Spacer()
@@ -313,18 +315,7 @@ struct HomeView: View {
 
             VStack(spacing: metrics.actionCardGap) {
                 if viewModel.articleLibraryPreviews.isEmpty {
-                    Button {
-                        selectedTab = 2
-                    } label: {
-                        articleLibraryCard(
-                            metrics: metrics,
-                            title: "No saved articles yet",
-                            tags: ["Library"],
-                            progressText: "0%",
-                            progressFraction: 0
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    articleLibraryEmptyState(metrics: metrics)
                 } else {
                     ForEach(viewModel.articleLibraryPreviews) { preview in
                         Button {
@@ -343,6 +334,82 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    private func articleLibraryEmptyState(metrics: HomeMetrics) -> some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Circle()
+                    .fill(Color(red: 0.95, green: 0.90, blue: 1.00))
+                    .frame(
+                        width: metrics.libraryIconBox * 3.0,
+                        height: metrics.libraryIconBox * 3.0
+                    )
+
+                Image(systemName: "books.vertical.fill")
+                    .font(.system(size: metrics.libraryIconFont + 8, weight: .bold))
+                    .foregroundStyle(Color(red: 0.57, green: 0.12, blue: 0.98))
+            }
+
+            Spacer()
+                .frame(height: metrics.libraryCardContentGap + 6)
+
+            Text("No Articles Yet")
+                .font(.system(size: metrics.libraryTitleFont + 4, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 0.14, green: 0.18, blue: 0.28))
+
+            Spacer()
+                .frame(height: metrics.libraryTitleGap + 4)
+
+            Text("Start building your reading library. Add\narticles to learn new words in context.")
+                .font(.system(size: metrics.libraryMetaFont + 1, weight: .medium, design: .rounded))
+                .foregroundStyle(Color(red: 0.34, green: 0.39, blue: 0.50))
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+
+            Spacer()
+                .frame(height: metrics.libraryCardContentGap + 10)
+
+            Button {
+                selectedTab = 2
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "plus")
+                        .font(.system(size: metrics.libraryMetaFont, weight: .bold))
+                    Text("Add Your First Article")
+                        .font(.system(size: metrics.libraryMetaFont + 1, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, metrics.libraryCardHorizontalPadding * 2)
+                .frame(height: metrics.actionCardHeight)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.72, green: 0.06, blue: 0.98),
+                            Color(red: 0.28, green: 0.22, blue: 0.94)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: metrics.actionCardCornerRadius + 4, style: .continuous))
+                .shadow(color: Color(red: 0.32, green: 0.20, blue: 0.87).opacity(0.28), radius: 12, x: 0, y: 8)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 250 * metrics.compactScale)
+        .padding(.horizontal, metrics.libraryCardHorizontalPadding + 4)
+        .padding(.vertical, metrics.libraryCardVerticalPadding + 10)
+        .background(Color(red: 0.98, green: 0.97, blue: 1.00))
+        .overlay(
+            RoundedRectangle(cornerRadius: metrics.libraryCardCornerRadius + 8, style: .continuous)
+                .stroke(
+                    Color(red: 0.88, green: 0.76, blue: 1.00),
+                    style: StrokeStyle(lineWidth: 1.2, dash: [5, 5])
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: metrics.libraryCardCornerRadius + 8, style: .continuous))
     }
 
     private var articleLibraryLinkTitle: String {
