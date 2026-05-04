@@ -1,6 +1,5 @@
 // LangGo/Vocabook/ExamViewModel.swift
 
-import Combine
 import SwiftUI
 
 // Enum to define the direction of the exam
@@ -11,7 +10,6 @@ enum ExamDirection {
 @MainActor
 class ExamViewModel: ObservableObject {
     private let flashcardService = DataServices.shared.flashcardService
-    private let pageSize = 20
 
     @Published var flashcards: [Flashcard] = []
     @Published var currentCardIndex: Int = 0
@@ -20,12 +18,8 @@ class ExamViewModel: ObservableObject {
     @Published var direction: ExamDirection = .baseToTarget
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
-    @Published var isLoadingMore: Bool = false
-    @Published var hasMorePages: Bool = true
-    @Published var isAutoLoadingRemainingPages: Bool = false
 
     private var loadedCardIds = Set<Int>()
-    private var cancellables = Set<AnyCancellable>()
     private var pendingReviewedCardId: Int?
 
     var currentCard: Flashcard? {
@@ -37,68 +31,26 @@ class ExamViewModel: ObservableObject {
         currentCardIndex < flashcards.count - 1
     }
 
-    init() {
-        flashcardService.$reviewFlashcards
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] cards in
-                self?.mergeReviewFlashcards(cards)
-            }
-            .store(in: &cancellables)
-
-        flashcardService.$isLoadingAllReviewFlashcards
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isLoading in
-                self?.isAutoLoadingRemainingPages = isLoading
-            }
-            .store(in: &cancellables)
-    }
+    init() {}
 
     func loadExamCards() async {
         guard !isLoading else { return }
 
         isLoading = true
-        isLoadingMore = false
         errorMessage = nil
-        hasMorePages = true
         currentCardIndex = 0
         loadedCardIds.removeAll()
         flashcards.removeAll()
         resetForNewCard()
 
         do {
-            let availableCards = try await flashcardService.fetchAvailableReviewFlashcards(pageSize: pageSize)
+            let availableCards = try await flashcardService.fetchAllReviewFlashcards()
             mergeReviewFlashcards(availableCards)
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
-    }
-
-    func loadMoreIfNeeded() async {
-        await flashcardService.loadMoreReviewFlashcardsIfNeeded(
-            currentIndex: currentCardIndex,
-            pageSize: pageSize
-        )
-    }
-
-    private func loadFirstPage() async {
-        isLoadingMore = true
-        defer { isLoadingMore = false }
-
-        do {
-            let (cards, pagination) = try await flashcardService.fetchFlashcards(
-                page: 1,
-                pageSize: pageSize,
-                dueOnly: true
-            )
-
-            appendExamReadyCards(cards)
-            hasMorePages = (pagination?.page ?? 1) < (pagination?.pageCount ?? 1)
-        } catch {
-            errorMessage = error.localizedDescription
-            hasMorePages = false
-        }
     }
 
     private func mergeReviewFlashcards(_ cards: [Flashcard]) {
@@ -203,9 +155,6 @@ class ExamViewModel: ObservableObject {
         guard canGoNext else { return }
         currentCardIndex += 1
         resetForNewCard()
-        Task {
-            await loadMoreIfNeeded()
-        }
     }
 
     func goToPreviousCard() {
@@ -257,10 +206,6 @@ class ExamViewModel: ObservableObject {
 
         currentCardIndex = min(originalIndex, flashcards.count - 1)
         resetForNewCard()
-
-        Task {
-            await loadMoreIfNeeded()
-        }
         return true
     }
 
@@ -297,12 +242,6 @@ class ExamViewModel: ObservableObject {
 
         if resetCurrentCardState {
             resetForNewCard()
-        }
-
-        if triggerLoadMore {
-            Task {
-                await loadMoreIfNeeded()
-            }
         }
     }
 }

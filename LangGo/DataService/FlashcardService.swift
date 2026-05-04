@@ -21,7 +21,6 @@ extension Notification.Name {
 final class FlashcardService: ObservableObject {
     @Published private(set) var flashcards: [Flashcard] = []
     @Published private(set) var reviewFlashcards: [Flashcard] = []
-    @Published private(set) var isLoadingAllReviewFlashcards = false
     @Published private(set) var flashcardStatistics: StrapiStatistics?
     @Published private(set) var flashcardStatChanged: Int = 0
     @Published private(set) var nextFlashcardStatisticsFetchAt: Date?
@@ -33,12 +32,8 @@ final class FlashcardService: ObservableObject {
     private let logger = Logger(subsystem: "com.langGo.swift", category: "FlashcardService")
     private let cacheService = CacheService.shared
     private let networkManager = NetworkManager.shared
-    private var reviewFlashcardPageTasks: [Int: Task<([Flashcard], StrapiPagination?), Error>] = [:]
     private var allMyFlashcardsFullLoadTask: Task<Void, Never>?
     private var flashcardStatisticsTask: Task<StrapiStatistics, Error>?
-    private var reviewFlashcardPagination: StrapiPagination?
-    private var reviewFlashcardNextPage: Int?
-    private var reviewFlashcardPageSize: Int?
     private var flashcardMutationVersion: Int = 0
 
     private var currentUserId: Int? {
@@ -116,7 +111,22 @@ final class FlashcardService: ObservableObject {
     }
 
     func fetchAllReviewFlashcards() async throws -> [Flashcard] {
-        return try await fetchAvailableReviewFlashcards(pageSize: 100)
+        logger.debug("Fetching all review flashcards from network.")
+        var allCards: [Flashcard] = []
+        var currentPage = 1
+        var hasMorePages = true
+
+        while hasMorePages {
+            let (cards, pagination) = try await fetchReviewFlashcardsPageFromNetwork(page: currentPage, pageSize: 100)
+            if !cards.isEmpty {
+                allCards.append(contentsOf: cards)
+            }
+            hasMorePages = (pagination?.page ?? 1) < (pagination?.pageCount ?? 1)
+            currentPage += 1
+        }
+
+        await publishReviewFlashcards(allCards)
+        return allCards
     }
 
     func fetchFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
@@ -132,14 +142,12 @@ final class FlashcardService: ObservableObject {
     }
 
     func fetchDueFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
-        try await fetchReviewFlashcardsPageFromNetworkDeduped(page: page, pageSize: pageSize)
+        try await fetchReviewFlashcardsPageFromNetwork(page: page, pageSize: pageSize)
     }
 
     func fetchAvailableReviewFlashcards(pageSize: Int = 100) async throws -> [Flashcard] {
-        let (cards, pagination) = try await fetchReviewFlashcardsPageFromNetworkDeduped(page: 1, pageSize: pageSize)
-        storeLoadedReviewPage(cards, pagination: pagination, reset: true)
-        await publishReviewFlashcards(cards)
-        return cards
+        _ = pageSize
+        return try await fetchAllReviewFlashcards()
     }
 
     func submitFlashcardReview(cardId: Int, result: ReviewResult) async throws -> Flashcard {
@@ -191,18 +199,6 @@ final class FlashcardService: ObservableObject {
         await MainActor.run {
             self.flashcards = self.flashcards.map { $0.id == updatedCard.id ? updatedCard : $0 }
             self.reviewFlashcards.removeAll { $0.id == updatedCard.id }
-        }
-
-        withReviewFlashcardStateLock {
-            if let pagination = reviewFlashcardPagination {
-                let updatedTotal = max(reviewFlashcards.count, pagination.total - 1)
-                reviewFlashcardPagination = StrapiPagination(
-                    page: pagination.page,
-                    pageSize: pagination.pageSize,
-                    pageCount: pagination.pageCount,
-                    total: updatedTotal
-                )
-            }
         }
 
         logger.debug("✅ Patched in-memory review state after review for card id: \(updatedCard.id).")
@@ -276,9 +272,6 @@ final class FlashcardService: ObservableObject {
         withReviewFlashcardStateLock {
             allMyFlashcardsFullLoadTask?.cancel()
             allMyFlashcardsFullLoadTask = nil
-            reviewFlashcardPageTasks.values.forEach { $0.cancel() }
-            reviewFlashcardPageTasks.removeAll()
-            resetReviewFlashcardRuntimeStateLocked()
         }
         withStatisticsStateLock {
             flashcardStatisticsTask?.cancel()
@@ -286,7 +279,6 @@ final class FlashcardService: ObservableObject {
         }
         Task {
             await publishReviewFlashcards([])
-            await setReviewFlashcardsFullLoadActive(false)
         }
         notifyFlashcardsDidChange()
         
@@ -298,9 +290,6 @@ final class FlashcardService: ObservableObject {
         withReviewFlashcardStateLock {
             allMyFlashcardsFullLoadTask?.cancel()
             allMyFlashcardsFullLoadTask = nil
-            reviewFlashcardPageTasks.values.forEach { $0.cancel() }
-            reviewFlashcardPageTasks.removeAll()
-            resetReviewFlashcardRuntimeStateLocked()
         }
 
         Task { @MainActor in
@@ -309,7 +298,6 @@ final class FlashcardService: ObservableObject {
             self.flashcardStatistics = nil
             self.nextFlashcardStatisticsFetchAt = nil
             self.isLoadingFlashcards = false
-            self.isLoadingAllReviewFlashcards = false
             self.isLoadingStatistics = false
             self.flashcardsErrorMessage = nil
             self.statisticsErrorMessage = nil
@@ -479,54 +467,8 @@ final class FlashcardService: ObservableObject {
         return allCards
     }
 
-    func ensureReviewFlashcardsFullyLoaded(pageSize firstPageSize: Int = 100) {
-        logger.debug("Review background autoload is disabled. Due review cards load lazily page-by-page.")
-    }
-
     private func fetchReviewFlashcardsPage(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
-        if page <= 1 {
-            let cards = try await fetchAvailableReviewFlashcards(pageSize: pageSize)
-            return pageSlice(from: cards, page: 1, pageSize: pageSize)
-        }
-
-        let minimumCount = page * pageSize
-        var cards = await MainActor.run { self.reviewFlashcards }
-        while cards.count < minimumCount, hasMoreReviewFlashcardPages() {
-            cards = try await loadNextReviewFlashcardsPage(pageSize: pageSize)
-        }
-
-        await publishReviewFlashcards(cards)
-        return pageSlice(from: cards, page: page, pageSize: pageSize)
-    }
-
-    private func fetchReviewFlashcardsPageFromNetworkDeduped(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
-        if let existingTask = withReviewFlashcardStateLock({ reviewFlashcardPageTasks[page] }) {
-            logger.debug("Joining existing review page \(page) network task.")
-            return try await existingTask.value
-        }
-
-        let task = Task { [weak self] () throws -> ([Flashcard], StrapiPagination?) in
-            guard let self else { throw CancellationError() }
-            return try await self.fetchReviewFlashcardsPageFromNetwork(page: page, pageSize: pageSize)
-        }
-
-        let taskState = withReviewFlashcardStateLock { () -> (task: Task<([Flashcard], StrapiPagination?), Error>, didStore: Bool) in
-            if let existingTask = reviewFlashcardPageTasks[page] {
-                return (existingTask, false)
-            }
-            reviewFlashcardPageTasks[page] = task
-            return (task, true)
-        }
-
-        defer {
-            if taskState.didStore {
-                withReviewFlashcardStateLock {
-                    reviewFlashcardPageTasks[page] = nil
-                }
-            }
-        }
-
-        return try await taskState.task.value
+        try await fetchReviewFlashcardsPageFromNetwork(page: page, pageSize: pageSize)
     }
 
     private func fetchReviewFlashcardsPageFromNetwork(page: Int, pageSize: Int) async throws -> ([Flashcard], StrapiPagination?) {
@@ -540,20 +482,6 @@ final class FlashcardService: ObservableObject {
         guard let url = urlComponents.url else { throw URLError(.badURL) }
         let response: StrapiListResponse<StrapiFlashcard> = try await networkManager.fetchDirect(from: url)
         return ((response.data ?? []).map(transformStrapiCard), response.meta?.pagination)
-    }
-
-    private func pageSlice(from cards: [Flashcard], page: Int, pageSize: Int) -> ([Flashcard], StrapiPagination?) {
-        let totalItems = cards.count
-        let totalPages = pageSize > 0 ? (totalItems + pageSize - 1) / pageSize : 0
-
-        guard page > 0, pageSize > 0, page <= totalPages || totalItems == 0 else {
-            return ([], StrapiPagination(page: page, pageSize: pageSize, pageCount: totalPages, total: totalItems))
-        }
-
-        let startIndex = (page - 1) * pageSize
-        let endIndex = min(startIndex + pageSize, totalItems)
-        let pageItems = startIndex < endIndex ? Array(cards[startIndex..<endIndex]) : []
-        return (pageItems, StrapiPagination(page: page, pageSize: pageSize, pageCount: totalPages, total: totalItems))
     }
 
     private func isCurrentUser(_ userId: Int?) -> Bool {
@@ -613,12 +541,6 @@ final class FlashcardService: ObservableObject {
     private func publishReviewFlashcards(_ cards: [Flashcard]) async {
         await MainActor.run {
             self.reviewFlashcards = cards
-        }
-    }
-
-    private func setReviewFlashcardsFullLoadActive(_ isActive: Bool) async {
-        await MainActor.run {
-            self.isLoadingAllReviewFlashcards = isActive
         }
     }
 
@@ -729,71 +651,4 @@ final class FlashcardService: ObservableObject {
         withStatisticsStateLock { flashcardMutationVersion }
     }
 
-    func loadMoreReviewFlashcardsIfNeeded(currentIndex: Int, pageSize: Int, threshold: Int = 5) async {
-        guard threshold >= 0 else { return }
-
-        let cards = await MainActor.run { self.reviewFlashcards }
-        let remaining = cards.count - currentIndex - 1
-        guard remaining <= threshold else { return }
-        guard hasMoreReviewFlashcardPages() else { return }
-
-        do {
-            _ = try await loadNextReviewFlashcardsPage(pageSize: pageSize)
-        } catch {
-            logger.error("Failed to lazily load more due review cards: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func loadNextReviewFlashcardsPage(pageSize: Int) async throws -> [Flashcard] {
-        guard let nextPage = withReviewFlashcardStateLock({ reviewFlashcardNextPage }) else {
-            return await MainActor.run { self.reviewFlashcards }
-        }
-        await setReviewFlashcardsFullLoadActive(true)
-        defer {
-            Task { await self.setReviewFlashcardsFullLoadActive(false) }
-        }
-
-        let (nextCards, pagination) = try await fetchReviewFlashcardsPageFromNetworkDeduped(
-            page: nextPage,
-            pageSize: withReviewFlashcardStateLock({ reviewFlashcardPageSize }) ?? pageSize
-        )
-
-        var mergedCards = await MainActor.run { self.reviewFlashcards }
-        let existingIDs = Set(mergedCards.map(\.id))
-        mergedCards.append(contentsOf: nextCards.filter { !existingIDs.contains($0.id) })
-        storeLoadedReviewPage(mergedCards, pagination: pagination, reset: false)
-        await publishReviewFlashcards(mergedCards)
-        return mergedCards
-    }
-
-    private func hasMoreReviewFlashcardPages() -> Bool {
-        withReviewFlashcardStateLock { reviewFlashcardNextPage != nil }
-    }
-
-    private func storeLoadedReviewPage(_ cards: [Flashcard], pagination: StrapiPagination?, reset: Bool) {
-        withReviewFlashcardStateLock {
-            if reset {
-                reviewFlashcardPagination = nil
-                reviewFlashcardNextPage = nil
-                reviewFlashcardPageSize = nil
-            }
-
-            let resolvedPageSize = pagination?.pageSize ?? reviewFlashcardPageSize ?? max(cards.count, 1)
-            let resolvedTotal = pagination?.total ?? cards.count
-            reviewFlashcardPagination = StrapiPagination(
-                page: pagination?.page ?? (reset ? 1 : reviewFlashcardPagination?.page ?? 1),
-                pageSize: resolvedPageSize,
-                pageCount: pagination?.pageCount ?? (cards.isEmpty ? 0 : 1),
-                total: resolvedTotal
-            )
-            reviewFlashcardPageSize = resolvedPageSize
-            reviewFlashcardNextPage = pagination.flatMap { $0.page < $0.pageCount ? ($0.page + 1) : nil }
-        }
-    }
-
-    private func resetReviewFlashcardRuntimeStateLocked() {
-        reviewFlashcardPagination = nil
-        reviewFlashcardNextPage = nil
-        reviewFlashcardPageSize = nil
-    }
 }

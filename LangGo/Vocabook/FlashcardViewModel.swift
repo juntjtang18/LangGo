@@ -1,6 +1,5 @@
 // LangGo/Vocabook/FlashcardViewModel.swift
 import SwiftUI
-import Combine
 import os
 
 @MainActor
@@ -13,27 +12,11 @@ class FlashcardViewModel: ObservableObject {
     @Published var reviewCards: [Flashcard] = []
     @Published var userReviewLogs: [StrapiReviewLog] = []  // keep if you use it elsewhere
     @Published var isLoadingReviewCards: Bool = false
-    @Published var isAutoLoadingReviewCards: Bool = false
     @Published var reviewErrorMessage: String?
 
     private var reviewCardIds = Set<Int>()
-    private var cancellables = Set<AnyCancellable>()
-
-    init() {
-        flashcardService.$reviewFlashcards
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] cards in
-                self?.syncReviewCards(cards)
-            }
-            .store(in: &cancellables)
-
-        flashcardService.$isLoadingAllReviewFlashcards
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] isLoading in
-                self?.isAutoLoadingReviewCards = isLoading
-            }
-            .store(in: &cancellables)
-    }
+    
+    init() {}
 
     // MARK: - Cards
     
@@ -59,7 +42,7 @@ class FlashcardViewModel: ObservableObject {
         resetReviewSessionState()
 
         do {
-            let availableCards = try await flashcardService.fetchAvailableReviewFlashcards(pageSize: 20)
+            let availableCards = try await flashcardService.fetchAllReviewFlashcards()
             syncReviewCards(availableCards)
             logger.info("prepareReviewSession: Loaded \(self.reviewCards.count) available cards for review.")
         } catch {
@@ -83,19 +66,13 @@ class FlashcardViewModel: ObservableObject {
         reviewCardIds = Set(sortedCards.map(\.id))
     }
 
-    func loadMoreReviewCardsIfNeeded(currentIndex: Int, threshold: Int = 5) async {
-        await flashcardService.loadMoreReviewFlashcardsIfNeeded(
-            currentIndex: currentIndex,
-            pageSize: 100,
-            threshold: threshold
-        )
-    }
-
-    // Keep the old optimistic path
     func submitReviewOptimistic(for card: Flashcard, result: ReviewResult) {
         Task.detached(priority: .utility) { [flashcardService, logger] in
             do {
                 _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
+                await MainActor.run {
+                    self.removeReviewedCardLocally(card.id)
+                }
                 logger.info("Review submitted and synced for card \(card.id).")
             } catch {
                 logger.error("Failed to submit/sync review for card \(card.id): \(error.localizedDescription)")
@@ -103,23 +80,20 @@ class FlashcardViewModel: ObservableObject {
         }
     }
 
-    // New function to be used for the last card
     func submitReviewAndWait(for card: Flashcard, result: ReviewResult) async {
         do {
             logger.info("Submitting FINAL review for card \(card.id) with result '\(result.rawValue)'")
             _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
+            removeReviewedCardLocally(card.id)
             logger.info("Final review submitted and synced for card \(card.id).")
-            // Optionally, re-fetch data after the last card is submitted.
-            // This ensures the statistics screen is accurate when loaded.
-            await self.fetchAllMyCards()
         } catch {
             logger.error("Failed to submit/sync FINAL review for card \(card.id): \(error.localizedDescription)")
         }
     }
-    
-    // Keep the old submit path if you ever need strict awaits elsewhere.
-    private func submitReview(for card: Flashcard, result: ReviewResult) async {
-        await submitReviewOptimistic(for: card, result: result)
+
+    private func removeReviewedCardLocally(_ cardId: Int) {
+        reviewCards.removeAll { $0.id == cardId }
+        reviewCardIds.remove(cardId)
     }
 
     

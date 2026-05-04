@@ -2,7 +2,6 @@
 import SwiftUI
 import SPConfetti
 import AVFoundation
-import Combine
 
 final class ReviewSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     private let tts = AVSpeechSynthesizer()
@@ -50,7 +49,6 @@ struct FlashcardReviewView: View {
     @State private var showFireworks = false
     @State private var showBadge = false
     @State private var isSubmittingFinalCard = false
-    @State private var isWaitingForMoreReviewCards = false
     @State private var previousReviewCardCount = 0
 
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled = false
@@ -65,7 +63,7 @@ struct FlashcardReviewView: View {
                 VStack {
                     if viewModel.reviewCards.isEmpty {
                         Spacer()
-                        if viewModel.isLoadingReviewCards || viewModel.isAutoLoadingReviewCards {
+                        if viewModel.isLoadingReviewCards {
                             ProgressView("Loading review cards...")
                                 .font(.headline)
                         } else if let errorMessage = viewModel.reviewErrorMessage {
@@ -94,16 +92,6 @@ struct FlashcardReviewView: View {
                             Text(progressCountString)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-
-                            if viewModel.isAutoLoadingReviewCards {
-                                HStack(spacing: 6) {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
-                                    Text("Loading more cards...")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
                         }
                         .padding()
                         
@@ -140,27 +128,14 @@ struct FlashcardReviewView: View {
 
                         Spacer()
                         
-                        if isWaitingForMoreReviewCards {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Loading more cards...")
-                                    .font(.footnote)
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.bottom, 4)
-                        }
-
                         HStack(spacing: 20) {
                             Button(action: { markCard(.wrong) }) {
                                 Text("Don't Know").style(.wrongButton)
                             }
-                            .disabled(isWaitingForMoreReviewCards)
                             
                             Button(action: { markCard(.correct) }) {
                                 Text("Correct").style(.correctButton)
                             }
-                            .disabled(isWaitingForMoreReviewCards)
                         }
                         .padding()
                     }
@@ -234,22 +209,10 @@ struct FlashcardReviewView: View {
             let oldCount = previousReviewCardCount
             previousReviewCardCount = newCount
 
-            if isWaitingForMoreReviewCards, currentIndex < newCount - 1 {
-                isWaitingForMoreReviewCards = false
-                isFlipped = false
-                currentIndex += 1
-                return
-            }
-
             if newCount < oldCount, currentIndex > 0 {
                 currentIndex = max(0, currentIndex - (oldCount - newCount))
             } else if newCount > 0, currentIndex >= newCount {
                 currentIndex = newCount - 1
-            }
-        }
-        .onChange(of: currentIndex) { newIndex in
-            Task {
-                await viewModel.loadMoreReviewCardsIfNeeded(currentIndex: newIndex)
             }
         }
     }
@@ -306,26 +269,15 @@ struct FlashcardReviewView: View {
     
     private func markCard(_ answer: ReviewResult) {
         guard let card = viewModel.reviewCards[safe: currentIndex] else { return }
-
-        if currentIndex == viewModel.reviewCards.count - 1 && viewModel.isAutoLoadingReviewCards {
-            // This is only the last currently available card. More cards may be
-            // published by FlashcardService, so do not treat it as final.
-            isWaitingForMoreReviewCards = true
-            isFlipped = false
-            viewModel.submitReviewOptimistic(for: card, result: answer)
-        } else if currentIndex == viewModel.reviewCards.count - 1 {
-            // This is the LAST card. Wait for the review to complete.
+        if currentIndex == viewModel.reviewCards.count - 1 {
             Task {
                 isSubmittingFinalCard = true
                 await viewModel.submitReviewAndWait(for: card, result: answer)
-                
-                // Only advance to the "Session Complete" screen after successful submission
                 DispatchQueue.main.async {
                     self.goToNextCard()
                 }
             }
         } else {
-            // Optimistic update for all cards except the last one
             goToNextCard()
             viewModel.submitReviewOptimistic(for: card, result: answer)
         }
@@ -338,10 +290,6 @@ struct FlashcardReviewView: View {
                 isFlipped = false
                 currentIndex += 1
             }
-        } else if viewModel.isAutoLoadingReviewCards {
-            // More cards are still being shared by FlashcardService. Stay on the
-            // current card instead of completing the session from a partial list.
-            return
         } else {
             isSessionComplete = true
             

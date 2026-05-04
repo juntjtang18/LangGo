@@ -45,21 +45,12 @@ struct ExamView: View {
                     Text(progressCountString)
                         .font(.caption)
                         .foregroundColor(.secondary)
-
-                    if viewModel.isAutoLoadingRemainingPages || viewModel.isLoadingMore {
-                        ProgressView()
-                            .scaleEffect(0.7)
-
-                        Text("Loading more...")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
                 }
             }
             .padding(.horizontal)
             .padding(.top, 8)
 
-            if let errorMessage = viewModel.errorMessage, !viewModel.isLoadingMore {
+            if let errorMessage = viewModel.errorMessage {
                 Text("Could not load more cards: \(errorMessage)")
                     .font(.footnote)
                     .foregroundColor(.red)
