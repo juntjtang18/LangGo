@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import os
 
@@ -106,8 +105,9 @@ final class HomeViewModel: ObservableObject {
     private let localeProvider: () -> String
     private let logger = Logger(subsystem: "com.langGo.swift", category: "HomeViewModel")
 
-    private var cancellables = Set<AnyCancellable>()
     private var latestLeaderboard: MyLeaderboardData?
+    private var reloadGeneration: Int = 0
+    private var reloadTask: Task<Void, Never>?
 
     init(
         userSnapshotService: UserSnapshotService? = nil,
@@ -125,136 +125,114 @@ final class HomeViewModel: ObservableObject {
             UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
         }
 
-        bindServices()
-        syncPublishedState()
+        applyPublishedState(
+            snapshot: nil,
+            statistics: nil,
+            leaderboard: nil
+        )
     }
 
     func load() async {
-        async let snapshotTask: Void = loadSnapshot()
-        async let flashcardStatTask: Void = flashcardService.loadStatisticsIfNeeded()
-        async let articleTask: Void = articleService.loadSharedUserArticlesIfNeeded()
-        async let leaderboardTask: Void = loadLeaderboard()
-        _ = await (snapshotTask, flashcardStatTask, articleTask, leaderboardTask)
-        syncPublishedState()
+        await runReloadJoiningInflight()
     }
 
     func refresh() async {
-        async let snapshotTask: Void = refreshUserSnapshot()
-        async let flashcardStatTask: Void = flashcardService.refreshFlashcardStat()
-        async let articleTask: Void = articleService.refreshArticleState()
-        async let leaderboardTask: Void = refreshLeaderboard()
-        _ = await (snapshotTask, flashcardStatTask, articleTask, leaderboardTask)
-        syncPublishedState()
+        await runReloadJoiningInflight()
     }
 
-    private func bindServices() {
-        userSnapshotService.$latestSnapshot
-            .sink { [weak self] _ in
-                self?.syncPublishedState()
-            }
-            .store(in: &cancellables)
-
-        flashcardService.$flashcardStatistics
-            .sink { [weak self] _ in
-                self?.syncPublishedState()
-            }
-            .store(in: &cancellables)
-
-        articleService.$userArticlesTotalCount
-            .sink { [weak self] _ in
-                self?.syncPublishedState()
-            }
-            .store(in: &cancellables)
-
-        articleService.$userArticles
-            .sink { [weak self] _ in
-                self?.syncPublishedState()
-            }
-            .store(in: &cancellables)
-
-        flashcardService.$flashcardStatChanged
-            .dropFirst()
-            .sink { [weak self] changeToken in
-                guard let self else { return }
-                Task { @MainActor in
-                    await self.handleFlashcardStatChanged(changeToken: changeToken)
-                }
-            }
-            .store(in: &cancellables)
-
-        articleService.$articleChanged
-            .dropFirst()
-            .sink { [weak self] changeToken in
-                guard let self else { return }
-                Task { @MainActor in
-                    self.logger.debug("reacting to articleChanged token=\(changeToken, privacy: .public)")
-                    await self.articleService.refreshArticleState()
-                }
-            }
-            .store(in: &cancellables)
-    }
-
-    private func loadSnapshot() async {
-        isLoadingSnapshot = true
-        syncPublishedState()
-        defer {
-            isLoadingSnapshot = false
-            syncPublishedState()
+    private func runReloadJoiningInflight() async {
+        if let existingTask = reloadTask {
+            await existingTask.value
+            return
         }
 
-        await userSnapshotService.loadSnapshot(locale: currentLocale())
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.reloadHomeState()
+        }
+        reloadTask = task
+        await task.value
+        reloadTask = nil
     }
 
-    private func refreshUserSnapshot() async {
+    private func reloadHomeState() async {
+        let generation = nextReloadGeneration()
         isLoadingSnapshot = true
-        syncPublishedState()
-        defer {
-            isLoadingSnapshot = false
-            syncPublishedState()
-        }
+        applyPublishedState(
+            snapshot: userSnapshotService.currentSnapshot(locale: currentLocale()),
+            statistics: flashcardService.flashcardStatistics,
+            leaderboard: latestLeaderboard
+        )
 
+        async let snapshotTask = fetchLatestSnapshot()
+        async let statisticsTask = fetchLatestStatistics()
+        async let articleTask = refreshArticles()
+        async let leaderboardTask = fetchLatestLeaderboard()
+
+        let snapshot = await snapshotTask
+        let statistics = await statisticsTask
+        _ = await articleTask
+        let leaderboard = await leaderboardTask
+
+        guard generation == reloadGeneration else { return }
+
+        latestLeaderboard = leaderboard
+        isLoadingSnapshot = false
+        applyPublishedState(
+            snapshot: snapshot,
+            statistics: statistics,
+            leaderboard: leaderboard
+        )
+    }
+
+    private func fetchLatestSnapshot() async -> UserRankSnapshot? {
         do {
-            _ = try await userSnapshotService.refreshUserSnapshot(locale: currentLocale())
+            return try await userSnapshotService.refreshUserSnapshot(locale: currentLocale())
         } catch {
-            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
-                return
+            if !Task.isCancelled, (error as? URLError)?.code != .cancelled {
+                logger.error("refreshUserSnapshot failed locale=\(self.currentLocale(), privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
-            logger.error("refreshUserSnapshot failed locale=\(self.currentLocale(), privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return userSnapshotService.currentSnapshot(locale: currentLocale())
         }
     }
 
-    private func handleFlashcardStatChanged(changeToken: Int) async {
-        logger.debug("reacting to flashcardStatChanged token=\(changeToken, privacy: .public)")
-        async let statTask: Void = flashcardService.refreshFlashcardStat()
-        async let snapshotTask: Void = refreshUserSnapshot()
-        async let leaderboardTask: Void = refreshLeaderboard()
-        _ = await (statTask, snapshotTask, leaderboardTask)
+    private func fetchLatestStatistics() async -> StrapiStatistics? {
+        do {
+            return try await flashcardService.fetchFlashcardStatistics(forceRefresh: true)
+        } catch {
+            return flashcardService.flashcardStatistics
+        }
     }
 
-    private func syncPublishedState() {
-        let snapshot = userSnapshotService.currentSnapshot(locale: currentLocale())
+    private func refreshArticles() async {
+        await articleService.refreshArticleState()
+    }
+
+    private func fetchLatestLeaderboard() async -> MyLeaderboardData? {
+        do {
+            return try await rankService.fetchMyLeaderboard()
+        } catch {
+            logger.error("loadLeaderboard failed: \(error.localizedDescription, privacy: .public)")
+            return latestLeaderboard
+        }
+    }
+
+    private func applyPublishedState(
+        snapshot: UserRankSnapshot?,
+        statistics: StrapiStatistics?,
+        leaderboard: MyLeaderboardData?
+    ) {
         rankPointsState = makeRankPointsCardState(snapshot: snapshot)
-        reviewCardState = makeReviewCardState(statistics: flashcardService.flashcardStatistics)
-        leaderboardBannerState = makeLeaderboardBannerState(leaderboard: latestLeaderboard)
-        leaderboardSheetState = makeLeaderboardSheetState(leaderboard: latestLeaderboard)
+        reviewCardState = makeReviewCardState(statistics: statistics)
+        leaderboardBannerState = makeLeaderboardBannerState(leaderboard: leaderboard)
+        leaderboardSheetState = makeLeaderboardSheetState(leaderboard: leaderboard)
         articleLibraryCount = articleService.userArticlesTotalCount
         articleLibraryPreviews = makeArticleLibraryPreviewStates()
     }
 
-    private func loadLeaderboard() async {
-        do {
-            latestLeaderboard = try await rankService.fetchMyLeaderboard()
-        } catch {
-            logger.error("loadLeaderboard failed: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func refreshLeaderboard() async {
-        do {
-            latestLeaderboard = try await rankService.fetchMyLeaderboard()
-        } catch {
-            logger.error("refreshLeaderboard failed: \(error.localizedDescription, privacy: .public)")
-        }
+    private func nextReloadGeneration() -> Int {
+        reloadGeneration += 1
+        return reloadGeneration
     }
 
     private func makeArticleLibraryPreviewStates() -> [ArticleLibraryPreviewState] {

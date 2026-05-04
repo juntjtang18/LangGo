@@ -84,73 +84,78 @@ struct HomeViewModelTests {
     }
 
     @Test @MainActor
-    func flashcardReviewChangeRefreshesStatAndSnapshot() async throws {
+    func refreshFetchesLatestHomeState() async throws {
         MockHomeAPI.install()
         defer { MockHomeAPI.uninstall() }
 
         let counters = RequestCounter()
+        let state = MutableHomeState(
+            stats: (totalCards: 39, dueForReview: 24, remembered: 7),
+            snapshot: (points: 120, pointsDelta: 9, groupRank: 3),
+            leaderboard: (orderInGroup: 1, periodPoints: 9)
+        )
+
         MockHomeAPI.handler = { request in
             let path = request.url?.path ?? ""
 
             switch (request.httpMethod ?? "GET", path) {
-            case ("POST", "/api/flashcards/2991/review"):
-                await counters.increment("review-post")
-                return .json(200, Self.flashcardReviewResponseJSON(cardId: 2991))
             case ("GET", "/api/flashcard-stat"):
                 await counters.increment("flashcard-stat")
-                return .json(200, Self.flashcardStatsJSON(totalCards: 40, dueForReview: 23, remembered: 8))
+                let stats = await state.stats
+                return .json(200, Self.flashcardStatsJSON(totalCards: stats.totalCards, dueForReview: stats.dueForReview, remembered: stats.remembered))
             case ("GET", "/api/rank/me"):
                 await counters.increment("rank-me")
-                return .json(200, Self.rankSnapshotJSON(points: 131, pointsDelta: 10, groupRank: 2))
+                let snapshot = await state.snapshot
+                return .json(200, Self.rankSnapshotJSON(points: snapshot.points, pointsDelta: snapshot.pointsDelta, groupRank: snapshot.groupRank))
             case ("GET", "/api/myleaderboard"):
                 await counters.increment("myleaderboard")
-                return .json(200, Self.myLeaderboardJSON(orderInGroup: 1, periodPoints: 9))
+                let leaderboard = await state.leaderboard
+                return .json(200, Self.myLeaderboardJSON(orderInGroup: leaderboard.orderInGroup, periodPoints: leaderboard.periodPoints))
             default:
                 throw URLError(.unsupportedURL)
             }
         }
 
-        let services = Self.makeServices()
-        let homeViewModel = HomeViewModel(
-            userSnapshotService: services.snapshotService,
-            flashcardService: services.flashcardService,
-            articleService: services.articleService,
-            rankService: services.rankService,
-            localeProvider: { "en" }
-        )
+        let homeViewModel = Self.makeHomeViewModel()
+        await homeViewModel.load()
+        await state.setStats(totalCards: 40, dueForReview: 23, remembered: 8)
+        await state.setSnapshot(points: 131, pointsDelta: 10, groupRank: 2)
+        await state.setLeaderboard(orderInGroup: 2, periodPoints: 10)
+        await homeViewModel.refresh()
 
-        _ = try await services.flashcardService.submitFlashcardReview(cardId: 2991, result: .correct)
+        #expect(homeViewModel.reviewCardState.totalCards == 40)
+        #expect(homeViewModel.reviewCardState.dueForReview == 23)
+        #expect(homeViewModel.rankPointsState.points == 131)
+        #expect(homeViewModel.leaderboardBannerState.currentUserPosition == 2)
 
-        try await Self.eventually {
-            homeViewModel.reviewCardState.totalCards == 40 &&
-            homeViewModel.rankPointsState.points == 131
-        }
-
-        #expect(await counters.value(for: "review-post") == 1)
-        #expect(await counters.value(for: "flashcard-stat") == 1)
-        #expect(await counters.value(for: "rank-me") == 1)
-        #expect(await counters.value(for: "myleaderboard") == 1)
+        #expect(await counters.value(for: "flashcard-stat") == 2)
+        #expect(await counters.value(for: "rank-me") == 2)
+        #expect(await counters.value(for: "myleaderboard") == 2)
     }
 
     @Test @MainActor
-    func articleCreateChangeRefreshesArticleState() async throws {
+    func articleCreateDoesNotAutoRefreshUntilHomeRefreshes() async throws {
         MockHomeAPI.install()
         defer { MockHomeAPI.uninstall() }
 
         let counters = RequestCounter()
+        let articleState = MutableArticleState(ids: [])
+
         MockHomeAPI.handler = { request in
             let path = request.url?.path ?? ""
 
             switch (request.httpMethod ?? "GET", path) {
             case ("POST", "/api/user-articles"):
                 await counters.increment("article-post")
+                await articleState.setIds([501])
                 return .json(200, #"{"data":{"id":501}}"#)
             case ("GET", "/api/user-articles/501"):
                 await counters.increment("article-detail")
                 return .json(200, Self.singleArticleJSON(id: 501))
             case ("GET", "/api/user-articles"):
                 await counters.increment("article-list")
-                return .json(200, Self.userArticlesPageJSON(ids: [501], total: 1))
+                let ids = await articleState.ids
+                return .json(200, Self.userArticlesPageJSON(ids: ids, total: ids.count))
             default:
                 throw URLError(.unsupportedURL)
             }
@@ -165,6 +170,7 @@ struct HomeViewModelTests {
             localeProvider: { "en" }
         )
 
+        await homeViewModel.load()
         _ = try await services.articleService.createUserArticle(
             title: "My First Article",
             content: "This is article content.",
@@ -173,14 +179,19 @@ struct HomeViewModelTests {
             articleTagIds: []
         )
 
+        #expect(homeViewModel.articleLibraryCount == 0)
+        #expect(homeViewModel.articleLibraryPreviews.isEmpty)
+
+        await homeViewModel.refresh()
+
         try await Self.eventually {
-            homeViewModel.articleLibraryPreviews.first?.backendId == 501 &&
-            homeViewModel.articleLibraryCount == 1
+            homeViewModel.articleLibraryCount == 1 &&
+            homeViewModel.articleLibraryPreviews.first?.backendId == 501
         }
 
         #expect(await counters.value(for: "article-post") == 1)
         #expect(await counters.value(for: "article-detail") == 1)
-        #expect(await counters.value(for: "article-list") == 1)
+        #expect(await counters.value(for: "article-list") == 2)
     }
 
     @Test @MainActor
@@ -310,6 +321,46 @@ struct HomeViewModelTests {
         """
         {"id":\(id),"attributes":{"title":"My First Article","content":"This is article content.","language_code":"en","word_count":120,"progress":0.5,"last_read_at":"2026-05-01T05:51:56.204Z","article_tags":{"data":[{"id":71,"attributes":{"tag":"Travel"}}]}}}
         """
+    }
+}
+
+actor MutableHomeState {
+    private(set) var stats: (totalCards: Int, dueForReview: Int, remembered: Int)
+    private(set) var snapshot: (points: Int, pointsDelta: Int, groupRank: Int)
+    private(set) var leaderboard: (orderInGroup: Int, periodPoints: Int)
+
+    init(
+        stats: (totalCards: Int, dueForReview: Int, remembered: Int),
+        snapshot: (points: Int, pointsDelta: Int, groupRank: Int),
+        leaderboard: (orderInGroup: Int, periodPoints: Int)
+    ) {
+        self.stats = stats
+        self.snapshot = snapshot
+        self.leaderboard = leaderboard
+    }
+
+    func setStats(totalCards: Int, dueForReview: Int, remembered: Int) {
+        stats = (totalCards, dueForReview, remembered)
+    }
+
+    func setSnapshot(points: Int, pointsDelta: Int, groupRank: Int) {
+        snapshot = (points, pointsDelta, groupRank)
+    }
+
+    func setLeaderboard(orderInGroup: Int, periodPoints: Int) {
+        leaderboard = (orderInGroup, periodPoints)
+    }
+}
+
+actor MutableArticleState {
+    private(set) var ids: [Int]
+
+    init(ids: [Int]) {
+        self.ids = ids
+    }
+
+    func setIds(_ ids: [Int]) {
+        self.ids = ids
     }
 }
 

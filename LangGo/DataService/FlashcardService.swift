@@ -39,6 +39,7 @@ final class FlashcardService: ObservableObject {
     private var reviewFlashcardPagination: StrapiPagination?
     private var reviewFlashcardNextPage: Int?
     private var reviewFlashcardPageSize: Int?
+    private var flashcardMutationVersion: Int = 0
 
     private var currentUserId: Int? {
         let userId = UserDefaults.standard.integer(forKey: "userId")
@@ -69,11 +70,11 @@ final class FlashcardService: ObservableObject {
     }
 
     func refreshStatistics(forceRefresh: Bool = false) async {
-        _ = try? await fetchFlashcardStatistics()
+        _ = try? await fetchFlashcardStatistics(forceRefresh: forceRefresh)
     }
 
     func refreshFlashcardStat() async {
-        _ = try? await fetchFlashcardStatistics()
+        _ = try? await fetchFlashcardStatistics(forceRefresh: true)
     }
 
     func loadFlashcardsIfNeeded() async {
@@ -93,11 +94,16 @@ final class FlashcardService: ObservableObject {
     }
 
     func fetchFlashcardStatistics(forceRefresh: Bool = false) async throws -> StrapiStatistics {
-        _ = forceRefresh
         await setStatisticsLoading(true)
         await setStatisticsErrorMessage(nil)
 
         do {
+            if forceRefresh {
+                let stats = try await fetchFlashcardStatisticsFromNetworkDeduped()
+                await setStatisticsLoading(false)
+                return stats
+            }
+
             let stats = try await fetchFlashcardStatisticsFromNetworkDeduped()
             await setStatisticsLoading(false)
             return stats
@@ -147,6 +153,7 @@ final class FlashcardService: ObservableObject {
 
         let updatedCard = transformStrapiCard(updatedStrapiCard)
         await patchInMemoryStateAfterFlashcardReview(updatedCard)
+        markFlashcardDataMutated()
         await publishFlashcardStatChanged()
         return updatedCard
     }
@@ -175,6 +182,7 @@ final class FlashcardService: ObservableObject {
 
         let _: DeleteResponse = try await networkManager.post(to: url, body: EmptyBody())
 
+        markFlashcardDataMutated()
         invalidateAllFlashcardCaches()
 
         logger.debug("✅ Successfully deleted flashcard with id: \(cardId) and invalidated caches.")
@@ -322,6 +330,7 @@ final class FlashcardService: ObservableObject {
                 self.flashcards.insert(flashcard, at: 0)
             }
         }
+        markFlashcardDataMutated()
         await publishFlashcardStatChanged()
     }
     
@@ -690,15 +699,34 @@ final class FlashcardService: ObservableObject {
     }
 
     private func fetchFlashcardStatisticsFromNetwork() async throws -> StrapiStatistics {
-        logger.debug("Fetching flashcard statistics from network.")
-        guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else {
-            throw URLError(.badURL)
-        }
+        while true {
+            let requestedVersion = currentFlashcardMutationVersion()
+            logger.debug("Fetching flashcard statistics from network.")
+            guard let url = URL(string: "\(Config.strapiBaseUrl)/api/flashcard-stat") else {
+                throw URLError(.badURL)
+            }
 
-        let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
-        let stats = resp.data
-        await publishStatistics(stats)
-        return stats
+            let resp: StrapiStatisticsResponse = try await networkManager.fetchDirect(from: url)
+            let stats = resp.data
+
+            if requestedVersion != currentFlashcardMutationVersion() {
+                logger.debug("Discarding stale flashcard statistics response; flashcard data changed during fetch.")
+                continue
+            }
+
+            await publishStatistics(stats)
+            return stats
+        }
+    }
+
+    private func markFlashcardDataMutated() {
+        withStatisticsStateLock {
+            flashcardMutationVersion += 1
+        }
+    }
+
+    private func currentFlashcardMutationVersion() -> Int {
+        withStatisticsStateLock { flashcardMutationVersion }
     }
 
     func loadMoreReviewFlashcardsIfNeeded(currentIndex: Int, pageSize: Int, threshold: Int = 5) async {

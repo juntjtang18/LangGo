@@ -120,9 +120,49 @@ struct FlashcardReviewFlowServiceTests {
         #expect(statsRequestCount == 2)
     }
 
-    private static func statisticsResponseJSON() -> String {
+    @Test
+    func refreshFlashcardStatRetriesWhenReviewHappensDuringInflightFetch() async throws {
+        MockFlashcardAPI.install()
+        defer { MockFlashcardAPI.uninstall() }
+
+        let gate = AsyncGate()
+        let counter = KeyedCounter()
+
+        MockFlashcardAPI.handler = { request in
+            switch request.url?.path {
+            case "/api/review-flashcards":
+                return .json(200, Self.reviewListResponseJSON(ids: [31], page: 1, pageSize: 1, pageCount: 1, total: 1))
+            case "/api/flashcards/31/review":
+                return .json(200, Self.reviewResponseJSON(cardId: 31))
+            case "/api/flashcard-stat":
+                let requestIndex = await counter.incrementAndGet("flashcard-stat")
+                if requestIndex == 1 {
+                    await gate.didStart()
+                    await gate.wait()
+                    return .json(200, Self.statisticsResponseJSON(dueForReview: 374))
+                }
+                return .json(200, Self.statisticsResponseJSON(dueForReview: 373))
+            default:
+                throw URLError(.unsupportedURL)
+            }
+        }
+
+        let service = FlashcardService()
+        _ = try await service.fetchAvailableReviewFlashcards(pageSize: 1)
+
+        async let refresh: Void = service.refreshFlashcardStat()
+        await gate.waitUntilStarted()
+        _ = try await service.submitFlashcardReview(cardId: 31, result: .correct)
+        await gate.release()
+        _ = await refresh
+
+        #expect(await counter.value(for: "flashcard-stat") == 2)
+        #expect(service.flashcardStatistics?.dueForReview == 373)
+    }
+
+    private static func statisticsResponseJSON(dueForReview: Int = 2) -> String {
         """
-        {"data":{"totalCards":6,"remembered":0,"dueForReview":2,"reviewed":0,"hardToRemember":0,"byTier":[],"nextFetchAt":null,"batchWindowMinutes":20}}
+        {"data":{"totalCards":6,"remembered":0,"dueForReview":\(dueForReview),"reviewed":0,"hardToRemember":0,"byTier":[],"nextFetchAt":null,"batchWindowMinutes":20}}
         """
     }
 
@@ -143,6 +183,58 @@ struct FlashcardReviewFlowServiceTests {
         """
         {"id":\(id),"attributes":{"createdAt":"2026-05-01T05:51:56.204Z","updatedAt":"2026-05-01T05:51:56.204Z","last_reviewed_at":null,"is_remembered":false,"correct_streak":0,"wrong_streak":0,"word_definition":{"data":{"id":\(3000 + id),"attributes":{"base_text":"Base \(id)","exam_base":[{"text":"Wrong","isCorrect":false},{"text":"Base \(id)","isCorrect":true}],"exam_target":[{"text":"Wrong","isCorrect":false},{"text":"Target \(id)","isCorrect":true}],"word":{"data":{"id":\(4000 + id),"attributes":{"target_text":"Target \(id)"}}},"part_of_speech":{"data":{"id":1,"attributes":{"name":"noun"}}}}}},"review_tire":{"data":null}}}
         """
+    }
+}
+
+actor KeyedCounter {
+    private var values: [String: Int] = [:]
+
+    func incrementAndGet(_ key: String) -> Int {
+        values[key, default: 0] += 1
+        return values[key, default: 0]
+    }
+
+    func value(for key: String) -> Int {
+        values[key, default: 0]
+    }
+}
+
+actor AsyncGate {
+    private var started = false
+    private var released = false
+    private var startContinuations: [CheckedContinuation<Void, Never>] = []
+    private var releaseContinuations: [CheckedContinuation<Void, Never>] = []
+
+    func didStart() {
+        started = true
+        let continuations = startContinuations
+        startContinuations.removeAll()
+        continuations.forEach { $0.resume() }
+    }
+
+    func waitUntilStarted() async {
+        if started {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            startContinuations.append(continuation)
+        }
+    }
+
+    func wait() async {
+        if released {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            releaseContinuations.append(continuation)
+        }
+    }
+
+    func release() {
+        released = true
+        let continuations = releaseContinuations
+        releaseContinuations.removeAll()
+        continuations.forEach { $0.resume() }
     }
 }
 

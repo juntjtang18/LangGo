@@ -18,6 +18,7 @@ struct HomeView: View {
     @State private var placeholderMessage: String?
     @State private var cameraAccessMessage: String?
     @State private var selectedLibraryArticlePreview: HomeViewModel.ArticleLibraryPreviewState?
+    @State private var hasLoadedHome = false
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
 
@@ -106,10 +107,12 @@ struct HomeView: View {
         }
         .background(Color.white.ignoresSafeArea())
         .fullScreenCover(isPresented: $isShowingReview, onDismiss: {
+            Task { await viewModel.refresh() }
         }) {
             FlashcardReviewView(viewModel: flashcardViewModel)
         }
         .fullScreenCover(isPresented: $isShowingQuizReview, onDismiss: {
+            Task { await viewModel.refresh() }
         }) {
             ExamView()
         }
@@ -172,7 +175,13 @@ struct HomeView: View {
             Text(placeholderMessage ?? "")
         }
         .task {
+            guard !hasLoadedHome else { return }
+            hasLoadedHome = true
             await viewModel.load()
+        }
+        .onChange(of: selectedTab) { newTab in
+            guard hasLoadedHome, newTab == 0 else { return }
+            Task { await viewModel.refresh() }
         }
     }
 
