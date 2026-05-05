@@ -1010,7 +1010,7 @@
     "NOTIFICATIONS" : {
 
     },
-    "Notify when words are due" : {
+    "Notify due words" : {
 
     },
     "OK" : {
@@ -1286,6 +1286,9 @@
 
     },
     "Review Complete" : {
+
+    },
+    "Review Reminders" : {
 
     },
     "Review Session" : {
@@ -1878,9 +1881,6 @@
 
     },
     "Word Repeat" : {
-
-    },
-    "Word Review Reminders" : {
 
     },
     "Wrong" : {

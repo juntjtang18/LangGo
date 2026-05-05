@@ -3,6 +3,31 @@ import KeychainAccess
 import os
 import AVFoundation
 
+private enum ProfileTypography {
+    static let tinyNote: CGFloat = 14
+    static let footnote: CGFloat = 14
+    static let metadata: CGFloat = 16
+    static let caption: CGFloat = 14
+    static let compactLabel: CGFloat = 15
+    static let secondaryButton: CGFloat = 16
+    static let bodyText: CGFloat = 16
+    static let rowTitle: CGFloat = 18
+    static let buttonLabel: CGFloat = 20
+    static let sectionTitle: CGFloat = 20
+    static let navigationTitle: CGFloat = 22
+    static let screenTitle: CGFloat = 24
+    static let avatarInitialsSmall: CGFloat = 26
+    static let avatarInitialsLarge: CGFloat = 36
+
+    static func rounded(_ size: CGFloat, weight: Font.Weight) -> Font {
+        .system(size: size, weight: weight, design: .rounded)
+    }
+
+    static func plain(_ size: CGFloat, weight: Font.Weight) -> Font {
+        .system(size: size, weight: weight)
+    }
+}
+
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var languageSettings: LanguageSettings
@@ -203,15 +228,15 @@ struct ProfileView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(displayName)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.screenTitle, weight: .bold))
                         .foregroundStyle(Color(red: 0.16, green: 0.17, blue: 0.21))
 
                     Text(email)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.compactLabel, weight: .semibold))
                         .foregroundStyle(Color(red: 0.47, green: 0.50, blue: 0.56))
 
                     Text(joinedLabel)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.metadata, weight: .semibold))
                         .foregroundStyle(Color(red: 0.60, green: 0.63, blue: 0.69))
                 }
             }
@@ -221,9 +246,9 @@ struct ProfileView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "square.and.pencil")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(ProfileTypography.plain(ProfileTypography.secondaryButton, weight: .bold))
                     Text("Edit Profile")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.rowTitle, weight: .bold))
                 }
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -245,7 +270,7 @@ struct ProfileView: View {
     private func profileSection(title: String, items: [ProfileMenuItem], footer: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.secondaryButton, weight: .heavy))
                 .foregroundStyle(Color(red: 0.61, green: 0.63, blue: 0.68))
                 .padding(.leading, 10)
 
@@ -261,24 +286,24 @@ struct ProfileView: View {
                                     .frame(width: 28, height: 28)
 
                                 Image(systemName: item.icon)
-                                    .font(.system(size: 16, weight: .bold))
+                                    .font(ProfileTypography.plain(ProfileTypography.rowTitle, weight: .bold))
                                     .foregroundStyle(item.iconTint)
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.title)
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                                    .font(ProfileTypography.rounded(ProfileTypography.rowTitle, weight: .bold))
                                     .foregroundStyle(Color(red: 0.18, green: 0.19, blue: 0.23))
 
                                 Text(item.subtitle)
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .font(ProfileTypography.rounded(ProfileTypography.secondaryButton, weight: .semibold))
                                     .foregroundStyle(Color(red: 0.55, green: 0.58, blue: 0.64))
                             }
 
                             Spacer()
 
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .bold))
+                                .font(ProfileTypography.plain(ProfileTypography.metadata, weight: .bold))
                                 .foregroundStyle(Color(red: 0.77, green: 0.78, blue: 0.82))
                         }
                         .padding(.horizontal, 12)
@@ -299,7 +324,7 @@ struct ProfileView: View {
                     }
                     HStack {
                         Text(footer)
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.metadata, weight: .semibold))
                             .foregroundStyle(Color(red: 0.60, green: 0.62, blue: 0.68))
                         Spacer()
                     }
@@ -315,7 +340,7 @@ struct ProfileView: View {
     private var notificationsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("NOTIFICATIONS")
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.metadata, weight: .heavy))
                 .foregroundStyle(Color(red: 0.61, green: 0.63, blue: 0.68))
                 .padding(.leading, 10)
 
@@ -326,17 +351,17 @@ struct ProfileView: View {
                         .frame(width: 42, height: 42)
 
                     Image(systemName: "bell.fill")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(ProfileTypography.plain(ProfileTypography.sectionTitle, weight: .bold))
                         .foregroundStyle(Color(red: 0.42, green: 0.84, blue: 0.53))
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Word Review Reminders")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                    Text("Review Reminders")
+                        .font(ProfileTypography.rounded(ProfileTypography.bodyText, weight: .bold))
                         .foregroundStyle(Color(red: 0.18, green: 0.19, blue: 0.23))
 
-                    Text("Notify when words are due")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    Text("Notify due words")
+                        .font(ProfileTypography.rounded(ProfileTypography.metadata, weight: .semibold))
                         .foregroundStyle(Color(red: 0.55, green: 0.58, blue: 0.64))
                 }
 
@@ -376,9 +401,9 @@ struct ProfileView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(ProfileTypography.plain(ProfileTypography.bodyText, weight: .bold))
                 Text("Log Out")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .bold))
             }
             .foregroundStyle(Color.red)
             .frame(maxWidth: .infinity)
@@ -698,13 +723,13 @@ private struct PrivacyPolicyView: View {
                 ForEach(sections) { section in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(section.title)
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.sectionTitle, weight: .bold))
                             .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
 
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(section.paragraphs, id: \.self) { paragraph in
                                 Text(paragraph)
-                                    .font(.system(size: 15, weight: .regular, design: .rounded))
+                                    .font(ProfileTypography.rounded(ProfileTypography.bodyText, weight: .regular))
                                     .foregroundStyle(Color(red: 0.37, green: 0.39, blue: 0.45))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -730,11 +755,11 @@ private struct PrivacyPolicyView: View {
     private var policyIntroCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("LangGo Privacy Policy")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.screenTitle, weight: .bold))
                 .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
 
             Text("This policy explains how LangGo uses account information, learning content, and device permissions when you use the app.")
-                .font(.system(size: 15, weight: .regular, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.bodyText, weight: .regular))
                 .foregroundStyle(Color(red: 0.37, green: 0.39, blue: 0.45))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -861,13 +886,13 @@ private struct TermsOfServiceView: View {
                 ForEach(sections) { section in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(section.title)
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.sectionTitle, weight: .bold))
                             .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
 
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(section.paragraphs, id: \.self) { paragraph in
                                 Text(paragraph)
-                                    .font(.system(size: 15, weight: .regular, design: .rounded))
+                                    .font(ProfileTypography.rounded(ProfileTypography.bodyText, weight: .regular))
                                     .foregroundStyle(Color(red: 0.37, green: 0.39, blue: 0.45))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -893,11 +918,11 @@ private struct TermsOfServiceView: View {
     private var introCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("LangGo Terms of Service")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.screenTitle, weight: .bold))
                 .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
 
             Text("These terms describe the rules for using LangGo, your account responsibilities, and the limits and conditions that apply to the service.")
-                .font(.system(size: 15, weight: .regular, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.bodyText, weight: .regular))
                 .foregroundStyle(Color(red: 0.37, green: 0.39, blue: 0.45))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -950,14 +975,14 @@ private struct ProfileBaseLanguageView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Text(language.name)
-                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.rowTitle, weight: .semibold))
                                 .foregroundStyle(Color.primary)
 
                             Spacer()
 
                             if draftLanguageCode == language.id {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 18, weight: .bold))
+                                    .font(ProfileTypography.plain(ProfileTypography.sectionTitle, weight: .bold))
                                     .foregroundStyle(Color(red: 0.09, green: 0.47, blue: 0.95))
                             }
                         }
@@ -982,7 +1007,7 @@ private struct ProfileBaseLanguageView: View {
                             await onSave(draftLanguageCode)
                         }
                     }
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(ProfileTypography.rounded(ProfileTypography.rowTitle, weight: .bold))
                     .disabled(draftLanguageCode == selectedLanguageCode)
                 }
             }
@@ -1052,9 +1077,9 @@ private struct ProfilePrivacySecurityView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(ProfileTypography.plain(ProfileTypography.bodyText, weight: .semibold))
                         Text("Back")
-                            .font(.system(size: 17, weight: .medium, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .medium))
                     }
                     .foregroundStyle(Color(red: 0.09, green: 0.47, blue: 0.95))
                 }
@@ -1062,7 +1087,7 @@ private struct ProfilePrivacySecurityView: View {
 
             ToolbarItem(placement: .principal) {
                 Text("Privacy & Security")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(ProfileTypography.rounded(ProfileTypography.navigationTitle, weight: .bold))
                     .foregroundStyle(Color(red: 0.16, green: 0.17, blue: 0.21))
             }
         }
@@ -1150,7 +1175,7 @@ private struct ProfilePrivacySecurityView: View {
                                     .tint(Color(red: 0.50, green: 0.52, blue: 0.58))
                             } else {
                                 Text("Update Password")
-                                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                                    .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .bold))
                             }
                         }
                         .foregroundStyle(Color.black)
@@ -1208,11 +1233,11 @@ private struct ProfilePrivacySecurityView: View {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Show me on the leaderboard")
-                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.rowTitle, weight: .bold))
                                 .foregroundStyle(Color(red: 0.17, green: 0.18, blue: 0.22))
 
                             Text("When enabled, your progress and rank will be visible to other users on the leaderboard")
-                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.caption, weight: .medium))
                                 .foregroundStyle(Color(red: 0.48, green: 0.50, blue: 0.56))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -1229,11 +1254,11 @@ private struct ProfilePrivacySecurityView: View {
                     if !visibleOnLadder {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("⚠️ Note")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.compactLabel, weight: .bold))
                                 .foregroundStyle(Color(red: 0.95, green: 0.60, blue: 0.11))
 
                             Text("You'll still see the leaderboard, but others won't see your rank or username.")
-                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.caption, weight: .medium))
                                 .foregroundStyle(Color(red: 0.30, green: 0.24, blue: 0.16))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -1283,17 +1308,17 @@ private struct ProfilePrivacySecurityView: View {
 
                 VStack(alignment: .leading, spacing: 16) {
                     Text("This action is permanent. Enter your current password to delete your account and sign out.")
-                        .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.caption, weight: .medium))
                         .foregroundStyle(Color(red: 0.48, green: 0.33, blue: 0.33))
                         .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("⚠️ Warning")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.compactLabel, weight: .bold))
                             .foregroundStyle(Color(red: 0.95, green: 0.60, blue: 0.11))
 
                         Text("This action cannot be undone. All your vocabulary, progress, and account data will be permanently deleted.")
-                            .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.caption, weight: .medium))
                             .foregroundStyle(Color(red: 0.30, green: 0.24, blue: 0.16))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -1314,7 +1339,7 @@ private struct ProfilePrivacySecurityView: View {
                                     .tint(Color.red)
                             } else {
                                 Text("Delete Account")
-                                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                                    .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .bold))
                             }
                         }
                         .foregroundStyle(Color.red)
@@ -1348,13 +1373,13 @@ private struct ProfilePrivacySecurityView: View {
     private var deleteConfirmationField: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text("TYPE \"DELETE\" TO CONFIRM")
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.metadata, weight: .heavy))
                 .foregroundStyle(Color(red: 0.59, green: 0.61, blue: 0.67))
 
             TextField("DELETE", text: $deleteConfirmationText)
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
-                .font(.system(size: 15, weight: .semibold))
+                .font(ProfileTypography.plain(ProfileTypography.bodyText, weight: .semibold))
                 .foregroundStyle(Color(red: 0.19, green: 0.20, blue: 0.24))
                 .padding(.horizontal, 14)
                 .frame(height: 44)
@@ -1387,24 +1412,24 @@ private struct ProfilePrivacySecurityView: View {
                         .frame(width: 36, height: 36)
 
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(ProfileTypography.plain(ProfileTypography.rowTitle, weight: .bold))
                         .foregroundStyle(iconTint)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.bodyText, weight: .bold))
                         .foregroundStyle(titleColor)
 
                     Text(subtitle)
-                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.caption, weight: .semibold))
                         .foregroundStyle(Color(red: 0.55, green: 0.58, blue: 0.64))
                 }
 
                 Spacer()
 
                 Image(systemName: chevron)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(ProfileTypography.plain(ProfileTypography.compactLabel, weight: .bold))
                     .foregroundStyle(Color(red: 0.76, green: 0.77, blue: 0.82))
             }
             .padding(.horizontal, 16)
@@ -1444,7 +1469,7 @@ private struct ProfilePrivacySecurityView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.metadata, weight: .heavy))
                 .foregroundStyle(Color(red: 0.59, green: 0.61, blue: 0.67))
 
             HStack(spacing: 10) {
@@ -1458,14 +1483,14 @@ private struct ProfilePrivacySecurityView: View {
                 .focused($focusedField, equals: field)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .font(.system(size: 15, weight: .semibold))
+                .font(ProfileTypography.plain(ProfileTypography.bodyText, weight: .semibold))
                 .foregroundStyle(Color(red: 0.19, green: 0.20, blue: 0.24))
 
                 Button {
                     isRevealed.wrappedValue.toggle()
                 } label: {
                     Image(systemName: isRevealed.wrappedValue ? "eye.slash" : "eye")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(ProfileTypography.plain(ProfileTypography.secondaryButton, weight: .semibold))
                         .foregroundStyle(Color(red: 0.62, green: 0.64, blue: 0.69))
                 }
                 .buttonStyle(.plain)
@@ -1486,7 +1511,7 @@ private struct ProfilePrivacySecurityView: View {
 
             if let footnote {
                 Text(footnote)
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .font(ProfileTypography.rounded(ProfileTypography.footnote, weight: .semibold))
                     .foregroundStyle(footnoteColor)
             }
         }
@@ -1688,7 +1713,7 @@ private struct ProfileEditView: View {
                                         .frame(width: 28, height: 28)
 
                                     Image(systemName: "camera.fill")
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(ProfileTypography.plain(ProfileTypography.metadata, weight: .bold))
                                         .foregroundStyle(.white)
                                 }
                             }
@@ -1701,7 +1726,7 @@ private struct ProfileEditView: View {
                         Button("Change Profile Photo") {
                             showUploadOptions()
                         }
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.secondaryButton, weight: .semibold))
                             .foregroundStyle(Color(red: 0.09, green: 0.47, blue: 0.95))
                             .frame(maxWidth: .infinity)
                     }
@@ -1709,7 +1734,7 @@ private struct ProfileEditView: View {
                     labeledField("USERNAME") {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(username)
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(ProfileTypography.plain(ProfileTypography.buttonLabel, weight: .semibold))
                                 .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.54))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 14)
@@ -1719,7 +1744,7 @@ private struct ProfileEditView: View {
                                 .overlay(fieldBorder(isReadOnly: true))
 
                             Text("Username cannot be changed right now")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.tinyNote, weight: .semibold))
                                 .foregroundStyle(Color(red: 0.59, green: 0.61, blue: 0.67))
                                 .padding(.leading, 4)
                         }
@@ -1727,7 +1752,7 @@ private struct ProfileEditView: View {
 
                     labeledField("EMAIL") {
                         Text(email)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(ProfileTypography.plain(ProfileTypography.buttonLabel, weight: .semibold))
                             .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.54))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 14)
@@ -1777,7 +1802,7 @@ private struct ProfileEditView: View {
                             }
 
                             Text("\(min(bio.count, 150))/150")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.tinyNote, weight: .semibold))
                                 .foregroundStyle(Color(red: 0.59, green: 0.61, blue: 0.67))
                         }
                     }
@@ -1787,9 +1812,9 @@ private struct ProfileEditView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(ProfileTypography.plain(ProfileTypography.secondaryButton, weight: .bold))
                             Text("Save Changes")
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .bold))
                         }
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -1881,7 +1906,7 @@ private struct ProfileEditView: View {
                             ProgressView()
                                 .controlSize(.regular)
                             Text(isUploadingAvatar ? "Uploading Photo..." : "Saving...")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .font(ProfileTypography.rounded(ProfileTypography.secondaryButton, weight: .semibold))
                                 .foregroundStyle(Color(red: 0.34, green: 0.36, blue: 0.42))
                         }
                         .padding(.horizontal, 24)
@@ -1921,7 +1946,7 @@ private struct ProfileEditView: View {
     private func labeledField<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(ProfileTypography.rounded(ProfileTypography.metadata, weight: .semibold))
                 .foregroundStyle(Color(red: 0.50, green: 0.52, blue: 0.58))
             content()
         }
@@ -2081,7 +2106,7 @@ private struct ProfileAvatarCircle: View {
                     .clipShape(Circle())
             } else {
                 Text(initials)
-                    .font(.system(size: fontSize, weight: .bold, design: .rounded))
+                    .font(ProfileTypography.rounded(fontSize, weight: .bold))
                     .foregroundStyle(.white)
             }
         }
@@ -2098,14 +2123,14 @@ private struct ProfilePhotoOptionsSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Change Profile Photo")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .bold))
                     .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
 
                 Spacer()
 
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(ProfileTypography.plain(ProfileTypography.rowTitle, weight: .medium))
                         .foregroundStyle(Color(red: 0.55, green: 0.57, blue: 0.63))
                         .frame(width: 28, height: 28)
                 }
@@ -2144,7 +2169,7 @@ private struct ProfilePhotoOptionsSheet: View {
 
             Button(action: onCancel) {
                 Text("Cancel")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .font(ProfileTypography.rounded(ProfileTypography.sectionTitle, weight: .semibold))
                     .foregroundStyle(Color(red: 0.19, green: 0.20, blue: 0.24))
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
@@ -2184,17 +2209,17 @@ private struct ProfilePhotoOptionCard: View {
                         .frame(width: 44, height: 44)
 
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(ProfileTypography.plain(ProfileTypography.sectionTitle, weight: .bold))
                         .foregroundStyle(iconTint)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .bold))
                         .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
 
                     Text(subtitle)
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .font(ProfileTypography.rounded(ProfileTypography.secondaryButton, weight: .medium))
                         .foregroundStyle(Color(red: 0.53, green: 0.55, blue: 0.61))
                 }
 
@@ -2295,7 +2320,7 @@ private struct ProfilePhotoReviewView: View {
                 HStack(spacing: 14) {
                     Button(action: onRetake) {
                         Text("Retake")
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 54)
@@ -2307,7 +2332,7 @@ private struct ProfilePhotoReviewView: View {
 
                     Button(action: onConfirm) {
                         Text(isProcessing ? "Uploading..." : "Use Photo")
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .font(ProfileTypography.rounded(ProfileTypography.buttonLabel, weight: .bold))
                             .foregroundStyle(Color(red: 0.16, green: 0.18, blue: 0.23))
                             .frame(maxWidth: .infinity)
                             .frame(height: 54)
