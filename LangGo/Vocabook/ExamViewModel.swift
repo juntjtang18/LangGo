@@ -9,6 +9,11 @@ enum ExamDirection {
 
 @MainActor
 class ExamViewModel: ObservableObject {
+    private struct CardReviewState {
+        let selectedOptionText: String
+        let direction: ExamDirection
+    }
+
     private let flashcardService = DataServices.shared.flashcardService
 
     @Published var flashcards: [Flashcard] = []
@@ -20,6 +25,7 @@ class ExamViewModel: ObservableObject {
     @Published var isLoading: Bool = false
 
     private var loadedCardIds = Set<Int>()
+    private var reviewStateByCardId: [Int: CardReviewState] = [:]
 
     var currentCard: Flashcard? {
         guard currentCardIndex >= 0 && currentCardIndex < flashcards.count else { return nil }
@@ -39,6 +45,7 @@ class ExamViewModel: ObservableObject {
         errorMessage = nil
         currentCardIndex = 0
         loadedCardIds.removeAll()
+        reviewStateByCardId.removeAll()
         flashcards.removeAll()
         resetForNewCard()
 
@@ -108,6 +115,10 @@ class ExamViewModel: ObservableObject {
         isAnswerSubmitted = true
 
         guard let card = currentCard else { return }
+        reviewStateByCardId[card.id] = CardReviewState(
+            selectedOptionText: option.text,
+            direction: direction
+        )
         let result: ReviewResult = option.isCorrect == true ? .correct : .wrong
 
         Task {
@@ -160,11 +171,23 @@ class ExamViewModel: ObservableObject {
     }
 
     private func resetForNewCard() {
-        selectedOption = nil
-        isAnswerSubmitted = false
+        guard let card = currentCard else {
+            selectedOption = nil
+            isAnswerSubmitted = false
+            return
+        }
 
-        if let resolvedDirection = resolvedDirection(for: currentCard) {
-            direction = resolvedDirection
+        if let savedState = reviewStateByCardId[card.id] {
+            direction = savedState.direction
+            selectedOption = examOptions?.first(where: { $0.text == savedState.selectedOptionText })
+            isAnswerSubmitted = true
+        } else {
+            selectedOption = nil
+            isAnswerSubmitted = false
+
+            if let resolvedDirection = resolvedDirection(for: card) {
+                direction = resolvedDirection
+            }
         }
     }
 
