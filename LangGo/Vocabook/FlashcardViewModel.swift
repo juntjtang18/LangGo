@@ -70,9 +70,6 @@ class FlashcardViewModel: ObservableObject {
         Task.detached(priority: .utility) { [flashcardService, logger] in
             do {
                 _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
-                await MainActor.run {
-                    self.removeReviewedCardLocally(card.id)
-                }
                 logger.info("Review submitted and synced for card \(card.id).")
             } catch {
                 logger.error("Failed to submit/sync review for card \(card.id): \(error.localizedDescription)")
@@ -84,16 +81,10 @@ class FlashcardViewModel: ObservableObject {
         do {
             logger.info("Submitting FINAL review for card \(card.id) with result '\(result.rawValue)'")
             _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
-            removeReviewedCardLocally(card.id)
             logger.info("Final review submitted and synced for card \(card.id).")
         } catch {
             logger.error("Failed to submit/sync FINAL review for card \(card.id): \(error.localizedDescription)")
         }
-    }
-
-    private func removeReviewedCardLocally(_ cardId: Int) {
-        reviewCards.removeAll { $0.id == cardId }
-        reviewCardIds.remove(cardId)
     }
 
     

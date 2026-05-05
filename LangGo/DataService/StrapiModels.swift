@@ -716,3 +716,28 @@ struct Flashcard: Codable, Identifiable, Equatable {
         lhs.id == rhs.id
     }
 }
+
+struct AchievementListResponse: Codable {
+    let data: [AchievementDTO]
+}
+
+struct AchievementDTO: Codable, Identifiable, Equatable {
+    let id: Int
+    let code: String
+    let eventName: String
+    let iconName: String?
+    let points: Int
+    let goal: Int
+    let progress: Int
+    let achieved: Bool
+    let achievedAt: Date?
+    let title: String?
+    let description: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, code, points, goal, progress, achieved, title, description
+        case eventName = "event_name"
+        case iconName = "icon_name"
+        case achievedAt = "achieved_at"
+    }
+}

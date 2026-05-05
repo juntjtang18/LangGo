@@ -7,6 +7,7 @@ final class DataServices {
     let authService: AuthService
     let userSnapshotService: UserSnapshotService
     let rankService: RankService
+    let achievementService: AchievementService
 
     let flashcardService: FlashcardService
     let wordService: WordService
@@ -22,6 +23,7 @@ final class DataServices {
         self.authService = AuthService()
         self.userSnapshotService = UserSnapshotService()
         self.rankService = RankService()
+        self.achievementService = AchievementService()
 
         let flashcardService = FlashcardService()
         self.flashcardService = flashcardService

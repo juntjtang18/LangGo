@@ -2,20 +2,32 @@ import SwiftUI
 
 @MainActor
 final class AscentViewModel: ObservableObject {
+    struct AchievementDisplay: Identifiable, Equatable {
+        let id: Int
+        let iconName: String
+        let title: String
+        let subtitle: String
+        let isAchieved: Bool
+    }
+
     @Published private(set) var totalPointsText = "0"
     @Published private(set) var groupOrderText = "#-"
+    @Published private(set) var allAchievements: [AchievementDisplay] = []
 
     private let rankService: RankService
+    private let achievementService: AchievementService
     private let userSnapshotService: UserSnapshotService
     private let localeProvider: () -> String
 
     init(
         rankService: RankService? = nil,
+        achievementService: AchievementService? = nil,
         userSnapshotService: UserSnapshotService? = nil,
         localeProvider: (() -> String)? = nil
     ) {
         let services = DataServices.shared
         self.rankService = rankService ?? services.rankService
+        self.achievementService = achievementService ?? services.achievementService
         self.userSnapshotService = userSnapshotService ?? services.userSnapshotService
         self.localeProvider = localeProvider ?? {
             UserSessionManager.shared.currentUser?.user_profile?.baseLanguage ?? "en"
@@ -25,9 +37,13 @@ final class AscentViewModel: ObservableObject {
     func load() async {
         async let snapshotTask = userSnapshotService.loadSnapshot(locale: currentLocale())
         async let leaderboardTask = rankService.fetchMyLeaderboard()
+        async let achievedTask = achievementService.fetchAchieved(locale: currentLocale())
+        async let notAchievedTask = achievementService.fetchNotAchieved(locale: currentLocale())
 
         _ = await snapshotTask
         let leaderboard = try? await leaderboardTask
+        let achieved = (try? await achievedTask) ?? []
+        let notAchieved = (try? await notAchievedTask) ?? []
         let snapshot = userSnapshotService.currentSnapshot(locale: currentLocale())
 
         totalPointsText = formatNumber(snapshot?.total_points ?? 0)
@@ -36,6 +52,15 @@ final class AscentViewModel: ObservableObject {
         } else {
             groupOrderText = "#-"
         }
+
+        allAchievements = (achieved + notAchieved)
+            .map { mapAchievement($0, isAchieved: $0.achieved) }
+            .sorted { lhs, rhs in
+                if lhs.isAchieved != rhs.isAchieved {
+                    return lhs.isAchieved && !rhs.isAchieved
+                }
+                return lhs.id < rhs.id
+            }
     }
 
     private func currentLocale() -> String {
@@ -46,6 +71,31 @@ final class AscentViewModel: ObservableObject {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    private func mapAchievement(_ dto: AchievementDTO, isAchieved: Bool) -> AchievementDisplay {
+        AchievementDisplay(
+            id: dto.id,
+            iconName: normalizedIconName(dto.iconName),
+            title: normalizedTitle(dto.title),
+            subtitle: normalizedSubtitle(dto.description),
+            isAchieved: isAchieved
+        )
+    }
+
+    private func normalizedIconName(_ value: String?) -> String {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "star.fill" : trimmed
+    }
+
+    private func normalizedTitle(_ value: String?) -> String {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "Achievement" : trimmed
+    }
+
+    private func normalizedSubtitle(_ value: String?) -> String {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "Keep going to unlock this." : trimmed
     }
 }
 
@@ -74,15 +124,6 @@ struct AscentView: View {
         .init(title: "Study Days", value: "45", icon: "trophy", accent: Color(red: 0.07, green: 0.70, blue: 0.29), background: Color(red: 0.93, green: 0.99, blue: 0.95))
     ]
 
-    private let achievements: [AscentAchievement] = [
-        .init(emoji: "🎯", title: "First Steps", subtitle: "Added your first word", accent: Color(red: 1.00, green: 0.76, blue: 0.20), isDimmed: false),
-        .init(emoji: "🔥", title: "Week Warrior", subtitle: "7-day streak", accent: Color(red: 1.00, green: 0.76, blue: 0.20), isDimmed: false),
-        .init(emoji: "💯", title: "Century Club", subtitle: "Learn 100 words", accent: Color(red: 1.00, green: 0.76, blue: 0.20), isDimmed: false),
-        .init(emoji: "📚", title: "Bookworm", subtitle: "Read 10 articles", accent: Color(red: 1.00, green: 0.76, blue: 0.20), isDimmed: false),
-        .init(emoji: "⭐", title: "Rising Star", subtitle: "Reach top 10", accent: Color(red: 1.00, green: 0.76, blue: 0.20), isDimmed: false),
-        .init(emoji: "🏆", title: "Month Master", subtitle: "30-day streak", accent: Color(red: 0.91, green: 0.88, blue: 0.75), isDimmed: true)
-    ]
-
     @MainActor
     init(
         onShowProfile: @escaping () -> Void,
@@ -99,7 +140,7 @@ struct AscentView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: metrics.sectionSpacing) {
                     hero(metrics: metrics)
-                    statsGrid(metrics: metrics)
+                    //statsGrid(metrics: metrics)
                     achievementsSection(metrics: metrics)
                 }
                 .padding(.horizontal, metrics.horizontalPadding)
@@ -238,24 +279,23 @@ struct AscentView: View {
                 Text("ACHIEVEMENTS")
                     .font(.system(size: metrics.sectionLabelFont, weight: .heavy, design: .rounded))
                     .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.56))
-
-                Spacer()
-
-                Button { } label: {
-                    Text("View All")
-                        .font(.system(size: metrics.viewAllFont, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color(red: 0.28, green: 0.25, blue: 0.98))
-                }
-                .buttonStyle(.plain)
             }
 
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: metrics.compactSpacing),
-                GridItem(.flexible(), spacing: metrics.compactSpacing),
-                GridItem(.flexible(), spacing: metrics.compactSpacing)
-            ], spacing: metrics.compactSpacing) {
-                ForEach(achievements) { achievement in
-                    AscentAchievementCard(achievement: achievement, metrics: metrics)
+            if viewModel.allAchievements.isEmpty {
+                Text("No achievements earned yet.")
+                    .font(.system(size: metrics.achievementSubtitleFont, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color(red: 0.57, green: 0.60, blue: 0.67))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, metrics.achievementCardPadding)
+            } else {
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: metrics.compactSpacing),
+                    GridItem(.flexible(), spacing: metrics.compactSpacing),
+                    GridItem(.flexible(), spacing: metrics.compactSpacing)
+                ], spacing: metrics.compactSpacing) {
+                    ForEach(viewModel.allAchievements) { achievement in
+                        AscentAchievementCard(achievement: achievement, metrics: metrics)
+                    }
                 }
             }
         }
@@ -285,15 +325,6 @@ private struct AscentStatCard: Identifiable {
     let icon: String
     let accent: Color
     let background: Color
-}
-
-private struct AscentAchievement: Identifiable {
-    let id = UUID()
-    let emoji: String
-    let title: String
-    let subtitle: String
-    let accent: Color
-    let isDimmed: Bool
 }
 
 private struct AscentMetrics {
@@ -489,26 +520,19 @@ private struct AscentStatCardView: View {
 }
 
 private struct AscentAchievementCard: View {
-    let achievement: AscentAchievement
+    let achievement: AscentViewModel.AchievementDisplay
     let metrics: AscentMetrics
 
     var body: some View {
         VStack(spacing: metrics.textTightSpacing) {
-            Text(achievement.emoji)
-                .font(.system(size: metrics.achievementEmojiFont))
-                .grayscale(achievement.isDimmed ? 0.65 : 0.0)
-                .opacity(achievement.isDimmed ? 0.75 : 1.0)
+            Image(systemName: achievement.iconName)
+                .font(.system(size: metrics.achievementEmojiFont * 1.5, weight: .bold))
+                .foregroundStyle(achievement.isAchieved ? Color(red: 1.00, green: 0.76, blue: 0.20) : Color(red: 0.70, green: 0.71, blue: 0.77))
+                .opacity(achievement.isAchieved ? 1.0 : 0.75)
 
             Text(achievement.title)
                 .font(.system(size: metrics.achievementTitleFont, weight: .bold, design: .rounded))
-                .foregroundStyle(achievement.isDimmed ? Color(red: 0.72, green: 0.73, blue: 0.78) : Color(red: 0.24, green: 0.23, blue: 0.18))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
-
-            Text(achievement.subtitle)
-                .font(.system(size: metrics.achievementSubtitleFont, weight: .medium, design: .rounded))
-                .foregroundStyle(achievement.isDimmed ? Color(red: 0.76, green: 0.77, blue: 0.82) : Color(red: 0.53, green: 0.51, blue: 0.41))
+                .foregroundStyle(achievement.isAchieved ? Color(red: 0.24, green: 0.23, blue: 0.18) : Color(red: 0.72, green: 0.73, blue: 0.78))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
@@ -518,7 +542,10 @@ private struct AscentAchievementCard: View {
         .background(Color.white)
         .overlay(
             RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous)
-                .stroke(achievement.accent, lineWidth: 1.1)
+                .stroke(
+                    achievement.isAchieved ? Color(red: 1.00, green: 0.76, blue: 0.20) : Color(red: 0.88, green: 0.89, blue: 0.93),
+                    lineWidth: 1.1
+                )
         )
         .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
     }

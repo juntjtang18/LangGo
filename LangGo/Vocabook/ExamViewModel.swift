@@ -20,7 +20,6 @@ class ExamViewModel: ObservableObject {
     @Published var isLoading: Bool = false
 
     private var loadedCardIds = Set<Int>()
-    private var pendingReviewedCardId: Int?
 
     var currentCard: Flashcard? {
         guard currentCardIndex >= 0 && currentCardIndex < flashcards.count else { return nil }
@@ -115,9 +114,9 @@ class ExamViewModel: ObservableObject {
             do {
                 _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
                 if result == .correct {
-                    removeReviewedCard(card.id)
-                } else {
-                    pendingReviewedCardId = card.id
+                    await MainActor.run {
+                        advanceAfterCorrectReviewIfNeeded()
+                    }
                 }
             } catch {
                 print("Error submitting review from ExamView: \(error.localizedDescription)")
@@ -148,20 +147,12 @@ class ExamViewModel: ObservableObject {
     }
 
     func goToNextCard() {
-        if consumePendingReviewedCardForNextNavigation() {
-            return
-        }
-
         guard canGoNext else { return }
         currentCardIndex += 1
         resetForNewCard()
     }
 
     func goToPreviousCard() {
-        if consumePendingReviewedCardForPreviousNavigation() {
-            return
-        }
-
         if currentCardIndex > 0 {
             currentCardIndex -= 1
             resetForNewCard()
@@ -195,53 +186,9 @@ class ExamViewModel: ObservableObject {
         }
     }
 
-    private func consumePendingReviewedCardForNextNavigation() -> Bool {
-        guard let cardId = pendingReviewedCardId, cardId == currentCard?.id else { return false }
-
-        let originalIndex = currentCardIndex
-        pendingReviewedCardId = nil
-        removeReviewedCard(cardId, resetCurrentCardState: false, triggerLoadMore: false)
-
-        guard !flashcards.isEmpty else { return true }
-
-        currentCardIndex = min(originalIndex, flashcards.count - 1)
+    private func advanceAfterCorrectReviewIfNeeded() {
+        guard canGoNext else { return }
+        currentCardIndex += 1
         resetForNewCard()
-        return true
-    }
-
-    private func consumePendingReviewedCardForPreviousNavigation() -> Bool {
-        guard let cardId = pendingReviewedCardId, cardId == currentCard?.id else { return false }
-
-        let originalIndex = currentCardIndex
-        pendingReviewedCardId = nil
-        removeReviewedCard(cardId, resetCurrentCardState: false, triggerLoadMore: false)
-
-        guard !flashcards.isEmpty else { return true }
-
-        currentCardIndex = min(max(0, originalIndex - 1), flashcards.count - 1)
-        resetForNewCard()
-        return true
-    }
-
-    private func removeReviewedCard(
-        _ cardId: Int,
-        resetCurrentCardState: Bool = true,
-        triggerLoadMore: Bool = true
-    ) {
-        let originalCount = flashcards.count
-        flashcards.removeAll { $0.id == cardId }
-        loadedCardIds.remove(cardId)
-
-        guard flashcards.count != originalCount else { return }
-
-        if flashcards.isEmpty {
-            currentCardIndex = 0
-        } else if currentCardIndex >= flashcards.count {
-            currentCardIndex = flashcards.count - 1
-        }
-
-        if resetCurrentCardState {
-            resetForNewCard()
-        }
     }
 }

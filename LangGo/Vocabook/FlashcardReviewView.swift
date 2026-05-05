@@ -49,7 +49,6 @@ struct FlashcardReviewView: View {
     @State private var showFireworks = false
     @State private var showBadge = false
     @State private var isSubmittingFinalCard = false
-    @State private var previousReviewCardCount = 0
 
     @AppStorage("repeatReadingEnabled") private var repeatReadingEnabled = false
     @State private var isRepeating = false
@@ -157,7 +156,6 @@ struct FlashcardReviewView: View {
                         repeatInterval = max(0.4, TimeInterval(vb.attributes.interval1))
                     }
                     await viewModel.prepareReviewSession()
-                    previousReviewCardCount = viewModel.reviewCards.count
                 }
             }
             // 2. ADDED: Overlay for the progress view
@@ -203,16 +201,6 @@ struct FlashcardReviewView: View {
                     onClose: { showRecorder = false }
                 )
                 .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .onChange(of: viewModel.reviewCards.count) { newCount in
-            let oldCount = previousReviewCardCount
-            previousReviewCardCount = newCount
-
-            if newCount < oldCount, currentIndex > 0 {
-                currentIndex = max(0, currentIndex - (oldCount - newCount))
-            } else if newCount > 0, currentIndex >= newCount {
-                currentIndex = newCount - 1
             }
         }
     }
