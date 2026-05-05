@@ -245,7 +245,7 @@ struct ProfileView: View {
     private func profileSection(title: String, items: [ProfileMenuItem], footer: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .font(.system(size: 14, weight: .heavy, design: .rounded))
                 .foregroundStyle(Color(red: 0.61, green: 0.63, blue: 0.68))
                 .padding(.leading, 10)
 
@@ -261,17 +261,17 @@ struct ProfileView: View {
                                     .frame(width: 28, height: 28)
 
                                 Image(systemName: item.icon)
-                                    .font(.system(size: 13, weight: .bold))
+                                    .font(.system(size: 16, weight: .bold))
                                     .foregroundStyle(item.iconTint)
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.title)
-                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .font(.system(size: 16, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color(red: 0.18, green: 0.19, blue: 0.23))
 
                                 Text(item.subtitle)
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
                                     .foregroundStyle(Color(red: 0.55, green: 0.58, blue: 0.64))
                             }
 
