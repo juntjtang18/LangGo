@@ -42,6 +42,10 @@ final class DataServices {
     }
     func resetUserScopedRuntimeState() {
         flashcardService.resetUserScopedRuntimeState()
+        articleService.resetUserScopedRuntimeState()
+        userSnapshotService.resetUserScopedRuntimeState()
+        rankService.resetUserScopedRuntimeState()
+        achievementService.resetUserScopedRuntimeState()
     }
 
 }

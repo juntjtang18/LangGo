@@ -34,7 +34,7 @@ struct InitialLoadingView: View {
         Task {
             do {
                 // Use the service from the singleton
-                let user = try await authService.fetchCurrentUser()
+                let user = try await authService.fetchCurrentUser(forceRefresh: true)
                 UserSessionManager.shared.login(user: user)
                 await reviewSettingsManager.loadSettings()
                 

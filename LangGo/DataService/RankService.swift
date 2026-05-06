@@ -37,4 +37,9 @@ final class RankService {
         let response: MyLeaderboardResponse = try await networkManager.fetchDirect(from: url)
         return response.data
     }
+
+    func resetUserScopedRuntimeState() {
+        myLeaderboardTask?.cancel()
+        myLeaderboardTask = nil
+    }
 }

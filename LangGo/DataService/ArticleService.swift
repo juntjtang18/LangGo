@@ -596,4 +596,16 @@ final class ArticleService: ObservableObject {
         isLoadingUserArticles = false
         articlesErrorMessage = nil
     }
+
+    func resetUserScopedRuntimeState() {
+        cachedCurrentUserID = nil
+        userArticlesPageTasks.values.forEach { $0.cancel() }
+        userArticlesPageTasks.removeAll()
+        activeUserArticlesRequestCount = 0
+        userArticlePages = [:]
+        userArticles = []
+        userArticlesTotalCount = nil
+        isLoadingUserArticles = false
+        articlesErrorMessage = nil
+    }
 }

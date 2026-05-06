@@ -374,7 +374,7 @@ struct UserRankSnapshot: Codable {
     let article_add: Int
     let level_no: Int
     let level_change: Int
-    let level_title: String
+    let level_title: String?
     let group_id: Int
     let group_no: Int
     let group_rank: Int
@@ -384,7 +384,7 @@ struct UserRankSnapshot: Codable {
     let period_points_change: Int?
 
     var rankText: String? {
-        if !level_title.isEmpty {
+        if let level_title, !level_title.isEmpty {
             return level_title
         }
         return group_rank_title.isEmpty ? nil : group_rank_title
@@ -404,7 +404,7 @@ extension UserRankSnapshot {
         article_add: 0,
         level_no: 0,
         level_change: 0,
-        level_title: "",
+        level_title: nil,
         group_id: 0,
         group_no: 0,
         group_rank: 0,

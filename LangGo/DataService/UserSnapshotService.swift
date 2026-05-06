@@ -102,6 +102,13 @@ final class UserSnapshotService: ObservableObject {
         }
     }
 
+    func resetUserScopedRuntimeState() {
+        snapshotTasks.values.forEach { $0.cancel() }
+        snapshotTasks.removeAll()
+        loadedLocale = nil
+        latestSnapshot = nil
+    }
+
     private func normalizedLocale(_ locale: String?) -> String? {
         guard let locale, !locale.isEmpty else { return nil }
         return locale

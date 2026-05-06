@@ -23,6 +23,7 @@ class ExamViewModel: ObservableObject {
     @Published var direction: ExamDirection = .baseToTarget
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
+    @Published var isSessionComplete: Bool = false
 
     private var loadedCardIds = Set<Int>()
     private var reviewStateByCardId: [Int: CardReviewState] = [:]
@@ -33,7 +34,7 @@ class ExamViewModel: ObservableObject {
     }
 
     var canGoNext: Bool {
-        currentCardIndex < flashcards.count - 1
+        currentCardIndex < flashcards.count - 1 || canCompleteFromCurrentCard
     }
 
     init() {}
@@ -47,6 +48,7 @@ class ExamViewModel: ObservableObject {
         loadedCardIds.removeAll()
         reviewStateByCardId.removeAll()
         flashcards.removeAll()
+        isSessionComplete = false
         resetForNewCard()
 
         do {
@@ -159,6 +161,10 @@ class ExamViewModel: ObservableObject {
 
     func goToNextCard() {
         guard canGoNext else { return }
+        if canCompleteFromCurrentCard {
+            isSessionComplete = true
+            return
+        }
         currentCardIndex += 1
         resetForNewCard()
     }
@@ -210,8 +216,18 @@ class ExamViewModel: ObservableObject {
     }
 
     private func advanceAfterCorrectReviewIfNeeded() {
-        guard canGoNext else { return }
+        if canCompleteFromCurrentCard {
+            isSessionComplete = true
+            return
+        }
+
+        guard currentCardIndex < flashcards.count - 1 else { return }
         currentCardIndex += 1
         resetForNewCard()
+    }
+
+    private var canCompleteFromCurrentCard: Bool {
+        guard !flashcards.isEmpty, currentCardIndex == flashcards.count - 1 else { return false }
+        return flashcards.allSatisfy { reviewStateByCardId[$0.id] != nil }
     }
 }

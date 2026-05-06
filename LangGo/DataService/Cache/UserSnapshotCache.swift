@@ -13,8 +13,9 @@ enum UserSnapshotCache {
     static let snapshotTag = CacheService.CacheTag(rawValue: "user-snapshot")
 
     static func snapshotKey(locale: String?) -> String {
+        let userID = activeUserID()
         let normalizedLocale = normalized(locale) ?? "default"
-        return "userSnapshot.locale.\(normalizedLocale)"
+        return "userSnapshot.user.\(userID).locale.\(normalizedLocale)"
     }
 
     static func load(locale: String?, using cacheService: CacheService = .shared) -> UserRankSnapshot? {
@@ -102,5 +103,10 @@ enum UserSnapshotCache {
         guard let locale else { return nil }
         let trimmed = locale.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func activeUserID() -> Int {
+        let userID = UserDefaults.standard.integer(forKey: "userId")
+        return userID > 0 ? userID : 0
     }
 }

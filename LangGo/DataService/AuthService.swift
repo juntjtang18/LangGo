@@ -38,13 +38,15 @@ class AuthService {
         return response
     }
     
-    func fetchCurrentUser() async throws -> StrapiUser {
-        if let sessionUser = await MainActor.run(body: { UserSessionManager.shared.currentUser }) {
-            return sessionUser
-        }
+    func fetchCurrentUser(forceRefresh: Bool = false) async throws -> StrapiUser {
+        if !forceRefresh {
+            if let sessionUser = await MainActor.run(body: { UserSessionManager.shared.currentUser }) {
+                return sessionUser
+            }
 
-        if let cachedUser = UserProfileCache.loadCurrentUser(using: cacheService) {
-            return cachedUser
+            if let cachedUser = UserProfileCache.loadCurrentUser(using: cacheService) {
+                return cachedUser
+            }
         }
 
         logger.debug("AuthService: Fetching current user profile.")

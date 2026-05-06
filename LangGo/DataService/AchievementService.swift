@@ -55,4 +55,11 @@ final class AchievementService {
         let response: AchievementListResponse = try await networkManager.fetchDirect(from: url)
         return response.data
     }
+
+    func resetUserScopedRuntimeState() {
+        achievedTask?.cancel()
+        achievedTask = nil
+        notAchievedTask?.cancel()
+        notAchievedTask = nil
+    }
 }
