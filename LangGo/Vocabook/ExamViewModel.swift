@@ -34,7 +34,7 @@ class ExamViewModel: ObservableObject {
     }
 
     var canGoNext: Bool {
-        currentCardIndex < flashcards.count - 1 || canCompleteFromCurrentCard
+        currentCardIndex < flashcards.count - 1
     }
 
     init() {}
@@ -126,10 +126,8 @@ class ExamViewModel: ObservableObject {
         Task {
             do {
                 _ = try await flashcardService.submitFlashcardReview(cardId: card.id, result: result)
-                if result == .correct {
-                    await MainActor.run {
-                        advanceAfterCorrectReviewIfNeeded()
-                    }
+                await MainActor.run {
+                    handleSubmittedReview(result: result)
                 }
             } catch {
                 print("Error submitting review from ExamView: \(error.localizedDescription)")
@@ -161,10 +159,6 @@ class ExamViewModel: ObservableObject {
 
     func goToNextCard() {
         guard canGoNext else { return }
-        if canCompleteFromCurrentCard {
-            isSessionComplete = true
-            return
-        }
         currentCardIndex += 1
         resetForNewCard()
     }
@@ -215,19 +209,18 @@ class ExamViewModel: ObservableObject {
         }
     }
 
-    private func advanceAfterCorrectReviewIfNeeded() {
-        if canCompleteFromCurrentCard {
+    private func handleSubmittedReview(result: ReviewResult) {
+        if allCardsReviewed {
             isSessionComplete = true
             return
         }
 
-        guard currentCardIndex < flashcards.count - 1 else { return }
+        guard result == .correct, currentCardIndex < flashcards.count - 1 else { return }
         currentCardIndex += 1
         resetForNewCard()
     }
 
-    private var canCompleteFromCurrentCard: Bool {
-        guard !flashcards.isEmpty, currentCardIndex == flashcards.count - 1 else { return false }
-        return flashcards.allSatisfy { reviewStateByCardId[$0.id] != nil }
+    private var allCardsReviewed: Bool {
+        !flashcards.isEmpty && reviewStateByCardId.count == flashcards.count
     }
 }
