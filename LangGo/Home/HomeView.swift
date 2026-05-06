@@ -85,7 +85,7 @@ struct HomeView: View {
                                 openArticleScan()
                             }),
                             .init(title: "Import Text", icon: "doc.text", iconColor: .white, iconBackground: Color(red: 0.17, green: 0.63, blue: 0.97), background: Color(red: 0.72, green: 0.89, blue: 1.00), border: Color(red: 0.67, green: 0.85, blue: 0.99), textColor: Color(red: 0.23, green: 0.33, blue: 0.45), action: {
-                                placeholderMessage = "Text article import will be backed by the new article input flow."
+                                placeholderMessage = String(localized: "Text article import will be backed by the new article input flow.")
                             }),
                             .init(title: "Add Word", icon: "plus", iconColor: .white, iconBackground: Color(red: 0.99, green: 0.57, blue: 0.05), background: Color(red: 0.72, green: 0.89, blue: 1.00), border: Color(red: 0.67, green: 0.85, blue: 0.99), textColor: Color(red: 0.23, green: 0.33, blue: 0.45), action: { isShowingAddWord = true })
                         ]
@@ -160,15 +160,15 @@ struct HomeView: View {
                 }
             )
         }
-        .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
-            Button("OK", role: .cancel) {
+        .alert(String(localized: "Camera Access Needed"), isPresented: cameraAccessAlertBinding) {
+            Button(String(localized: "OK"), role: .cancel) {
                 cameraAccessMessage = nil
             }
         } message: {
             Text(cameraAccessMessage ?? "")
         }
-        .alert("Coming Soon", isPresented: placeholderAlertBinding) {
-            Button("OK", role: .cancel) {
+        .alert(String(localized: "Coming Soon"), isPresented: placeholderAlertBinding) {
+            Button(String(localized: "OK"), role: .cancel) {
                 placeholderMessage = nil
             }
         } message: {
@@ -189,16 +189,16 @@ struct HomeView: View {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
         case 5..<12:
-            return "Good morning"
+            return String(localized: "Good morning")
         case 12..<18:
-            return "Good afternoon"
+            return String(localized: "Good afternoon")
         default:
-            return "Good evening"
+            return String(localized: "Good evening")
         }
     }
 
     private func sectionLabel(_ text: String, metrics: HomeMetrics) -> some View {
-        Text(text)
+        Text(LocalizedStringKey(text))
             .font(.system(size: metrics.sectionLabelFont, weight: .heavy, design: .rounded))
             .foregroundStyle(Color(red: 0.43, green: 0.47, blue: 0.55))
             .tracking(0.2)
@@ -249,7 +249,7 @@ struct HomeView: View {
             }
 
             VStack(spacing: metrics.reviewRowsGap) {
-                ReviewStatusRow(label: "Due Words", value: formatNumber(viewModel.reviewCardState.dueForReview), icon: nil, metrics: metrics)
+                ReviewStatusRow(labelKey: "Due Words", value: formatNumber(viewModel.reviewCardState.dueForReview), icon: nil, metrics: metrics)
                 //ReviewStatusRow(label: "Remembered", value: formatNumber(viewModel.reviewCardState.remembered), icon: nil, metrics: metrics)
             }
             .padding(.horizontal, metrics.reviewPanelHorizontalPadding)
@@ -414,10 +414,11 @@ struct HomeView: View {
 
     private var articleLibraryLinkTitle: String {
         if let articleLibraryCount = viewModel.articleLibraryCount {
-            return "View All (\(articleLibraryCount))"
+            let format = String(localized: "View All (%lld)")
+            return String.localizedStringWithFormat(format, articleLibraryCount)
         }
 
-        return "View All"
+        return String(localized: "View All")
     }
 
     private func articleLibraryCard(
@@ -518,7 +519,7 @@ struct HomeView: View {
 
     private func openBookMode() {
         guard viewModel.reviewCardState.totalCards > 0 else {
-            placeholderMessage = "No words are available in book mode yet."
+            placeholderMessage = String(localized: "No words are available in book mode yet.")
             return
         }
         isShowingBookMode = true
@@ -526,7 +527,7 @@ struct HomeView: View {
 
     private func openArticleScan() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            cameraAccessMessage = "Camera is not available on this device."
+            cameraAccessMessage = String(localized: "Camera is not available on this device.")
             return
         }
 
@@ -539,14 +540,14 @@ struct HomeView: View {
                     if granted {
                         isShowingArticleScanFlow = true
                     } else {
-                        cameraAccessMessage = "Please enable camera access in Settings to scan an article."
+                        cameraAccessMessage = String(localized: "Please enable camera access in Settings to scan an article.")
                     }
                 }
             }
         case .denied, .restricted:
-            cameraAccessMessage = "Please enable camera access in Settings to scan an article."
+            cameraAccessMessage = String(localized: "Please enable camera access in Settings to scan an article.")
         @unknown default:
-            cameraAccessMessage = "Camera access is unavailable right now."
+            cameraAccessMessage = String(localized: "Camera access is unavailable right now.")
         }
     }
 
@@ -776,7 +777,7 @@ private struct HomeMetrics {
 
 private struct HomeActionItem: Identifiable {
     let id = UUID()
-    let title: String
+    let title: LocalizedStringKey
     let icon: String
     let iconColor: Color
     let iconBackground: Color
@@ -972,7 +973,7 @@ private func formatDelta(_ value: Int) -> String {
 }
 
 private struct ReviewStatusRow: View {
-    let label: String
+    let labelKey: LocalizedStringKey
     let value: String
     let icon: String?
     let metrics: HomeMetrics
@@ -986,7 +987,7 @@ private struct ReviewStatusRow: View {
                         .foregroundStyle(Color(red: 0.98, green: 0.75, blue: 0.05))
                 }
 
-                Text(label)
+                Text(labelKey)
                     .font(.system(size: metrics.reviewRowFont, weight: .medium, design: .rounded))
                     .foregroundStyle(Color.black.opacity(0.84))
             }

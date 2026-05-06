@@ -78,11 +78,11 @@ struct ProfileView: View {
                         profileHeaderCard
 
                         profileSection(
-                            title: "ACCOUNT",
+                            title: String(localized: "ACCOUNT"),
                             items: [
                                 .init(
-                                    title: "Privacy & Security",
-                                    subtitle: "Password, data privacy",
+                                    title: String(localized: "Privacy & Security"),
+                                    subtitle: String(localized: "Password, data privacy"),
                                     icon: "lock.fill",
                                     iconTint: Color(red: 0.35, green: 0.63, blue: 0.98),
                                     iconBackground: Color(red: 0.92, green: 0.96, blue: 1.00),
@@ -94,10 +94,10 @@ struct ProfileView: View {
                         notificationsSection
 
                         profileSection(
-                            title: "PREFERENCES",
+                            title: String(localized: "PREFERENCES"),
                             items: [
                                 .init(
-                                    title: "Language",
+                                    title: String(localized: "Language"),
                                     subtitle: currentLanguageName,
                                     icon: "globe",
                                     iconTint: Color(red: 0.43, green: 0.39, blue: 0.99),
@@ -108,19 +108,19 @@ struct ProfileView: View {
                         )
 
                         profileSection(
-                            title: "LEGAL",
+                            title: String(localized: "LEGAL"),
                             items: [
                                 .init(
-                                    title: "Privacy Policy",
-                                    subtitle: "How we handle your data",
+                                    title: String(localized: "Privacy Policy"),
+                                    subtitle: String(localized: "How we handle your data"),
                                     icon: "shield.fill",
                                     iconTint: Color(red: 0.55, green: 0.59, blue: 0.68),
                                     iconBackground: Color(red: 0.95, green: 0.96, blue: 0.97),
                                     action: { isShowingPrivacyPolicy = true }
                                 ),
                                 .init(
-                                    title: "Terms of Service",
-                                    subtitle: "User agreement",
+                                    title: String(localized: "Terms of Service"),
+                                    subtitle: String(localized: "User agreement"),
                                     icon: "doc.text.fill",
                                     iconTint: Color(red: 0.55, green: 0.59, blue: 0.68),
                                     iconBackground: Color(red: 0.95, green: 0.96, blue: 0.97),
@@ -130,9 +130,9 @@ struct ProfileView: View {
                         )
 
                         profileSection(
-                            title: "ABOUT",
+                            title: String(localized: "ABOUT"),
                             items: [],
-                            footer: "Version 1.0.0"
+                            footer: String(localized: "Version 1.0.0")
                         )
 
                         logoutButton
@@ -420,7 +420,8 @@ struct ProfileView: View {
     }
 
     private var currentLanguageName: String {
-        availableLanguages.first(where: { $0.id == baseLanguageCode })?.name ?? "English"
+        let fallback = availableLanguages.first(where: { $0.id == baseLanguageCode })?.name ?? "English"
+        return String(localized: String.LocalizationValue(fallback))
     }
 
     private var initialsText: String {

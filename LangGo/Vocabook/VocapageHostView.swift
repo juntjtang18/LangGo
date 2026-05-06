@@ -62,7 +62,7 @@ struct VocapageHostView: View {
         guard !viewModel.currentPageCards.isEmpty else { return nil }
         return Vocapage(
             id: viewModel.currentPage,
-            title: "Page \(viewModel.currentPage)",
+            title: String.localizedStringWithFormat(String(localized: "Page %lld"), viewModel.currentPage),
             order: viewModel.currentPage,
             flashcards: viewModel.currentPageCards
         )
@@ -132,14 +132,14 @@ struct VocapageHostView: View {
             } label: {
                 Image(systemName: "chevron.left").font(.body.weight(.semibold))
             }
-            .accessibilityLabel("Back"),
+            .accessibilityLabel(Text("Back")),
             trailing: Button {
                 showBaseText.toggle()
             } label: {
                 Image(systemName: showBaseText ? "text.badge.minus" : "text.badge.plus")
                     .font(.body.weight(.semibold))
             }
-            .accessibilityLabel(showBaseText ? "Hide Base Text" : "Show Base Text")
+            .accessibilityLabel(Text(showBaseText ? "Hide Base Text" : "Show Base Text"))
         )
         .safeAreaInset(edge: .bottom) { bottomToolbar }
         .toolbar(.hidden, for: .tabBar)
@@ -184,7 +184,7 @@ struct VocapageHostView: View {
                 Text("No words to show.")
                     .foregroundColor(.secondary)
                     .font(.headline)
-                Text(isShowingDueWordsOnly ? "You have no words due for review." : "Add some words to your vocabook to get started.")
+                Text(isShowingDueWordsOnly ? String(localized: "You have no words due for review.") : String(localized: "Add some words to your vocabook to get started."))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -263,7 +263,7 @@ struct VocapageHostView: View {
                 Image(systemName: isAutoPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.title)
             }
-            .accessibilityLabel(isAutoPlaying ? "Pause" : "Play")
+            .accessibilityLabel(Text(isAutoPlaying ? "Pause" : "Play"))
 
             Spacer(minLength: 0)
 
@@ -286,7 +286,7 @@ struct VocapageHostView: View {
             } label: {
                 Image(systemName: repeatIndicatorIcon).font(.title3)
             }
-            .accessibilityLabel("Reading Mode")
+            .accessibilityLabel(Text("Reading Mode"))
 
             Menu {
                 Button {
@@ -302,7 +302,7 @@ struct VocapageHostView: View {
             } label: {
                 Image(systemName: "line.3.horizontal.decrease.circle").font(.title3)
             }
-            .accessibilityLabel("Filter")
+            .accessibilityLabel(Text("Filter"))
             .opacity(allowsDueFilter ? 1 : 0)
             .allowsHitTesting(allowsDueFilter)
         }

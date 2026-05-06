@@ -10,7 +10,7 @@ final class HomeViewModel: ObservableObject {
         let isLoading: Bool
 
         static let empty = RankPointsCardState(
-            rankText: "Unranked",
+            rankText: String(localized: "Unranked"),
             points: nil,
             pointsDelta: nil,
             isLoading: false
@@ -36,7 +36,7 @@ final class HomeViewModel: ObservableObject {
         let isEnabled: Bool
 
         static let empty = LeaderboardBannerState(
-            title: "Leaderboard",
+            title: String(localized: "Leaderboard"),
             currentUserPosition: nil,
             groupRankChange: nil,
             isEnabled: false
@@ -62,7 +62,7 @@ final class HomeViewModel: ObservableObject {
         let members: [MemberState]
 
         static let empty = LeaderboardSheetState(
-            title: "Leaderboard",
+            title: String(localized: "Leaderboard"),
             rankTitle: nil,
             groupNo: nil,
             currentUserPosition: nil,
@@ -243,7 +243,7 @@ final class HomeViewModel: ObservableObject {
 
     private func makeArticleLibraryPreviewState(from article: StrapiUserArticle) -> ArticleLibraryPreviewState {
         let trimmedTitle = article.attributes.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedTitle = (trimmedTitle?.isEmpty == false ? trimmedTitle : nil) ?? "Untitled Article"
+        let resolvedTitle = (trimmedTitle?.isEmpty == false ? trimmedTitle : nil) ?? String(localized: "Untitled Article")
         let content = article.attributes.content
         let tagNames = article.attributes.articleTags?.data.compactMap {
             $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -253,7 +253,7 @@ final class HomeViewModel: ObservableObject {
             ?? content?.split { $0.isWhitespace || $0.isNewline }.count
             ?? 0
         let progressFraction = min(max(article.attributes.progress ?? 0, 0), 1)
-        let displayedTags = Array(tagNames.prefix(2)).isEmpty ? ["My Article"] : Array(tagNames.prefix(2))
+        let displayedTags = Array(tagNames.prefix(2)).isEmpty ? [String(localized: "My Article")] : Array(tagNames.prefix(2))
         let newWords = max(8, min(max(wordCount / 28, 0), 60))
         let dateLabel = relativeDateLabel(for: article.attributes.lastReadAt)
 
@@ -268,7 +268,7 @@ final class HomeViewModel: ObservableObject {
             primaryTag: tagNames.first,
             tags: tagNames,
             dateLabel: dateLabel,
-            sourceLabel: "My Article",
+            sourceLabel: String(localized: "My Article"),
             displayedTags: displayedTags,
             progressFraction: progressFraction,
             progressText: "\(Int((progressFraction * 100).rounded()))%"
@@ -276,14 +276,14 @@ final class HomeViewModel: ObservableObject {
     }
 
     private func relativeDateLabel(for date: Date?) -> String {
-        guard let date else { return "Saved" }
+        guard let date else { return String(localized: "Saved") }
         return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
     }
 
     private func makeRankPointsCardState(snapshot: UserRankSnapshot?) -> RankPointsCardState {
         guard let snapshot else {
             return RankPointsCardState(
-                rankText: isLoadingSnapshot ? "Loading..." : "Unranked",
+                rankText: isLoadingSnapshot ? String(localized: "Loading...") : String(localized: "Unranked"),
                 points: nil,
                 pointsDelta: nil,
                 isLoading: isLoadingSnapshot
@@ -292,7 +292,7 @@ final class HomeViewModel: ObservableObject {
 
         let rankText = trimmed(snapshot.level_title).flatMap { !$0.isEmpty ? $0 : nil }
             ?? trimmed(snapshot.rankText).flatMap { !$0.isEmpty ? $0 : nil }
-            ?? (snapshot.group_rank > 0 ? "#\(snapshot.group_rank)" : "Unranked")
+            ?? (snapshot.group_rank > 0 ? "#\(snapshot.group_rank)" : String(localized: "Unranked"))
 
         return RankPointsCardState(
             rankText: rankText,
@@ -315,7 +315,7 @@ final class HomeViewModel: ObservableObject {
     private func makeLeaderboardBannerState(leaderboard: MyLeaderboardData?) -> LeaderboardBannerState {
         guard let leaderboard else {
             return LeaderboardBannerState(
-                title: isLoadingSnapshot ? "Loading..." : "Leaderboard",
+                title: isLoadingSnapshot ? String(localized: "Loading...") : String(localized: "Leaderboard"),
                 currentUserPosition: nil,
                 groupRankChange: nil,
                 isEnabled: false
@@ -359,9 +359,10 @@ final class HomeViewModel: ObservableObject {
 
     private func leaderboardTitle(for group: MyLeaderboardGroup) -> String {
         if group.group_no > 0 {
-            return "Group \(group.group_no)"
+            let format = String(localized: "Group %lld")
+            return String.localizedStringWithFormat(format, group.group_no)
         }
-        return "Leaderboard"
+        return String(localized: "Leaderboard")
     }
 
     private func currentLocale() -> String {
@@ -384,8 +385,9 @@ final class HomeViewModel: ObservableObject {
             return trimmedName
         }
         if member.isCurrentUser {
-            return "You"
+            return String(localized: "You")
         }
-        return "User \(member.userid)"
+        let format = String(localized: "User %lld")
+        return String.localizedStringWithFormat(format, Int64(member.userid) ?? 0)
     }
 }

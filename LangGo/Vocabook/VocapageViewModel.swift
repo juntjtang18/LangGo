@@ -72,7 +72,10 @@ class VocapageViewModel: ObservableObject {
                 )
             }
         } catch {
-            errorMessage = "Failed to load page content: \(error.localizedDescription)"
+            errorMessage = String.localizedStringWithFormat(
+                String(localized: "Failed to load page content: %@"),
+                error.localizedDescription
+            )
         }
     }
 

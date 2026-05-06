@@ -10,11 +10,11 @@ private enum MemoryTier: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .remembered: return "Remembered"
-        case .monthly: return "Almost Remembered"
-        case .weekly: return "Well Practiced"
-        case .warmup: return "Getting Familiar"
-        case .new: return "New Word"
+        case .remembered: return String(localized: "Remembered")
+        case .monthly: return String(localized: "Almost Remembered")
+        case .weekly: return String(localized: "Well Practiced")
+        case .warmup: return String(localized: "Getting Familiar")
+        case .new: return String(localized: "New Word")
         }
     }
 
@@ -100,7 +100,7 @@ struct VocabookView: View {
                 if isInitialLoading || isPreparingBookMode {
                     ZStack {
                         Color.black.opacity(0.16).ignoresSafeArea()
-                        ProgressView(isPreparingBookMode ? "Opening Book..." : "Loading...")
+                        ProgressView(isPreparingBookMode ? String(localized: "Opening Book...") : String(localized: "Loading..."))
                             .progressViewStyle(.circular)
                             .padding(24)
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -159,8 +159,8 @@ struct VocabookView: View {
                 )
             }
         }
-        .alert("Notice", isPresented: infoAlertBinding) {
-            Button("OK", role: .cancel) { infoMessage = nil }
+        .alert(String(localized: "Notice"), isPresented: infoAlertBinding) {
+            Button(String(localized: "OK"), role: .cancel) { infoMessage = nil }
         } message: {
             Text(infoMessage ?? "")
         }
@@ -218,7 +218,7 @@ struct VocabookView: View {
                 .foregroundStyle(.white.opacity(0.9))
 
             HStack(alignment: .lastTextBaseline, spacing: metrics.compactSpacing) {
-                Text("\(totalVocabularyCount) words")
+                Text(String.localizedStringWithFormat(String(localized: "%lld words"), totalVocabularyCount))
                     .font(.system(size: metrics.heroNumberFont, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                     .minimumScaleFactor(0.7)
@@ -231,7 +231,7 @@ struct VocabookView: View {
             }
 
             HStack(alignment: .lastTextBaseline, spacing: metrics.compactSpacing) {
-                Text("\(dueWordsCount) Due Words")
+                Text(String.localizedStringWithFormat(String(localized: "%lld Due Words"), dueWordsCount))
                     .font(.system(size: metrics.heroSubNumberFont, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                     .minimumScaleFactor(0.7)
@@ -266,8 +266,8 @@ struct VocabookView: View {
                 GridItem(.flexible(), spacing: metrics.compactSpacing)
             ], spacing: metrics.compactSpacing) {
                 VocabookActionCard(
-                    title: "Card Review",
-                    subtitle: "Flashcard mode",
+                    title: String(localized: "Card Review"),
+                    subtitle: String(localized: "Flashcard mode"),
                     icon: "square.stack.3d.up.fill",
                     fill: LinearGradient(
                         colors: [Color(red: 0.05, green: 0.78, blue: 0.39), Color(red: 0.00, green: 0.63, blue: 0.37)],
@@ -281,8 +281,8 @@ struct VocabookView: View {
                 }
 
                 VocabookActionCard(
-                    title: "Quiz Review",
-                    subtitle: "Multiple choice",
+                    title: String(localized: "Quiz Review"),
+                    subtitle: String(localized: "Multiple choice"),
                     icon: "checkmark.square",
                     fill: nil,
                     borderColor: Color(red: 0.87, green: 0.77, blue: 1.00),
@@ -295,8 +295,8 @@ struct VocabookView: View {
                 }
 
                 VocabookActionCard(
-                    title: "Book Mode",
-                    subtitle: "Read & listen",
+                    title: String(localized: "Book Mode"),
+                    subtitle: String(localized: "Read & listen"),
                     icon: "book.closed",
                     fill: nil,
                     borderColor: Color(red: 0.74, green: 0.84, blue: 1.00),
@@ -309,8 +309,8 @@ struct VocabookView: View {
                 }
 
                 VocabookActionCard(
-                    title: "Add Word",
-                    subtitle: "New vocabulary",
+                    title: String(localized: "Add Word"),
+                    subtitle: String(localized: "New vocabulary"),
                     icon: "plus",
                     fill: LinearGradient(
                         colors: [Color(red: 1.00, green: 0.61, blue: 0.12), Color(red: 1.00, green: 0.41, blue: 0.02)],
@@ -376,7 +376,7 @@ struct VocabookView: View {
     }
 
     private func sectionTitle(_ text: String, metrics: VocabookMetrics) -> some View {
-        Text(text)
+        Text(LocalizedStringKey(text))
             .font(.system(size: metrics.sectionLabelFont, weight: .bold, design: .rounded))
             .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.56))
     }
@@ -403,7 +403,7 @@ struct VocabookView: View {
             return MemoryLevelItem(
                 tier: tier,
                 title: tier.title,
-                subtitle: "\(count) words",
+                subtitle: String.localizedStringWithFormat(String(localized: "%lld words"), count),
                 count: count,
                 accent: tier.accent
             )
@@ -487,7 +487,7 @@ struct VocabookView: View {
     private func openBookMode() {
         guard !isPreparingBookMode else { return }
         guard totalVocabularyCount > 0 else {
-            infoMessage = "No words are available in book mode yet."
+            infoMessage = String(localized: "No words are available in book mode yet.")
             return
         }
         presentedBookModeTier = nil
@@ -499,7 +499,7 @@ struct VocabookView: View {
         guard !isPreparingBookMode else { return }
         let limit = max(recentAddedCount, recentFlashcards.count)
         guard limit > 0 else {
-            infoMessage = "No recently added words yet."
+            infoMessage = String(localized: "No recently added words yet.")
             return
         }
         recentlyAddedBookModeLimit = limit
@@ -510,7 +510,7 @@ struct VocabookView: View {
     private func openBookMode(for tier: MemoryTier) {
         guard !isPreparingBookMode else { return }
         guard countForTier(tier) > 0 else {
-            infoMessage = "No words are available for \(tier.title) yet."
+            infoMessage = String.localizedStringWithFormat(String(localized: "No words are available for %@ yet."), tier.title)
             return
         }
 
@@ -756,7 +756,7 @@ private struct RecentWordCard: View {
         if let base = card.wordDefinition?.attributes.baseText, !base.isEmpty {
             return "\(base)"
         }
-        return "Saved in your vocabook"
+        return String(localized: "Saved in your vocabook")
     }
 
     private var tierTitle: String {
