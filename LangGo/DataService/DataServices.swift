@@ -16,7 +16,6 @@ final class DataServices {
     let articleService: ArticleService
     
     let storyService: StoryService
-    let conversationService: ConversationService
     let reviewSettingsManager: ReviewSettingsManager
 
     private init() {
@@ -35,7 +34,6 @@ final class DataServices {
         self.articleService = ArticleService(articleTagService: articleTagService)
         
         self.storyService = StoryService()
-        self.conversationService = ConversationService()
         
         // This was the line with the error.
         // I am keeping strapiService as a local variable to be used here.
