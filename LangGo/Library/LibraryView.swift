@@ -44,7 +44,6 @@ struct LibraryView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: metrics.sectionSpacing) {
                     header(metrics: metrics)
-                    modePicker(metrics: metrics)
 
                     if selectedMode == .myLibrary {
                         tagFilters(metrics: metrics, availableWidth: proxy.size.width - (metrics.horizontalPadding * 2))
@@ -694,9 +693,9 @@ private struct LibraryMetrics {
         cardSpacing = scaled(12)
 
         titleFont = scaled(30)
-        addButtonSize = scaled(34)
-        addButtonIconFont = scaled(20)
-        addButtonCornerRadius = scaled(16)
+        addButtonSize = scaled(51)
+        addButtonIconFont = scaled(30)
+        addButtonCornerRadius = scaled(24)
         segmentFont = scaled(18)
         segmentBadgeFont = scaled(16)
         filterLabelFont = scaled(18)
