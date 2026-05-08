@@ -181,8 +181,8 @@ struct ProfileView: View {
             .toolbar {
                 if showsDismissButton {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("Back") {
-                            dismiss()
+                        Button(action: { dismiss() }) {
+                            HStack { Image(systemName: "chevron.left"); Text("Back") }
                         }
                     }
                 }

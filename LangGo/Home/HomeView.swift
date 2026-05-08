@@ -459,7 +459,7 @@ struct HomeView: View {
                     .font(.system(size: metrics.libraryChevronFont, weight: .bold))
                     .foregroundStyle(Color(red: 0.65, green: 0.64, blue: 0.74))
             }
-
+            /*
             HStack {
                 Text("Progress")
                     .font(.system(size: metrics.libraryMetaFont, weight: .semibold, design: .rounded))
@@ -469,7 +469,7 @@ struct HomeView: View {
                     .font(.system(size: metrics.libraryMetaFont, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(red: 0.49, green: 0.49, blue: 0.60))
             }
-
+             
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -480,6 +480,7 @@ struct HomeView: View {
                 }
             }
             .frame(height: metrics.libraryProgressHeight)
+             */
         }
         .padding(.horizontal, metrics.libraryCardHorizontalPadding)
         .padding(.vertical, metrics.libraryCardVerticalPadding)

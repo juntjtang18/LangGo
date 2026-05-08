@@ -859,7 +859,7 @@ private struct LibraryArticleCard: View {
                     }
                     .buttonStyle(.plain)
                 }
-            } else if let progress = article.progress {
+            } /*else if let progress = article.progress {
                 VStack(alignment: .leading, spacing: metrics.progressSpacing) {
                     HStack {
                         Text("Progress")
@@ -884,7 +884,7 @@ private struct LibraryArticleCard: View {
                     }
                     .frame(height: metrics.progressHeight)
                 }
-            }
+            }*/
         }
         .padding(isExpanded ? metrics.expandedCardPadding : metrics.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)

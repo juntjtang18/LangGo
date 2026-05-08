@@ -130,7 +130,11 @@ struct VocapageHostView: View {
                 stopAutoplay()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                    Text("Back")
+                }
+                //Image(systemName: "chevron.left").font(.body.weight(.semibold))
             }
             .accessibilityLabel(Text("Back")),
             trailing: Button {
