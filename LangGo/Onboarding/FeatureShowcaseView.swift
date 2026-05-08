@@ -12,7 +12,7 @@ struct FeatureShowcaseView: View {
     var onComplete: () -> Void
 
     @State private var page = 0
-    private let pageCount = 3
+    private let pageCount = 2
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,18 +25,11 @@ struct FeatureShowcaseView: View {
                 .tag(0)
 
                 FeaturePageView(
-                    imageName: "message.fill",
-                    title: "AI Conversation Partner",
-                    description: "Proactively starts conversations appropriate to your level and guides the discussion with relevant prompts."
-                )
-                .tag(1)
-
-                FeaturePageView(
                     imageName: "book.fill",
                     title: "Contextual Reading & Listening",
                     description: "Famous short stories with tap-to-translate and integration with the Vocabulary Notebook for efficient retention."
                 )
-                .tag(2)
+                .tag(1)
             }
             .tabViewStyle(PageTabViewStyle())
             .indexViewStyle(PageIndexViewStyle(backgroundDisplayMode: .always))
@@ -74,8 +67,8 @@ struct FeatureShowcaseView: View {
 
 struct FeaturePageView: View {
     let imageName: String
-    let title: String
-    let description: String
+    let title: LocalizedStringKey
+    let description: LocalizedStringKey
 
     var body: some View {
         VStack(spacing: 20) {

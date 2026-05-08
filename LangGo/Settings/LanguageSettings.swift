@@ -43,10 +43,10 @@ class LanguageSettings: ObservableObject {
 
     init() {
         let savedCode   = UserDefaults.standard.string(forKey: "selectedLanguage")
-        let appMatch    = Bundle.main.preferredLocalizations.first  // e.g. "zh-Hans" on a Simplified Chinese device
+        let localeMatch = Self.resolvePreferredLanguageCode(from: Locale.preferredLanguages)
         let defaultCode = "en"
 
-        let initialCode = savedCode ?? appMatch ?? defaultCode
+        let initialCode = savedCode ?? localeMatch ?? defaultCode
         self.selectedLanguageCode = initialCode
     }
 
@@ -74,5 +74,41 @@ class LanguageSettings: ObservableObject {
                 return Language(id: langCode, name: languageName.capitalized)
             }
             .sorted { $0.name < $1.name }
+    }
+
+    private static func resolvePreferredLanguageCode(from preferredLanguages: [String]) -> String? {
+        let supportedCodes = Set(availableLanguages.map(\.id))
+
+        for preferredLanguage in preferredLanguages {
+            if supportedCodes.contains(preferredLanguage) {
+                return preferredLanguage
+            }
+
+            let locale = Locale(identifier: preferredLanguage)
+
+            if let languageCode = locale.language.languageCode?.identifier,
+               supportedCodes.contains(languageCode) {
+                return languageCode
+            }
+
+            if let languageCode = locale.language.languageCode?.identifier {
+                switch languageCode {
+                case "zh":
+                    if preferredLanguage.contains("Hans"), supportedCodes.contains("zh-Hans") {
+                        return "zh-Hans"
+                    }
+                    if preferredLanguage.contains("Hant"), supportedCodes.contains("zh-Hant") {
+                        return "zh-Hant"
+                    }
+                    if supportedCodes.contains("zh-Hans") {
+                        return "zh-Hans"
+                    }
+                default:
+                    break
+                }
+            }
+        }
+
+        return nil
     }
 }

@@ -3001,6 +3001,46 @@
         }
       }
     },
+    "Contextual Reading & Listening" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lecture et écoute contextualisées"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "संदर्भ आधारित पढ़ना और सुनना"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文脈で学ぶ読解とリスニング"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "맥락 기반 읽기와 듣기"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đọc và nghe theo ngữ cảnh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "情境阅读与听力"
+          }
+        }
+      }
+    },
     "Continue" : {
       "localizations" : {
         "fr" : {
@@ -4359,6 +4399,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法加载页面内容：%@"
+          }
+        }
+      }
+    },
+    "Famous short stories with tap-to-translate and integration with the Vocabulary Notebook for efficient retention." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Des nouvelles célèbres avec traduction au toucher et intégration au carnet de vocabulaire pour une mémorisation plus efficace."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "प्रसिद्ध लघु कथाएँ, टैप-टू-ट्रांसलेट सुविधा और शब्दावली नोटबुक एकीकरण के साथ, ताकि याद रखना अधिक प्रभावी हो।"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有名な短編をタップ翻訳で読み、語彙ノートと連携して効率よく定着させます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "탭 번역이 가능한 유명 단편과 어휘 노트 연동으로 더 효율적인 기억 정착을 돕습니다."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Truyện ngắn nổi tiếng với tính năng chạm để dịch và tích hợp với Sổ tay Từ vựng để ghi nhớ hiệu quả hơn."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过点击翻译阅读经典短篇故事，并与词汇笔记本联动，提升记忆效率。"
           }
         }
       }
@@ -9457,6 +9537,47 @@
         }
       }
     },
+    "Scientific Vocabulary Notebook" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carnet scientifique de vocabulaire"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वैज्ञानिक शब्दावली नोटबुक"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "科学的な語彙ノート"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "과학적 어휘 노트"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sổ tay từ vựng khoa học"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "科学词汇笔记本"
+          }
+        }
+      }
+    },
     "Search" : {
       "localizations" : {
         "fr" : {
@@ -11255,6 +11376,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "总单词数"
+          }
+        }
+      }
+    },
+    "Tracks memory level for each word and schedules optimal reviews to strengthen retention and minimize effort." : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suit le niveau de mémorisation de chaque mot et planifie des révisions optimales pour renforcer la rétention tout en réduisant l'effort."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "हर शब्द के स्मृति स्तर को ट्रैक करता है और याददाश्त मजबूत करने तथा प्रयास कम करने के लिए सर्वोत्तम पुनरावृत्तियों का समय तय करता है।"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各単語の記憶レベルを追跡し、定着を強めながら負担を最小限にする最適な復習を計画します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "각 단어의 기억 수준을 추적하고, 부담은 줄이면서 기억 정착을 강화할 최적의 복습 시점을 계획합니다."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Theo dõi mức độ ghi nhớ của từng từ và lên lịch ôn tập tối ưu để tăng khả năng lưu giữ mà giảm công sức."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟踪每个单词的记忆水平，并安排最佳复习时间，以加强记忆并减少学习负担。"
           }
         }
       }
