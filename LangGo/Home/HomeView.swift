@@ -17,7 +17,7 @@ struct HomeView: View {
     @State private var isPreparingBookMode = false
     @State private var placeholderMessage: String?
     @State private var cameraAccessMessage: String?
-    @State private var selectedLibraryArticlePreview: HomeViewModel.ArticleLibraryPreviewState?
+    @State private var selectedArticlePreview: HomeViewModel.ArticleLibraryPreviewState?
     @State private var hasLoadedHome = false
 
     @AppStorage("isShowingDueWordsOnly") private var isShowingDueWordsOnly = false
@@ -133,9 +133,9 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $isShowingLeaderboard) {
             AscentLeaderboardSheet()
         }
-        .fullScreenCover(item: $selectedLibraryArticlePreview) { preview in
+        .fullScreenCover(item: $selectedArticlePreview) { preview in
             ArticleReadingView(
-                article: LibraryArticle(
+                article: ArticleItem(
                     backendId: preview.backendId,
                     title: preview.title,
                     content: preview.content,
@@ -319,7 +319,7 @@ struct HomeView: View {
                 } else {
                     ForEach(viewModel.articleLibraryPreviews) { preview in
                         Button {
-                            selectedLibraryArticlePreview = preview
+                            selectedArticlePreview = preview
                         } label: {
                             articleLibraryCard(
                                 metrics: metrics,

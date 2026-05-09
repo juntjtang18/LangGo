@@ -2,11 +2,11 @@ import Combine
 import Foundation
 
 @MainActor
-final class LibraryViewModel: ObservableObject {
-    @Published private(set) var libraryArticles: [LibraryArticle] = []
-    @Published private(set) var discoverArticles = LibraryArticle.discoverMocks
+final class ArticleViewModel: ObservableObject {
+    @Published private(set) var articles: [ArticleItem] = []
+    @Published private(set) var discoverArticles = ArticleItem.discoverMocks
     @Published private(set) var availableTags: [String] = []
-    @Published private(set) var isLoadingLibrary = false
+    @Published private(set) var isLoadingArticles = false
     @Published private(set) var isLoadingNextArticlePage = false
     @Published private(set) var isLoadingPreviousArticlePage = false
     @Published private(set) var articleErrorMessage: String?
@@ -19,11 +19,11 @@ final class LibraryViewModel: ObservableObject {
     private let maxCachedArticlePages: Int
 
     private var cancellables = Set<AnyCancellable>()
-    private var hasLoadedLibrary = false
-    private var cachedArticlePages: [Int: [LibraryArticle]] = [:]
+    private var hasLoadedArticles = false
+    private var cachedArticlePages: [Int: [ArticleItem]] = [:]
     private var cachedArticlePageOrder: [Int] = []
     private var pendingPageLoads: [Int: ArticlePageDirection] = [:]
-    private var discoverLibraryArticles: [LibraryArticle] = []
+    private var discoverArticleItems: [ArticleItem] = []
 
     init(
         articleService: ArticleService? = nil,
@@ -47,28 +47,28 @@ final class LibraryViewModel: ObservableObject {
         return tags.sorted()
     }
 
-    var displayedLibraryArticles: [LibraryArticle] {
-        guard !selectedFilterTags.isEmpty else { return libraryArticles }
-        return libraryArticles.filter { article in
+    var displayedArticles: [ArticleItem] {
+        guard !selectedFilterTags.isEmpty else { return articles }
+        return articles.filter { article in
             selectedFilterTags.isSubset(of: Set(article.tags))
         }
     }
 
     func loadIfNeeded() async {
-        guard !hasLoadedLibrary else { return }
-        hasLoadedLibrary = true
-        await loadLibrary()
+        guard !hasLoadedArticles else { return }
+        hasLoadedArticles = true
+        await loadArticles()
     }
 
-    func loadLibrary() async {
-        isLoadingLibrary = true
+    func loadArticles() async {
+        isLoadingArticles = true
         articleErrorMessage = nil
 
         defer {
             syncPendingPagesFromService()
             syncAvailableTagsFromService()
             syncErrorState()
-            isLoadingLibrary = false
+            isLoadingArticles = false
         }
 
         async let tagsTask: Void = articleTagService.loadArticleTagsIfNeeded(usedOnly: true)
@@ -106,9 +106,9 @@ final class LibraryViewModel: ObservableObject {
             )
         }
 
-        let existingID = libraryArticles.first(where: { $0.backendId == savedArticle.id })?.id
+        let existingID = articles.first(where: { $0.backendId == savedArticle.id })?.id
         upsertLocalArticle(
-            makeLibraryArticle(
+            makeArticleItem(
                 from: savedArticle,
                 fallbackID: existingID,
                 sourceLabelOverride: sourceLabel,
@@ -129,24 +129,24 @@ final class LibraryViewModel: ObservableObject {
         articleErrorMessage = nil
     }
 
-    func addDiscoverArticle(_ article: LibraryArticle) {
+    func addDiscoverArticle(_ article: ArticleItem) {
         guard let index = discoverArticles.firstIndex(where: { $0.id == article.id }) else { return }
 
         var moved = discoverArticles.remove(at: index)
         moved.progress = 0.0
-        discoverLibraryArticles.removeAll { $0.id == moved.id }
-        discoverLibraryArticles.insert(moved, at: 0)
+        discoverArticleItems.removeAll { $0.id == moved.id }
+        discoverArticleItems.insert(moved, at: 0)
         rebuildArticleWindow()
     }
 
-    func handleArticleAppearance(_ article: LibraryArticle) async {
-        guard !displayedLibraryArticles.isEmpty else { return }
+    func handleArticleAppearance(_ article: ArticleItem) async {
+        guard !displayedArticles.isEmpty else { return }
 
-        if article.id == displayedLibraryArticles.first?.id {
+        if article.id == displayedArticles.first?.id {
             await loadPreviousArticlePageIfNeeded()
         }
 
-        if article.id == displayedLibraryArticles.last?.id {
+        if article.id == displayedArticles.last?.id {
             await loadNextArticlePageIfNeeded()
         }
     }
@@ -253,7 +253,7 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func loadNextArticlePageIfNeeded() async {
-        guard !isLoadingLibrary, !isLoadingNextArticlePage else { return }
+        guard !isLoadingArticles, !isLoadingNextArticlePage else { return }
         guard let lastPage = cachedArticlePageOrder.max(), lastPage < totalArticlePages else { return }
 
         isLoadingNextArticlePage = true
@@ -263,7 +263,7 @@ final class LibraryViewModel: ObservableObject {
     }
 
     private func loadPreviousArticlePageIfNeeded() async {
-        guard !isLoadingLibrary, !isLoadingPreviousArticlePage else { return }
+        guard !isLoadingArticles, !isLoadingPreviousArticlePage else { return }
         guard let firstPage = cachedArticlePageOrder.min(), firstPage > 1 else { return }
 
         isLoadingPreviousArticlePage = true
@@ -300,12 +300,12 @@ final class LibraryViewModel: ObservableObject {
     private func rebuildArticleWindow() {
         let orderedPages = cachedArticlePageOrder.sorted()
         let backendArticles = orderedPages.flatMap { cachedArticlePages[$0] ?? [] }
-        libraryArticles = discoverLibraryArticles + backendArticles
+        articles = discoverArticleItems + backendArticles
     }
 
-    private func upsertLocalArticle(_ article: LibraryArticle) {
-        if let existingIndex = libraryArticles.firstIndex(where: { $0.backendId == article.backendId }) {
-            libraryArticles[existingIndex] = article
+    private func upsertLocalArticle(_ article: ArticleItem) {
+        if let existingIndex = articles.firstIndex(where: { $0.backendId == article.backendId }) {
+            articles[existingIndex] = article
 
             for page in cachedArticlePages.keys {
                 if let pageIndex = cachedArticlePages[page]?.firstIndex(where: { $0.backendId == article.backendId }) {
@@ -313,8 +313,8 @@ final class LibraryViewModel: ObservableObject {
                 }
             }
 
-            if let discoverIndex = discoverLibraryArticles.firstIndex(where: { $0.backendId == article.backendId }) {
-                discoverLibraryArticles[discoverIndex] = article
+            if let discoverIndex = discoverArticleItems.firstIndex(where: { $0.backendId == article.backendId }) {
+                discoverArticleItems[discoverIndex] = article
             }
         } else {
             if cachedArticlePages[1] != nil {
@@ -339,8 +339,8 @@ final class LibraryViewModel: ObservableObject {
         availableTags = mergedTags.sorted()
     }
 
-    private func mapUserArticles(_ articles: [StrapiUserArticle], preserving existing: [LibraryArticle]) -> [LibraryArticle] {
-        let existingPairs: [(Int, LibraryArticle)] = existing.compactMap { article in
+    private func mapUserArticles(_ articles: [StrapiUserArticle], preserving existing: [ArticleItem]) -> [ArticleItem] {
+        let existingPairs: [(Int, ArticleItem)] = existing.compactMap { article in
             guard let backendId = article.backendId else { return nil }
             return (backendId, article)
         }
@@ -351,7 +351,7 @@ final class LibraryViewModel: ObservableObject {
             let sourceLabelOverride = existingArticle?.sourceLabel == "My Article" ? nil : existingArticle?.sourceLabel
             let dateLabelOverride = existingArticle?.dateLabel == "Just now" ? existingArticle?.dateLabel : nil
 
-            return makeLibraryArticle(
+            return makeArticleItem(
                 from: article,
                 fallbackID: existingArticle?.id,
                 sourceLabelOverride: sourceLabelOverride,
@@ -360,12 +360,12 @@ final class LibraryViewModel: ObservableObject {
         }
     }
 
-    private func makeLibraryArticle(
+    private func makeArticleItem(
         from article: StrapiUserArticle,
         fallbackID: UUID? = nil,
         sourceLabelOverride: String? = nil,
         dateLabelOverride: String? = nil
-    ) -> LibraryArticle {
+    ) -> ArticleItem {
         let title = article.attributes.title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let content = article.attributes.content ?? ""
         let tagNames = article.attributes.articleTags?.data.compactMap {
@@ -374,7 +374,7 @@ final class LibraryViewModel: ObservableObject {
         .filter { !$0.isEmpty } ?? []
         let wordCount = article.attributes.wordCount ?? content.split { $0.isWhitespace || $0.isNewline }.count
 
-        return LibraryArticle(
+        return ArticleItem(
             id: fallbackID ?? UUID(),
             backendId: article.id,
             title: (title?.isEmpty == false ? title : "Untitled Article") ?? "Untitled Article",

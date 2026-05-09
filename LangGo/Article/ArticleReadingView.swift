@@ -3,7 +3,7 @@ import AVFoundation
 
 @MainActor
 final class ArticleReadingViewModel: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
-    @Published private(set) var article: LibraryArticle
+    @Published private(set) var article: ArticleItem
     @Published var contextualTranslation: StoryViewModel.ContextualTranslation?
     @Published var isTranslating = false
     @Published var isSavingWord = false
@@ -17,7 +17,7 @@ final class ArticleReadingViewModel: NSObject, ObservableObject, AVSpeechSynthes
     private let speechSynthesizer = AVSpeechSynthesizer()
     private let selectedVoiceIdentifier = UserDefaults.standard.string(forKey: "selectedVoiceIdentifier")
 
-    init(article: LibraryArticle) {
+    init(article: ArticleItem) {
         self.article = article
         super.init()
         speechSynthesizer.delegate = self
@@ -46,7 +46,7 @@ final class ArticleReadingViewModel: NSObject, ObservableObject, AVSpeechSynthes
 
         do {
             let fetchedArticle = try await articleService.fetchUserArticle(articleId: backendId)
-            article = mapLibraryArticle(fetchedArticle, fallback: article)
+            article = mapArticleItem(fetchedArticle, fallback: article)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -166,7 +166,7 @@ final class ArticleReadingViewModel: NSObject, ObservableObject, AVSpeechSynthes
         return AVSpeechSynthesisVoice(language: Config.learningTargetLanguageCode)
     }
 
-    private func mapLibraryArticle(_ article: StrapiUserArticle, fallback: LibraryArticle) -> LibraryArticle {
+    private func mapArticleItem(_ article: StrapiUserArticle, fallback: ArticleItem) -> ArticleItem {
         let tagNames = article.attributes.articleTags?.data.compactMap {
             $0.attributes.tag?.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -177,7 +177,7 @@ final class ArticleReadingViewModel: NSObject, ObservableObject, AVSpeechSynthes
         let trimmedTitle = article.attributes.title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedTitle = (trimmedTitle?.isEmpty == false ? trimmedTitle : nil) ?? fallback.title
 
-        return LibraryArticle(
+        return ArticleItem(
             id: fallback.id,
             backendId: article.id,
             title: resolvedTitle,
@@ -208,7 +208,7 @@ struct ArticleReadingView: View {
     @State private var showTranslationPopover = false
     @State private var showReaderSettings = false
 
-    init(article: LibraryArticle) {
+    init(article: ArticleItem) {
         _viewModel = StateObject(wrappedValue: ArticleReadingViewModel(article: article))
     }
 
@@ -457,7 +457,7 @@ struct ArticleReadingView: View {
             Button {
                 dismiss()
             } label: {
-                Text("Back to Library")
+                Text("Back to Articles")
                     .font(.system(size: metrics.bottomButtonFont, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity)

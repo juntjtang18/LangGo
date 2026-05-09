@@ -3,12 +3,12 @@ import AVFoundation
 import UIKit
 import Vision
 
-struct LibraryTabView: View {
+struct ArticleTabView: View {
     @Binding var isSideMenuShowing: Bool
 
     var body: some View {
         NavigationStack {
-            LibraryView()
+            ArticleView()
                 .navigationTitle("")
                 .toolbarBackground(.hidden, for: .navigationBar)
                 .toolbar {
@@ -26,11 +26,11 @@ struct LibraryTabView: View {
     }
 }
 
-struct LibraryView: View {
-    @StateObject private var viewModel = LibraryViewModel()
-    @State private var selectedMode: LibraryMode = .myLibrary
-    @State private var selectedArticle: LibraryArticle?
-    @State private var expandedArticleID: LibraryArticle.ID?
+struct ArticleView: View {
+    @StateObject private var viewModel = ArticleViewModel()
+    @State private var selectedMode: ArticleMode = .myArticles
+    @State private var selectedArticle: ArticleItem?
+    @State private var expandedArticleID: ArticleItem.ID?
     @State private var isShowingAddMenu = false
     @State private var isShowingArticleScanFlow = false
     @State private var articleEditorDraft: ArticleDraft?
@@ -39,13 +39,13 @@ struct LibraryView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let metrics = LibraryMetrics(screenSize: proxy.size)
+            let metrics = ArticleMetrics(screenSize: proxy.size)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: metrics.sectionSpacing) {
                     header(metrics: metrics)
 
-                    if selectedMode == .myLibrary {
+                    if selectedMode == .myArticles {
                         tagFilters(metrics: metrics, availableWidth: proxy.size.width - (metrics.horizontalPadding * 2))
                         libraryList(metrics: metrics)
                     } else {
@@ -59,7 +59,7 @@ struct LibraryView: View {
             .background(Color(red: 0.99, green: 0.99, blue: 1.00).ignoresSafeArea())
             .overlay {
                 if isShowingAddMenu {
-                    LibraryAddMenuOverlay(metrics: metrics) {
+                    ArticleAddMenuOverlay(metrics: metrics) {
                         withAnimation(.easeInOut(duration: 0.18)) {
                             isShowingAddMenu = false
                         }
@@ -84,7 +84,7 @@ struct LibraryView: View {
                 }
             }
             .overlay {
-                if viewModel.isLoadingLibrary && viewModel.libraryArticles.isEmpty {
+                if viewModel.isLoadingArticles && viewModel.articles.isEmpty {
                     loadingOverlay(
                         title: "Loading Library...",
                         message: "Fetching your tags and saved articles."
@@ -106,7 +106,7 @@ struct LibraryView: View {
                 onSave: { draft in
                     try await viewModel.saveDraftAsArticle(draft)
                     expandedArticleID = nil
-                    selectedMode = .myLibrary
+                    selectedMode = .myArticles
                     isShowingArticleScanFlow = false
                 }
             )
@@ -121,7 +121,7 @@ struct LibraryView: View {
                 onSave: { draft in
                     try await viewModel.saveDraftAsArticle(draft, sourceLabel: draft.sourceLabel ?? "Manual")
                     expandedArticleID = nil
-                    selectedMode = .myLibrary
+                    selectedMode = .myArticles
                     articleEditorDraft = nil
                 }
             )
@@ -145,7 +145,7 @@ struct LibraryView: View {
         }
     }
 
-    private func header(metrics: LibraryMetrics) -> some View {
+    private func header(metrics: ArticleMetrics) -> some View {
         HStack {
             Text("Articles")
                 .font(.system(size: metrics.titleFont, weight: .bold, design: .rounded))
@@ -153,7 +153,7 @@ struct LibraryView: View {
 
             Spacer()
 
-            if selectedMode == .myLibrary {
+            if selectedMode == .myArticles {
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         isShowingAddMenu = true
@@ -175,9 +175,9 @@ struct LibraryView: View {
         }
     }
 
-    private func modePicker(metrics: LibraryMetrics) -> some View {
+    private func modePicker(metrics: ArticleMetrics) -> some View {
         HStack(spacing: metrics.segmentSpacing) {
-            ForEach(LibraryMode.allCases, id: \.self) { mode in
+            ForEach(ArticleMode.allCases, id: \.self) { mode in
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         selectedMode = mode
@@ -212,7 +212,7 @@ struct LibraryView: View {
         .clipShape(RoundedRectangle(cornerRadius: metrics.segmentCornerRadius, style: .continuous))
     }
 
-    private func tagFilters(metrics: LibraryMetrics, availableWidth: CGFloat) -> some View {
+    private func tagFilters(metrics: ArticleMetrics, availableWidth: CGFloat) -> some View {
         let pages = buildTagPages(tags: viewModel.filterTags, availableWidth: availableWidth, metrics: metrics)
         let resolvedPageIndex = min(tagPageIndex, max(pages.count - 1, 0))
         let currentRows = pages.isEmpty ? [] : pages[resolvedPageIndex]
@@ -280,24 +280,24 @@ struct LibraryView: View {
         }
     }
 
-    private func libraryList(metrics: LibraryMetrics) -> some View {
+    private func libraryList(metrics: ArticleMetrics) -> some View {
         LazyVStack(spacing: metrics.cardSpacing) {
-            if viewModel.isLoadingPreviousArticlePage && !viewModel.displayedLibraryArticles.isEmpty {
+            if viewModel.isLoadingPreviousArticlePage && !viewModel.displayedArticles.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, metrics.compactSpacing)
             }
 
-            if viewModel.isLoadingLibrary && viewModel.displayedLibraryArticles.isEmpty {
+            if viewModel.isLoadingArticles && viewModel.displayedArticles.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, metrics.cardPadding * 2)
-            } else if viewModel.displayedLibraryArticles.isEmpty {
+            } else if viewModel.displayedArticles.isEmpty {
                 emptyLibraryCard(metrics: metrics)
             }
 
-            ForEach(viewModel.displayedLibraryArticles) { article in
-                LibraryArticleCard(
+            ForEach(viewModel.displayedArticles) { article in
+                ArticleCard(
                     article: article,
                     metrics: metrics,
                     isExpanded: expandedArticleID == article.id,
@@ -314,14 +314,14 @@ struct LibraryView: View {
                     }
                 )
                 .onAppear {
-                    guard selectedMode == .myLibrary else { return }
+                    guard selectedMode == .myArticles else { return }
                     Task {
                         await viewModel.handleArticleAppearance(article)
                     }
                 }
             }
 
-            if viewModel.isLoadingNextArticlePage && !viewModel.displayedLibraryArticles.isEmpty {
+            if viewModel.isLoadingNextArticlePage && !viewModel.displayedArticles.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, metrics.compactSpacing)
@@ -329,13 +329,13 @@ struct LibraryView: View {
         }
     }
 
-    private func discoverList(metrics: LibraryMetrics) -> some View {
+    private func discoverList(metrics: ArticleMetrics) -> some View {
         VStack(spacing: metrics.cardSpacing) {
             ForEach(viewModel.discoverArticles) { article in
-                LibraryDiscoverCard(article: article, metrics: metrics) {
+                ArticleDiscoverCard(article: article, metrics: metrics) {
                     viewModel.addDiscoverArticle(article)
                     withAnimation(.easeInOut(duration: 0.18)) {
-                        selectedMode = .myLibrary
+                        selectedMode = .myArticles
                     }
                 }
             }
@@ -394,7 +394,7 @@ struct LibraryView: View {
         }
     }
 
-    private func tagChip(_ tag: String, metrics: LibraryMetrics, isSelected: Bool) -> some View {
+    private func tagChip(_ tag: String, metrics: ArticleMetrics, isSelected: Bool) -> some View {
         Text(tag)
             .font(.system(size: metrics.tagFont, weight: .semibold, design: .rounded))
             .foregroundStyle(isSelected ? Color.white : Color(red: 0.44, green: 0.47, blue: 0.55))
@@ -404,7 +404,7 @@ struct LibraryView: View {
             .clipShape(Capsule())
     }
 
-    private func buildTagPages(tags: [String], availableWidth: CGFloat, metrics: LibraryMetrics) -> [[[String]]] {
+    private func buildTagPages(tags: [String], availableWidth: CGFloat, metrics: ArticleMetrics) -> [[[String]]] {
         guard !tags.isEmpty else { return [] }
 
         let font = UIFont.systemFont(ofSize: metrics.tagFont, weight: .semibold)
@@ -441,7 +441,7 @@ struct LibraryView: View {
         return pages
     }
 
-    private func beginEditing(_ article: LibraryArticle) {
+    private func beginEditing(_ article: ArticleItem) {
         articleEditorDraft = ArticleDraft(
             articleId: article.backendId,
             title: article.title,
@@ -451,7 +451,7 @@ struct LibraryView: View {
         )
     }
 
-    private func emptyLibraryCard(metrics: LibraryMetrics) -> some View {
+    private func emptyLibraryCard(metrics: ArticleMetrics) -> some View {
         VStack(alignment: .leading, spacing: metrics.metaSpacing) {
             Text("No saved articles yet")
                 .font(.system(size: metrics.cardTitleFont, weight: .bold, design: .rounded))
@@ -500,26 +500,26 @@ struct LibraryView: View {
     }
 }
 
-private enum LibraryMode: CaseIterable {
-    case myLibrary
+private enum ArticleMode: CaseIterable {
+    case myArticles
     case discover
 
     var title: String {
         switch self {
-        case .myLibrary: return "My Library"
+        case .myArticles: return "My Articles"
         case .discover: return "Discover"
         }
     }
 }
 
-private enum LibraryTag {
+private enum ArticleTagCatalog {
     static let mockTags = [
         "Technology", "AI", "Science", "Environment",
         "Business", "Health"
     ]
 }
 
-struct LibraryArticle: Identifiable, Equatable {
+struct ArticleItem: Identifiable, Equatable {
     let id: UUID
     let backendId: Int?
     let title: String
@@ -564,7 +564,7 @@ struct LibraryArticle: Identifiable, Equatable {
         self.topic = topic
     }
 
-    static let myLibraryMocks: [LibraryArticle] = [
+    static let myArticleMocks: [ArticleItem] = [
         .init(title: "Modern Business Strategies", wordCount: 1400, newWords: 52, progress: nil, tag: "Business", dateLabel: "1 week ago", sourceLabel: "URL"),
         .init(title: "Healthcare Innovation in 2026", wordCount: 1100, newWords: 41, progress: 1.00, tag: "Health", dateLabel: "4 days ago", sourceLabel: "URL"),
         .init(title: "Understanding Machine Learning Basics", wordCount: 1350, newWords: 47, progress: 0.15, tag: "AI", dateLabel: "2 days ago", sourceLabel: "URL"),
@@ -575,7 +575,7 @@ struct LibraryArticle: Identifiable, Equatable {
         .init(title: "Mental Health in the Digital Age", wordCount: 1050, newWords: 39, progress: 0.90, tag: "Health", dateLabel: "2 weeks ago", sourceLabel: "URL")
     ]
 
-    static let discoverMocks: [LibraryArticle] = [
+    static let discoverMocks: [ArticleItem] = [
         .init(title: "Breaking: New Renewable Energy Breakthrough", wordCount: 1500, newWords: 65, level: "Advanced", topic: "News"),
         .init(title: "Short Stories: The Lost Letter", wordCount: 950, newWords: 32, level: "Intermediate", topic: "Stories"),
         .init(title: "Everyday Conversations in English", wordCount: 720, newWords: 22, level: "Beginner", topic: "Educational"),
@@ -596,7 +596,7 @@ struct ArticleDraft: Identifiable {
     var sourceLabel: String?
 }
 
-private struct LibraryMetrics {
+private struct ArticleMetrics {
     let horizontalPadding: CGFloat
     let topPadding: CGFloat
     let bottomPadding: CGFloat
@@ -765,9 +765,9 @@ private struct LibraryMetrics {
     }
 }
 
-private struct LibraryArticleCard: View {
-    let article: LibraryArticle
-    let metrics: LibraryMetrics
+private struct ArticleCard: View {
+    let article: ArticleItem
+    let metrics: ArticleMetrics
     let isExpanded: Bool
     let onToggle: () -> Void
     let onStartReading: () -> Void
@@ -909,9 +909,9 @@ private struct LibraryArticleCard: View {
     }
 }
 
-private struct LibraryDiscoverCard: View {
-    let article: LibraryArticle
-    let metrics: LibraryMetrics
+private struct ArticleDiscoverCard: View {
+    let article: ArticleItem
+    let metrics: ArticleMetrics
     let onAdd: () -> Void
 
     var body: some View {
@@ -981,7 +981,7 @@ private struct DiscoverBadge: View {
 
     let text: String
     let style: Style
-    let metrics: LibraryMetrics
+    let metrics: ArticleMetrics
 
     var body: some View {
         Text(text)
@@ -1026,8 +1026,8 @@ private struct DiscoverBadge: View {
     }
 }
 
-private struct LibraryAddMenuOverlay: View {
-    let metrics: LibraryMetrics
+private struct ArticleAddMenuOverlay: View {
+    let metrics: ArticleMetrics
     let onDismiss: () -> Void
     let onScanArticle: () -> Void
     let onManualInput: () -> Void
@@ -1062,7 +1062,7 @@ private struct LibraryAddMenuOverlay: View {
                     .buttonStyle(.plain)
                 }
 
-                LibraryAddOptionCard(
+                ArticleAddOptionCard(
                     icon: "viewfinder",
                     title: "Scan Article",
                     subtitle: "Use OCR to extract text from images",
@@ -1070,7 +1070,7 @@ private struct LibraryAddMenuOverlay: View {
                     action: onScanArticle
                 )
 
-                LibraryAddOptionCard(
+                ArticleAddOptionCard(
                     icon: "square.and.pencil",
                     title: "Manual Input",
                     subtitle: "Type or paste article content yourself",
@@ -1087,11 +1087,11 @@ private struct LibraryAddMenuOverlay: View {
     }
 }
 
-private struct LibraryAddOptionCard: View {
+private struct ArticleAddOptionCard: View {
     let icon: String
     let title: String
     let subtitle: String
-    let metrics: LibraryMetrics
+    let metrics: ArticleMetrics
     let action: () -> Void
 
     var body: some View {
@@ -1728,7 +1728,7 @@ private struct ArticleEditorView: View {
     }
 
     private var resolvedAvailableTags: [String] {
-        let tags = availableTags.isEmpty ? LibraryTag.mockTags : availableTags
+        let tags = availableTags.isEmpty ? ArticleTagCatalog.mockTags : availableTags
         return Array(NSOrderedSet(array: tags)) as? [String] ?? tags
     }
 
@@ -1954,6 +1954,6 @@ private struct FlexibleTagLayout: Layout {
 
 #Preview {
     NavigationStack {
-        LibraryView()
+        ArticleView()
     }
 }

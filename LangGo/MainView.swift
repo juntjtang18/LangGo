@@ -53,7 +53,7 @@ struct MainView: View {
                     .tabItem { Label("Vocabook", systemImage: "doc.text") }
                     .tag(1)
 
-                LibraryTabView(isSideMenuShowing: $isSideMenuShowing)
+                ArticleTabView(isSideMenuShowing: $isSideMenuShowing)
                     .tabItem { Label("Articles", systemImage: "text.alignleft") }
                     .tag(2)
 
