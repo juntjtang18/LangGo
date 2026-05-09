@@ -1,4 +1,5 @@
 import SwiftUI
+import AudioToolbox
 
 @MainActor
 final class AscentViewModel: ObservableObject {
@@ -116,6 +117,7 @@ struct AscentView: View {
     @StateObject private var userSession = UserSessionManager.shared
     @StateObject private var viewModel: AscentViewModel
     @State private var isShowingLeaderboard = false
+    @State private var activeAchievementFireworkID: Int?
 
     private let statCards: [AscentStatCard] = [
         .init(title: "Streak", value: "7 days", icon: "calendar", accent: Color(red: 0.96, green: 0.42, blue: 0.12), background: Color(red: 1.00, green: 0.96, blue: 0.92)),
@@ -294,10 +296,30 @@ struct AscentView: View {
                     GridItem(.flexible(), spacing: metrics.compactSpacing)
                 ], spacing: metrics.compactSpacing) {
                     ForEach(viewModel.allAchievements) { achievement in
-                        AscentAchievementCard(achievement: achievement, metrics: metrics)
+                        AscentAchievementCard(
+                            achievement: achievement,
+                            metrics: metrics,
+                            showsFireworks: Binding(
+                                get: { activeAchievementFireworkID == achievement.id },
+                                set: { isPresented in
+                                    if !isPresented, activeAchievementFireworkID == achievement.id {
+                                        activeAchievementFireworkID = nil
+                                    }
+                                }
+                            ),
+                            onTap: achievement.isAchieved ? { celebrateAchievement(id: achievement.id) } : nil
+                        )
                     }
                 }
             }
+        }
+    }
+
+    private func celebrateAchievement(id: Int) {
+        AudioServicesPlaySystemSound(1025)
+        activeAchievementFireworkID = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            activeAchievementFireworkID = id
         }
     }
 
@@ -522,8 +544,23 @@ private struct AscentStatCardView: View {
 private struct AscentAchievementCard: View {
     let achievement: AscentViewModel.AchievementDisplay
     let metrics: AscentMetrics
+    let showsFireworks: Binding<Bool>
+    var onTap: (() -> Void)? = nil
 
     var body: some View {
+        Group {
+            if let onTap {
+                Button(action: onTap) {
+                    cardContent
+                }
+                .buttonStyle(.plain)
+            } else {
+                cardContent
+            }
+        }
+    }
+
+    private var cardContent: some View {
         VStack(spacing: metrics.textTightSpacing) {
             Image(systemName: achievement.iconName)
                 .font(.system(size: metrics.achievementEmojiFont * 1.5, weight: .bold))
@@ -548,6 +585,109 @@ private struct AscentAchievementCard: View {
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: metrics.cardCornerRadius, style: .continuous))
+        .overlay {
+            AscentAchievementBurstOverlay(isPresented: showsFireworks)
+        }
+    }
+}
+
+private struct AscentAchievementBurstOverlay: View {
+    @Binding var isPresented: Bool
+    @State private var animateBurst = false
+    @State private var renderedParticles: [RenderedBurstParticle] = []
+
+    private let particles: [BurstParticle] = [
+        .init(symbol: "sparkle", color: Color(red: 1.00, green: 0.78, blue: 0.24), x: -108, y: -126, rotation: -40, scale: 1.35),
+        .init(symbol: "sparkle", color: Color(red: 1.00, green: 0.88, blue: 0.38), x: -63, y: -147, rotation: -22, scale: 1.15),
+        .init(symbol: "star.fill", color: Color(red: 1.00, green: 0.62, blue: 0.18), x: 0, y: -168, rotation: 0, scale: 1.35),
+        .init(symbol: "sparkle", color: Color(red: 1.00, green: 0.85, blue: 0.34), x: 63, y: -147, rotation: 22, scale: 1.15),
+        .init(symbol: "sparkle", color: Color(red: 1.00, green: 0.78, blue: 0.24), x: 108, y: -126, rotation: 40, scale: 1.35),
+        .init(symbol: "circle.fill", color: Color(red: 0.96, green: 0.38, blue: 0.88), x: -147, y: -51, rotation: 0, scale: 0.92),
+        .init(symbol: "star.fill", color: Color(red: 1.00, green: 0.74, blue: 0.18), x: -123, y: -6, rotation: -28, scale: 1.08),
+        .init(symbol: "circle.fill", color: Color(red: 0.31, green: 0.56, blue: 1.00), x: 147, y: -51, rotation: 0, scale: 0.92),
+        .init(symbol: "star.fill", color: Color(red: 1.00, green: 0.74, blue: 0.18), x: 123, y: -6, rotation: 28, scale: 1.08),
+        .init(symbol: "sparkle", color: Color(red: 0.38, green: 0.72, blue: 1.00), x: -111, y: 57, rotation: -32, scale: 1.04),
+        .init(symbol: "circle.fill", color: Color(red: 1.00, green: 0.78, blue: 0.24), x: -48, y: 99, rotation: 0, scale: 0.82),
+        .init(symbol: "sparkle", color: Color(red: 1.00, green: 0.74, blue: 0.18), x: 0, y: 123, rotation: 0, scale: 1.15),
+        .init(symbol: "circle.fill", color: Color(red: 1.00, green: 0.78, blue: 0.24), x: 48, y: 99, rotation: 0, scale: 0.82),
+        .init(symbol: "sparkle", color: Color(red: 0.38, green: 0.72, blue: 1.00), x: 111, y: 57, rotation: 32, scale: 1.04),
+        .init(symbol: "sparkle", color: Color(red: 0.98, green: 0.44, blue: 0.92), x: -27, y: -81, rotation: -14, scale: 1.0),
+        .init(symbol: "sparkle", color: Color(red: 0.98, green: 0.44, blue: 0.92), x: 27, y: -81, rotation: 14, scale: 1.0)
+    ]
+
+    var body: some View {
+        ZStack {
+            if isPresented {
+                ForEach(renderedParticles) { particle in
+                    Image(systemName: particle.symbol)
+                        .font(.system(size: 28 * particle.scale, weight: .bold))
+                        .foregroundStyle(particle.color)
+                        .rotationEffect(.degrees(animateBurst ? particle.rotation : 0))
+                        .scaleEffect(animateBurst ? particle.scale : 0.15)
+                        .opacity(animateBurst ? 0 : 1)
+                        .offset(
+                            x: animateBurst ? particle.x : 0,
+                            y: animateBurst ? particle.y : 0
+                        )
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .onChange(of: isPresented) { presented in
+            guard presented else {
+                animateBurst = false
+                return
+            }
+
+            animateBurst = false
+            renderedParticles = particles.enumerated().map { index, particle in
+                particle.rendered(id: index)
+            }
+            withAnimation(.easeOut(duration: 0.95)) {
+                animateBurst = true
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                isPresented = false
+            }
+        }
+    }
+
+    private struct BurstParticle {
+        let symbol: String
+        let color: Color
+        let x: CGFloat
+        let y: CGFloat
+        let rotation: Double
+        let scale: CGFloat
+
+        func rendered(id: Int) -> RenderedBurstParticle {
+            let radialScale = CGFloat.random(in: 0.9...1.18)
+            let jitterX = CGFloat.random(in: -16...16)
+            let jitterY = CGFloat.random(in: -16...16)
+            let rotationJitter = Double.random(in: -14...14)
+            let scaleJitter = CGFloat.random(in: 0.94...1.06)
+
+            return RenderedBurstParticle(
+                id: id,
+                symbol: symbol,
+                color: color,
+                x: (x * radialScale) + jitterX,
+                y: (y * radialScale) + jitterY,
+                rotation: rotation + rotationJitter,
+                scale: scale * scaleJitter
+            )
+        }
+    }
+
+    private struct RenderedBurstParticle: Identifiable {
+        let id: Int
+        let symbol: String
+        let color: Color
+        let x: CGFloat
+        let y: CGFloat
+        let rotation: Double
+        let scale: CGFloat
     }
 }
 

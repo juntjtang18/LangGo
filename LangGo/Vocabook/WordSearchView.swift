@@ -22,6 +22,7 @@ struct WordSearchView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                headerBar
                 searchHeader
                 List {
                     if let msg = errorMessage, !msg.isEmpty {
@@ -64,12 +65,8 @@ struct WordSearchView: View {
                 }
                 .listStyle(.plain)
             }
-            .navigationTitle("Search")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarBackButtonHidden(true)
             .onChange(of: query) { newValue in
                 liveSearchTask?.cancel()
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -103,6 +100,31 @@ struct WordSearchView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+    }
+
+    @ViewBuilder
+    private var headerBar: some View {
+        HStack {
+            Text("Search")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.20))
+
+            Spacer()
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color(red: 0.48, green: 0.49, blue: 0.58))
+                    .frame(width: 36, height: 36)
+                    .background(Color(red: 0.97, green: 0.97, blue: 0.99))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal)
+        .padding(.top, 12)
     }
 
     @ViewBuilder

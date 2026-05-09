@@ -33,7 +33,15 @@ struct ExamView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Close") { dismiss() }
+                        Button(action: { dismiss() }) {
+                            //    Button("Close") { dismiss() }
+                            
+                            HStack {
+                                Image(systemName: "chevron.left")
+                                Text("Back")
+                            }
+                            
+                        }
                     }
                 }
                 .task {

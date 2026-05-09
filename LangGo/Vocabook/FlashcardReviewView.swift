@@ -143,10 +143,13 @@ struct FlashcardReviewView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .navigationBarItems(leading:
                     Button(action: { dismiss() }) {
+                    //    Button("Close") { dismiss() }
+                    
                         HStack {
                             Image(systemName: "chevron.left")
                             Text("Back")
                         }
+                    
                     }
                 )
                 .task {

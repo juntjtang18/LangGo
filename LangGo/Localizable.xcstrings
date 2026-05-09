@@ -587,7 +587,7 @@
       }
     },
     "%lld%%" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -948,7 +948,7 @@
       }
     },
     "Account" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -1189,7 +1189,7 @@
       }
     },
     "ADD CONTENT" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -1510,7 +1510,7 @@
       }
     },
     "AI Conversation Partner" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -1831,7 +1831,7 @@
       }
     },
     "ARTICLE LIBRARY" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -2266,7 +2266,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "浏览并管理你的词汇"
+            "value" : "复习词汇"
           }
         }
       }
@@ -2312,7 +2312,7 @@
       }
     },
     "BY MEMORY LEVEL" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -2599,7 +2599,7 @@
       }
     },
     "CHANGE PASSWORD" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -2760,6 +2760,7 @@
       }
     },
     "Close" : {
+      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -2840,7 +2841,7 @@
       }
     },
     "Complete some lessons or add new words to get cards for your quiz." : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -2921,7 +2922,7 @@
       }
     },
     "Confirm New Password" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -3242,7 +3243,7 @@
       }
     },
     "Current Password" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -4003,7 +4004,7 @@
       }
     },
     "English" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -4964,7 +4965,7 @@
       }
     },
     "Hide keyboard" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -5525,7 +5526,7 @@
       }
     },
     "Limited Offer" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -6086,7 +6087,7 @@
       }
     },
     "My Vocabulary\nNote Book" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -6247,7 +6248,7 @@
       }
     },
     "New Password" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -6448,7 +6449,7 @@
       }
     },
     "Nice work! You’ve finished today’s due words." : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -6689,7 +6690,7 @@
       }
     },
     "No Cards for Quiz" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -7890,7 +7891,7 @@
       }
     },
     "Preferences" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8331,7 +8332,7 @@
       }
     },
     "Profile Update" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8412,7 +8413,7 @@
       }
     },
     "QUICK ACTIONS" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8613,7 +8614,7 @@
       }
     },
     "Read Flashcards" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8774,7 +8775,7 @@
       }
     },
     "READY TO REVIEW" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -8815,7 +8816,7 @@
       }
     },
     "RECENTLY ADDED" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -9016,7 +9017,7 @@
       }
     },
     "Resume Learning" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -9097,7 +9098,7 @@
       }
     },
     "Review Complete" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -9739,7 +9740,7 @@
       }
     },
     "Select a Theme" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -10620,7 +10621,7 @@
       }
     },
     "Stories" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -11661,7 +11662,7 @@
       }
     },
     "Type or hold to speak..." : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -11782,7 +11783,7 @@
       }
     },
     "Unit 1 Introductions" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -12383,7 +12384,7 @@
       }
     },
     "USER PROFILE" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -12424,7 +12425,7 @@
       }
     },
     "Username" : {
-      "extractionState" : "stale",
+      "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {

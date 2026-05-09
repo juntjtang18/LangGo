@@ -75,6 +75,8 @@ struct ProfileView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
+                        profileHeaderBar
+
                         profileHeaderCard
 
                         profileSection(
@@ -148,8 +150,8 @@ struct ProfileView: View {
                         .scaleEffect(1.2)
                 }
             }
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.large)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarBackButtonHidden(true)
             .navigationDestination(isPresented: $isShowingPrivacySecurity) {
                 ProfilePrivacySecurityView(
                     onAccountDeleted: {
@@ -178,15 +180,6 @@ struct ProfileView: View {
             .navigationDestination(isPresented: $isShowingTermsOfService) {
                 TermsOfServiceView()
             }
-            .toolbar {
-                if showsDismissButton {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(action: { dismiss() }) {
-                            HStack { Image(systemName: "chevron.left"); Text("Back") }
-                        }
-                    }
-                }
-            }
             .task {
                 await loadUserProfile()
             }
@@ -212,6 +205,30 @@ struct ProfileView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(alertMessage)
+            }
+        }
+    }
+
+    private var profileHeaderBar: some View {
+        HStack {
+            Text("Profile")
+                .font(ProfileTypography.rounded(ProfileTypography.screenTitle, weight: .bold))
+                .foregroundStyle(Color(red: 0.12, green: 0.14, blue: 0.20))
+
+            Spacer()
+
+            if showsDismissButton {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color(red: 0.48, green: 0.49, blue: 0.58))
+                        .frame(width: 36, height: 36)
+                        .background(Color(red: 0.97, green: 0.97, blue: 0.99))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
