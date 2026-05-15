@@ -740,4 +740,101 @@ struct AchievementDTO: Codable, Identifiable, Equatable {
         case iconName = "icon_name"
         case achievedAt = "achieved_at"
     }
+
+    init(
+        id: Int,
+        code: String,
+        eventName: String,
+        iconName: String?,
+        points: Int,
+        goal: Int,
+        progress: Int,
+        achieved: Bool,
+        achievedAt: Date?,
+        title: String?,
+        description: String?
+    ) {
+        self.id = id
+        self.code = code
+        self.eventName = eventName
+        self.iconName = iconName
+        self.points = points
+        self.goal = goal
+        self.progress = progress
+        self.achieved = achieved
+        self.achievedAt = achievedAt
+        self.title = title
+        self.description = description
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decode(Int.self, forKey: .id)
+        code = try container.decode(String.self, forKey: .code)
+        eventName = try container.decode(String.self, forKey: .eventName)
+        iconName = try container.decodeIfPresent(String.self, forKey: .iconName)
+        points = try container.decode(Int.self, forKey: .points)
+        goal = try container.decode(Int.self, forKey: .goal)
+        progress = try container.decode(Int.self, forKey: .progress)
+        achieved = try container.decode(Bool.self, forKey: .achieved)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        achievedAt = try Self.decodeFlexibleDateIfPresent(from: container, forKey: .achievedAt)
+    }
+
+    private static func decodeFlexibleDateIfPresent(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> Date? {
+        guard let rawValue = try container.decodeIfPresent(String.self, forKey: key) else {
+            return nil
+        }
+
+        if let date = parseFlexibleDate(rawValue) {
+            return date
+        }
+
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: container,
+            debugDescription: "Date string does not match supported achievement timestamp formats."
+        )
+    }
+
+    private static func parseFlexibleDate(_ value: String) -> Date? {
+        let normalized = normalizeTimezoneSuffix(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SZ",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd HH:mm:ss.SSSZ",
+            "yyyy-MM-dd HH:mm:ss.SSZ",
+            "yyyy-MM-dd HH:mm:ss.SZ",
+            "yyyy-MM-dd HH:mm:ssZ"
+        ]
+
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.dateFormat = format
+            formatter.calendar = Calendar(identifier: .iso8601)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+
+            if let date = formatter.date(from: normalized) {
+                return date
+            }
+        }
+
+        return nil
+    }
+
+    private static func normalizeTimezoneSuffix(_ value: String) -> String {
+        guard let range = value.range(of: #"([+-]\d{2})$"#, options: .regularExpression) else {
+            return value
+        }
+
+        return value.replacingCharacters(in: range, with: "\(value[range])00")
+    }
 }

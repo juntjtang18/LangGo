@@ -3,7 +3,7 @@ import KeychainAccess
 import XCTest
 @testable import LangGo
 
-final class LibraryViewModelFunctionalTests: XCTestCase {
+final class ArticleViewModelFunctionalTests: XCTestCase {
     private let keychain = Keychain(service: Config.keychainService)
 
     private struct SessionSnapshot {
@@ -50,22 +50,22 @@ final class LibraryViewModelFunctionalTests: XCTestCase {
         ArticleCache.invalidateAll(using: .shared)
 
         let viewModel = await MainActor.run {
-            LibraryViewModel(
+            ArticleViewModel(
                 articleService: articleService,
                 articleTagService: articleTagService,
                 articlePageSize: 10
             )
         }
 
-        await viewModel.loadLibrary()
+        await viewModel.loadArticles()
 
         let backendIDs = await MainActor.run {
-            viewModel.libraryArticles.compactMap(\.backendId)
+            viewModel.articles.compactMap(\.backendId)
         }
 
         XCTAssertTrue(
             backendIDs.contains(seedArticle.id),
-            "Expected the initial article page loaded by LibraryViewModel to include the newly created article."
+            "Expected the initial article page loaded by ArticleViewModel to include the newly created article."
         )
     }
 

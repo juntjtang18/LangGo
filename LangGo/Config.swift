@@ -26,6 +26,7 @@ struct Config {
             return "https://langgo-en-strapi.geniusparentingai.ca"
         #endif
     }
+
     static let keychainService = "com.langGo.swift"
     
     // Define the target language for learning based on Xcode Build Settings (Preprocessor Macros)

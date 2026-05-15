@@ -43,6 +43,12 @@ final class AchievementService {
     private func fetchAchievements(path: String, locale: String?) async throws -> [AchievementDTO] {
         logger.debug("Fetching achievements path=\(path, privacy: .public)")
 
+        let url = try makeAchievementsURL(path: path, locale: locale)
+        let response: AchievementListResponse = try await networkManager.fetchDirect(from: url)
+        return response.data
+    }
+
+    func makeAchievementsURL(path: String, locale: String?) throws -> URL {
         guard var components = URLComponents(string: "\(Config.strapiBaseUrl)\(path)") else {
             throw URLError(.badURL)
         }
@@ -51,9 +57,7 @@ final class AchievementService {
             components.queryItems = [URLQueryItem(name: "locale", value: trimmedLocale)]
         }
         guard let url = components.url else { throw URLError(.badURL) }
-
-        let response: AchievementListResponse = try await networkManager.fetchDirect(from: url)
-        return response.data
+        return url
     }
 
     func resetUserScopedRuntimeState() {

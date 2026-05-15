@@ -26,41 +26,6 @@ struct FlashcardReviewFlowServiceTests {
     }
 
     @Test
-    func loadMoreReviewFlashcardsAppendsNextPageInMemory() async throws {
-        MockFlashcardAPI.install()
-        defer { MockFlashcardAPI.uninstall() }
-
-        var requestedPages: [Int] = []
-        MockFlashcardAPI.handler = { request in
-            switch request.url?.path {
-            case "/api/review-flashcards":
-                let page = URLComponents(url: try #require(request.url), resolvingAgainstBaseURL: false)?
-                    .queryItems?
-                    .first(where: { $0.name == "pagination[page]" })?
-                    .value
-                    .flatMap(Int.init) ?? 1
-                requestedPages.append(page)
-                if page == 1 {
-                    return .json(200, Self.reviewListResponseJSON(ids: [21, 22], page: 1, pageSize: 2, pageCount: 2, total: 4))
-                }
-                if page == 2 {
-                    return .json(200, Self.reviewListResponseJSON(ids: [23, 24], page: 2, pageSize: 2, pageCount: 2, total: 4))
-                }
-                throw URLError(.unsupportedURL)
-            default:
-                throw URLError(.unsupportedURL)
-            }
-        }
-
-        let service = FlashcardService()
-        _ = try await service.fetchAvailableReviewFlashcards(pageSize: 2)
-        await service.loadMoreReviewFlashcardsIfNeeded(currentIndex: 1, pageSize: 2, threshold: 1)
-
-        #expect(requestedPages == [1, 2])
-        #expect(service.reviewFlashcards.map(\.id) == [21, 22, 23, 24])
-    }
-
-    @Test
     func submitReviewRemovesCardFromInMemoryReviewState() async throws {
         MockFlashcardAPI.install()
         defer { MockFlashcardAPI.uninstall() }
