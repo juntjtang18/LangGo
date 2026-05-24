@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 import os
 import AVFoundation
+import UIKit
 
 struct NewWordInputView: View {
     // MARK: - Environment & View Model
@@ -28,6 +29,8 @@ struct NewWordInputView: View {
     @State private var showSuccessMessage: Bool = false
     @State private var showErrorMessage: Bool = false
     @State private var errorMessageText: String = ""
+    @State private var isShowingWordScanFlow = false
+    @State private var cameraAccessMessage: String?
     
     // Enum and State for managing focus
     enum Field: Hashable {
@@ -74,6 +77,33 @@ struct NewWordInputView: View {
                         HStack { Image(systemName: "chevron.left"); Text("Back") }
                     }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: openWordScan) {
+                        Image(systemName: "text.viewfinder")
+                            .font(.title3)
+                    }
+                    .accessibilityLabel("Scan to Add Word")
+                }
+            }
+            .fullScreenCover(isPresented: $isShowingWordScanFlow) {
+                ScanWordToVocabookFlowView(
+                    onCancel: {
+                        isShowingWordScanFlow = false
+                    },
+                    onSaved: {
+                        isShowingWordScanFlow = false
+                        Task {
+                            await viewModel.fetchAllMyCards()
+                        }
+                    }
+                )
+            }
+            .alert("Camera Access Needed", isPresented: cameraAccessAlertBinding) {
+                Button("OK", role: .cancel) {
+                    cameraAccessMessage = nil
+                }
+            } message: {
+                Text(cameraAccessMessage ?? "")
             }
             /*
             .sheet(isPresented: $isTranslating) {
@@ -186,6 +216,45 @@ struct NewWordInputView: View {
     
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    private var cameraAccessAlertBinding: Binding<Bool> {
+        Binding(
+            get: { cameraAccessMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    cameraAccessMessage = nil
+                }
+            }
+        )
+    }
+
+    private func openWordScan() {
+        hideKeyboard()
+
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            cameraAccessMessage = String(localized: "Camera is not available on this device.")
+            return
+        }
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            isShowingWordScanFlow = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        isShowingWordScanFlow = true
+                    } else {
+                        cameraAccessMessage = String(localized: "Please enable camera access in Settings to scan words.")
+                    }
+                }
+            }
+        case .denied, .restricted:
+            cameraAccessMessage = String(localized: "Please enable camera access in Settings to scan words.")
+        @unknown default:
+            cameraAccessMessage = String(localized: "Camera access is unavailable right now.")
+        }
     }
 
     private func speak(text: String, languageCode: String) {
@@ -378,7 +447,7 @@ struct NewWordInputView: View {
             isTranslating = false
         }
     }
-    
+
 }
 
 

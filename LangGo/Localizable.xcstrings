@@ -2760,7 +2760,6 @@
       }
     },
     "Close" : {
-      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -2799,6 +2798,9 @@
           }
         }
       }
+    },
+    "Close and scan another photo." : {
+
     },
     "Coming Soon" : {
       "localizations" : {
@@ -4363,6 +4365,9 @@
           }
         }
       }
+    },
+    "Extracting words from your photo." : {
+
     },
     "Failed to load page content: %@" : {
       "localizations" : {
@@ -6970,6 +6975,9 @@
         }
       }
     },
+    "No text found" : {
+
+    },
     "No words are available for %@ yet." : {
       "localizations" : {
         "fr" : {
@@ -7730,6 +7738,9 @@
         }
       }
     },
+    "Pick a Word" : {
+
+    },
     "Play" : {
       "localizations" : {
         "fr" : {
@@ -7889,6 +7900,9 @@
           }
         }
       }
+    },
+    "Please enable camera access in Settings to scan words." : {
+
     },
     "Preferences" : {
       "extractionState" : "manual",
@@ -9537,6 +9551,12 @@
           }
         }
       }
+    },
+    "Scan to Add Word" : {
+
+    },
+    "Scan Word" : {
+
     },
     "Scientific Vocabulary Notebook" : {
       "extractionState" : "manual",
