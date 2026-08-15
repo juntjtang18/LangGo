@@ -9,11 +9,23 @@ platform :ios do
   CI_KEYCHAIN_PASSWORD = "ci_temp_password"
 
   def match_git_auth
-    Base64.strict_encode64("juntjtang18:#{ENV['MATCH_GIT_TOKEN']}")
+    token = ENV.fetch("MATCH_GIT_TOKEN")
+    UI.user_error!("MATCH_GIT_TOKEN is empty") if token.to_s.strip.empty?
+    Base64.strict_encode64("x-access-token:#{token}")
   end
 
   desc "Build and upload to TestFlight"
   lane :beta do
+    %w[
+      APP_STORE_CONNECT_KEY_ID
+      APP_STORE_CONNECT_ISSUER_ID
+      APP_STORE_CONNECT_API_KEY
+      MATCH_PASSWORD
+      MATCH_GIT_TOKEN
+    ].each do |name|
+      UI.user_error!("Missing required env var #{name}") if ENV[name].to_s.strip.empty?
+    end
+
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],

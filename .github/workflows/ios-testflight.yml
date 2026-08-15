@@ -9,7 +9,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Show Xcode version
         run: xcodebuild -version
@@ -19,6 +21,29 @@ jobs:
           bundle install || true
           gem install fastlane
 
+      - name: Check required secrets
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_TOKEN: ${{ secrets.MATCH_GIT_TOKEN }}
+        run: |
+          missing=0
+          for name in APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_API_KEY MATCH_PASSWORD MATCH_GIT_TOKEN; do
+            eval "value=\${$name}"
+            if [ -z "$value" ]; then
+              echo "MISSING secret: $name"
+              missing=1
+            else
+              echo "OK secret: $name (length ${#value})"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Add the missing secrets in the LangGo repo settings, then re-run this workflow."
+            exit 1
+          fi
+
       - name: Build and upload to TestFlight
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -26,4 +51,9 @@ jobs:
           APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_TOKEN: ${{ secrets.MATCH_GIT_TOKEN }}
-        run: fastlane ios beta
+        run: |
+          # checkout stores GITHUB_TOKEN as an extraheader for all github.com
+          # requests. That token cannot read LangGo-certificates, so Match's
+          # git clone fails unless the header is removed.
+          git config --global --unset-all http.https://github.com/.extraheader || true
+          fastlane ios beta
