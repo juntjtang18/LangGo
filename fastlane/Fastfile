@@ -52,8 +52,19 @@ platform :ios do
       keychain_password: CI_KEYCHAIN_PASSWORD
     )
 
+    build_number = get_build_number.to_i
+    begin
+      tf_build = latest_testflight_build_number(
+        api_key: api_key,
+        app_identifier: APP_IDENTIFIER
+      ).to_i
+      build_number = [build_number, tf_build + 1].max
+    rescue => e
+      UI.important("Could not fetch TestFlight build number (#{e}). Using project build #{build_number}.")
+    end
+
     increment_build_number(
-      build_number: get_build_number.to_i
+      build_number: build_number
     )
 
     build_app(
